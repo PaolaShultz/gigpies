@@ -440,6 +440,9 @@ impl Rack {
         self.maximizer
             .tick(x.map(|v| v * gain(self.p.maximizer_drive_db)))
     }
+    pub fn reduction_db(&self) -> f64 {
+        self.maximizer.reduction_db()
+    }
     pub fn max_reduction(&self) -> f64 {
         self.maximizer.max_reduction
     }

@@ -11,3 +11,5 @@ mod fx_engines;
 pub mod analysis;
 
 pub mod unity;
+
+pub mod balance;

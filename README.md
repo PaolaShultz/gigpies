@@ -47,9 +47,10 @@ These are design boundaries. Node integration is planned; see [architecture](doc
 The first offline automixer now provides causal soundcheck, editable instrument
 presets, frozen settings and full-song stereo rendering. A new unity-source workflow
 keeps source gains intact and exports comparisons without loudness matching.
+The offline balance pass adds measured kit/group fader search and held-out checks.
 It builds independently and opens no audio hardware. Mix quality awaits listening.
 
-[**Unity-source comparison →**](docs/UNITY_PASS.md) · [**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
+[**Musical balance experiment →**](docs/BALANCE_PASS.md) · [**Unity-source comparison →**](docs/UNITY_PASS.md) · [**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
 
 Live-show transport, monitors, lighting and hardware integration remain planned.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.

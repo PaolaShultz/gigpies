@@ -8,7 +8,7 @@ fn run() -> gigpies::inventory::Result<()> {
             env!("CARGO_PKG_VERSION")
         ),
         [arg] if arg == "--help" || arg == "-h" => println!(
-            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
+            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
         ),
         [arg] if arg == "--version" || arg == "-V" => {
             println!("gigpies {}", env!("CARGO_PKG_VERSION"))
@@ -34,6 +34,31 @@ fn run() -> gigpies::inventory::Result<()> {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;
             let policy = serde_json::from_reader(std::fs::File::open(policy)?)?;
             gigpies::automix::analysis::finish(session, Path::new(root), Path::new(out), policy)?;
+        }
+        [command, config, root, out, policy]
+            if command == "balance-pass" || command == "balance-analyze" =>
+        {
+            let session = serde_json::from_reader(std::fs::File::open(config)?)?;
+            let policy = serde_json::from_reader(std::fs::File::open(policy)?)?;
+            gigpies::automix::balance::run(
+                session,
+                Path::new(root),
+                Path::new(out),
+                Some(policy),
+                command == "balance-pass",
+            )?;
+        }
+        [command, config, root, out]
+            if command == "balance-pass" || command == "balance-analyze" =>
+        {
+            let session = serde_json::from_reader(std::fs::File::open(config)?)?;
+            gigpies::automix::balance::run(
+                session,
+                Path::new(root),
+                Path::new(out),
+                None,
+                command == "balance-pass",
+            )?;
         }
         [command, config, root, out] if command == "unity-pass" => {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;

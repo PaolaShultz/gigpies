@@ -1,5 +1,8 @@
 # Unity-source comparison without loudness matching
 
+For the next source/group balance experiment, see [BALANCE_PASS.md](BALANCE_PASS.md).
+This unity baseline and its previous renders remain unchanged.
+
 This revision follows the listening feedback on the first mixes. It removes the
 old input-level targets, negative musical faders and fixed −6 dB master from this
 workflow. Earlier renders and commands remain available for historical comparison.

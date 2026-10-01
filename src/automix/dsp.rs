@@ -84,6 +84,10 @@ impl Strip {
             max_reduction: 0.,
         }
     }
+    /// Current linked reduction, excluding explicit makeup.
+    pub fn reduction_db(&self) -> f64 {
+        -self.reduction
+    }
     pub fn tick(&mut self, mut x: [f64; 2]) -> [f64; 2] {
         for f in &mut self.filters {
             for i in 0..2 {
@@ -164,6 +168,10 @@ pub struct Limiter {
     pub affected_frames: u64,
 }
 impl Limiter {
+    /// Instantaneous linked attenuation in dB, before final export gain.
+    pub fn reduction_db(&self) -> f64 {
+        -db(self.envelope)
+    }
     pub fn new(ceiling_db: f64, release_ms: f64, rate: u32) -> Self {
         Self {
             envelope: 1.,

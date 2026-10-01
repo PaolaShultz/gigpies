@@ -44,19 +44,19 @@ fn time_reference(path: &Path) -> Result<Option<u64>> {
     }
     Ok(result)
 }
-struct Source {
+pub(super) struct Source {
     reader: hound::WavReader<BufReader<File>>,
-    channels: usize,
+    pub(super) channels: usize,
     scale: f64,
     float: bool,
-    frames: u64,
+    pub(super) frames: u64,
     position: u64,
-    offset: u64,
-    reference: Option<u64>,
+    pub(super) offset: u64,
+    pub(super) reference: Option<u64>,
     meter: Meter,
 }
 impl Source {
-    fn open(path: &Path, rate: u32) -> Result<Self> {
+    pub(super) fn open(path: &Path, rate: u32) -> Result<Self> {
         let reader = hound::WavReader::open(path)?;
         let s = reader.spec();
         if s.sample_rate != rate
@@ -81,7 +81,7 @@ impl Source {
             meter: Meter::default(),
         })
     }
-    fn next(&mut self, t: u64) -> Result<[f64; 2]> {
+    pub(super) fn next(&mut self, t: u64) -> Result<[f64; 2]> {
         if t < self.offset || self.position >= self.frames {
             return Ok([0.; 2]);
         }
@@ -118,7 +118,7 @@ impl Source {
         Ok(x)
     }
 }
-fn route(x: [f64; 2], channels: usize, pan: f64, fader: f64) -> [f64; 2] {
+pub(super) fn route(x: [f64; 2], channels: usize, pan: f64, fader: f64) -> [f64; 2] {
     if channels == 1 {
         let angle = (pan + 1.) * std::f64::consts::FRAC_PI_4;
         [x[0] * angle.cos() * fader, x[0] * angle.sin() * fader]

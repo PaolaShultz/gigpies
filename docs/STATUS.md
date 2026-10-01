@@ -27,8 +27,9 @@ Not implemented: live audio or device transport, networking, web/TUI/controller,
 recording, lighting integration, gates or true-peak limiting.
 No live latency, acoustic safety, listening acceptance or Pi headroom is claimed.
 
-Next: audition the unmatched unity-source pair, assess vocal/snare/bass/guitar balance
-and revise one setting at a time. A second source session and hardware integration follow when useful.
+Next: audition the unmatched OLD/A/B musical-balance candidates and record listener
+preference separately from policy compliance. A second source session and hardware
+integration follow when useful.
 
 The [archived blueprint](archive/blueprints/blueprint-v2.md) retains the wider scope.
 
@@ -48,3 +49,13 @@ Implemented and offline-validated: DI-only bass, unity input trims and faders,
 thresholds and loss compensation, independent final PCM output leveling to −0.01 dBFS, preserved
 float sums, and code-generated envelope/spectral reports. No loudness matching in
 this workflow. [Commands and limits](UNITY_PASS.md). Listening acceptance remains open.
+
+## Musical balance pass
+
+Implemented and offline-validated: synchronized role-band and event measurements,
+explicit tom-bleed uncertainty, microphone covariance, bounded static kit/group
+fader search, held-out section regression checks, event-level compressor/master
+reduction, and exact unmatched OLD/A/B excerpts. The local processing candidate
+partially restores guitar low-mid cuts after rendering the fader-only candidate.
+Initial policy targets remain hypotheses and some remain unmet; listener preference
+is pending. No playback or hardware changes. [Workflow and limits](BALANCE_PASS.md).

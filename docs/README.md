@@ -17,3 +17,5 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 - [Offline automixer](AUTOMIX.md): CLI, soundcheck/freeze, presets, A/B and validation.
 
 - [Effects and automatic review](FX_PASS.md): optional FX, deterministic corrections and comparison.
+
+- [Offline musical balance](BALANCE_PASS.md): measurements, policy and OLD/A/B evidence.

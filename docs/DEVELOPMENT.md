@@ -68,3 +68,8 @@ The optional FX/review extension is documented in [FX_PASS.md](FX_PASS.md).
 bounded review rules. `scripts/analyze_mix.py` is optional plotting only and cannot
 change settings. All correction decisions remain in Rust and are covered by the
 normal synthetic suite.
+
+The [musical balance pass](BALANCE_PASS.md) is owned by `automix/balance.rs`. It
+reuses native source reading/routing and DSP, buffers synchronized energy covariance,
+and searches musical faders without touching input trims. `scripts/balance_excerpts.py`
+is an optional PCM excerpt/export verification tool; it never changes mix settings.
