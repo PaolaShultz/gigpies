@@ -1,0 +1,16 @@
+/target/
+/recordings/
+/artifacts/
+/archive/local/
+/sessions/local/
+/user/
+.env
+.env.*
+*.wav
+*.WAV
+*.flac
+*.mp3
+*.zip
+*.tar
+*.gz
+.DS_Store
