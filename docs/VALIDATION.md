@@ -79,3 +79,13 @@ See [FX_PASS.md](FX_PASS.md) for reproducing the automatic review and local comp
   matched comparisons/source variations do not describe this new workflow.
 
 Measurements do not establish listening acceptance. See [UNITY_PASS.md](UNITY_PASS.md).
+
+## Independent final output level correction
+
+Unmatched exports now use their own measured sample peaks, with a −0.01 dBFS
+ceiling in the unity workflow. The regression deliberately lowers the processed
+bus by 6 dB and verifies that final export compensates it independently of raw.
+All 29 normal tests passed (including the focused silence regression), with Clippy; old private matching
+auditions remain intentionally skipped. A fresh full-song render checks both PCM
+peaks and finite output. Raw float samples are identical to the preceding pass;
+processed differs by at most 1.5e-8 after JSON settings reload (floating rounding).

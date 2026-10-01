@@ -173,7 +173,7 @@ pub fn prepare(s: &mut Session) -> Result<()> {
     s.calibration.initial_trim_db = 0.;
     s.master_db = 0.;
     s.master_hpf_hz = 40.;
-    s.ceiling_db = -0.5;
+    s.ceiling_db = -0.01;
     s.output_mode = OutputMode::Unmatched;
     s.prepared = true;
     if s.effects.is_some() {

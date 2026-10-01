@@ -437,6 +437,23 @@ pub fn run(
     let ld = loud_dry.integrated();
     let lw = loud_wet.integrated();
     let export_db = (session.ceiling_db - db(dry_meter.peak.max(wet_meter.peak))).min(0.);
+    // Finalize each unmatched output from its own peak. Neither reference bus
+    // participates in the other output's gain decision. Silence stays silent.
+    let independent_gain = |peak: f64| {
+        if peak > 0. {
+            session.ceiling_db - db(peak)
+        } else {
+            0.
+        }
+    };
+    let (dry_export, wet_export) = if session.output_mode == OutputMode::Unmatched {
+        (
+            independent_gain(dry_meter.peak),
+            independent_gain(wet_meter.peak),
+        )
+    } else {
+        (export_db, export_db)
+    };
     let target = match (ld, lw) {
         (Some(d), Some(w)) if session.output_mode == OutputMode::Matched => Some(
             session
@@ -451,9 +468,12 @@ pub fn run(
     };
     let dry_match = target.zip(ld).map(|(t, l)| t - l).unwrap_or(export_db);
     let wet_match = target.zip(lw).map(|(t, l)| t - l).unwrap_or(export_db);
-    for (stem, matched_db) in [("bypass", dry_match), ("processed", wet_match)] {
+    for (stem, matched_db, output_db) in [
+        ("bypass", dry_match, dry_export),
+        ("processed", wet_match, wet_export),
+    ] {
         let input = out.join(format!("{stem}-bus.tmp.wav"));
-        export(&input, &out.join(format!("{stem}.wav")), gain(export_db))?;
+        export(&input, &out.join(format!("{stem}.wav")), gain(output_db))?;
         if session.output_mode == OutputMode::Matched {
             export(
                 &input,
@@ -474,21 +494,21 @@ pub fn run(
         "source_frames":source_frames,"tail_frames":tail_frames
     }));
     let report = serde_json::json!({"output_mode":session.output_mode,"master_hpf_hz":session.master_hpf_hz,"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
-        "bypass_bus":dry_meter.report(),"processed_bus":wet_meter.report(),"bypass_lufs":ld,"processed_lufs":lw,"common_export_gain_db":export_db,
-        "bypass_export_peak_dbfs":db(dry_meter.peak)+export_db,"processed_export_peak_dbfs":db(wet_meter.peak)+export_db,
+        "bypass_bus":dry_meter.report(),"processed_bus":wet_meter.report(),"bypass_lufs":ld,"processed_lufs":lw,"common_export_gain_db":(session.output_mode == OutputMode::Matched).then_some(export_db),"bypass_export_gain_db":dry_export,"processed_export_gain_db":wet_export,
+        "bypass_export_peak_dbfs":db(dry_meter.peak)+dry_export,"processed_export_peak_dbfs":db(wet_meter.peak)+wet_export,
         "matched_target_lufs":target,"bypass_matching_gain_db":(session.output_mode == OutputMode::Matched).then_some(dry_match),"processed_matching_gain_db":(session.output_mode == OutputMode::Matched).then_some(wet_match),
         "master_max_reduction_db":limiter.max_reduction,"master_affected_frames":limiter.affected_frames,"true_peak":false,"effects":fx_report,
         "calibration_active_seconds":calibrators.iter().map(|c|c.active_seconds).collect::<Vec<_>>()});
     write_json(&out.join("measurements.json"), &report)?;
     let comparison_note = if session.output_mode == OutputMode::Unmatched {
-        "No loudness matching. Unity float buses are preserved, including any values above full scale. PCM copies share only measured peak-overload attenuation."
+        "No loudness matching. Unity float buses are preserved, including any values above full scale. Each PCM output is finalized independently to its own configured sample peak; neither output determines the other's gain."
     } else {
         "Matching uses one static gain per file, outside the automixer, with sample-peak headroom."
     };
     std::fs::write(
         out.join("report.txt"),
         format!(
-            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> optional exciter -> fader/pan + optional post-fader FX returns -> master -> optional master HPF -> optional master EQ/maximizer -> linked sample-peak limiter (matched mode only).\nCommon static export attenuation: {export_db:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\n{comparison_note} Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
+            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> optional exciter -> fader/pan + optional post-fader FX returns -> master -> optional master HPF -> optional master EQ/maximizer -> linked sample-peak limiter (matched mode only).\nStatic export gains: bypass {dry_export:.3} dB, processed {wet_export:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\n{comparison_note} Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
             if finish_seconds.is_some() {
                 "causal rehearsal then frozen"
             } else {

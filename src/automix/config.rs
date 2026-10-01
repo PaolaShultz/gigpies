@@ -106,7 +106,7 @@ impl Session {
             || self.channels.len() > 64
             || self.groups.is_empty()
             || !range(self.master_db, -60., 12.)
-            || !range(self.ceiling_db, -24., -0.1)
+            || !range(self.ceiling_db, -24., -0.01)
             || !(self.master_hpf_hz == 0.
                 || range(self.master_hpf_hz, 10., self.sample_rate as f64 * 0.45))
             || !range(self.limiter_release_ms, 10., 2000.)

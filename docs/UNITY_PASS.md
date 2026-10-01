@@ -57,15 +57,26 @@ This is whole-recording offline preparation followed by a frozen render. It does
 
 The internal float sums may exceed 0 dBFS without clipping. Preserve them as
 `final/bypass-unity-float.wav` and `final/processed-unity-float.wav`. Play the PCM
-files `final/bypass.wav` and `final/processed.wav`: both receive exactly one shared
-export attenuation calculated from the larger peak, leaving 0.5 dB sample headroom.
-No per-file loudness gain, target LUFS or matched copies are produced. Loudness is
-measured for reporting only. Output protection is sample-peak, not true-peak.
+files `final/bypass.wav` and `final/processed.wav`: each is finalized independently
+from its own measured peak to **−0.01 dBFS**. This can add gain or attenuate. Digital
+silence gets zero gain. Neither raw nor processed controls the other's export gain.
+No LUFS target or matched copies are produced. Loudness is measured for reporting
+only. Output protection is sample-peak, not true-peak.
 
-For the first local revision, raw unity sum peak was +7.0468 dBFS, requiring shared
-−7.5468 dB export attenuation. Raw/processed PCM peaks were −0.5000/−3.9801 dBFS;
-actual maximum maximizer reduction was 1.9996 dB. The processed mix retains its
-natural level difference. No individual source gain was reduced to achieve these peaks.
+The earlier shared export attenuation was a mistake for this requested final-mix
+workflow: raw's +7.0468 dBFS peak forced processed to −3.9801 dBFS. The correction
+uses raw export gain −7.0568 dB and processed export gain −3.5767 dB. Both now peak
+at −0.01 dBFS; processed is 3.9701 dB louder than its previous PCM export. This is
+one constant final gain, with no change to mix balance or compressor envelopes.
+Actual maximum maximizer reduction remains 1.9996 dB.
+
+To reproduce this output-level correction without redoing preparation, copy the
+saved settings, set `ceiling_db` to `-0.01` and retain `output_mode: "unmatched"`, then:
+
+```sh
+target/release/gigpies render artifacts/automix/final-level-settings.json \
+  recordings/sessions/complainiacs-etc artifacts/automix/final-level
+```
 
 `measured-channel-decisions.json` and `measured-bus-decisions.json` record measured
 reasons. `settings.json` saves all processing; `final/` includes channel/master

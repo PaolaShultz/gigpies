@@ -77,7 +77,7 @@ fn prepare_enforces_unity_di_only_and_exact_low_cuts() {
     );
 }
 #[test]
-fn unmatched_retains_exact_float_sum_and_only_shared_measured_peak_attenuation() {
+fn unmatched_retains_float_sum_and_finalizes_each_output_independently() {
     let t = Scratch::new();
     for name in ["01_Kick.wav", "02_Snare.wav"] {
         wav(&t.0.join(name), 2, 4410, |_| 0.8);
@@ -88,13 +88,13 @@ fn unmatched_retains_exact_float_sum_and_only_shared_measured_peak_attenuation()
     s.prepared = true;
     s.master_db = 0.;
     s.output_mode = OutputMode::Unmatched;
-    s.ceiling_db = -0.5;
+    s.ceiling_db = -0.01;
     for c in &mut s.channels {
         c.fader_db = 0.;
         c.hpf_hz = 0.;
         c.eq.clear();
         c.compressor.ratio = 1.;
-        c.compressor.makeup_db = 0.;
+        c.compressor.makeup_db = -6.;
     }
     automix::run(s, &t.0, &t.0.join("out"), None).unwrap();
     let samples: Vec<_> = hound::WavReader::open(t.0.join("out/bypass-unity-float.wav"))
@@ -110,9 +110,13 @@ fn unmatched_retains_exact_float_sum_and_only_shared_measured_peak_attenuation()
     assert!(m["matched_target_lufs"].is_null());
     assert!(m["bypass_matching_gain_db"].is_null());
     assert!(
-        (m["common_export_gain_db"].as_f64().unwrap() - (-0.5 - 20. * 1.6_f64.log10())).abs()
+        (m["bypass_export_gain_db"].as_f64().unwrap() - (-0.01 - 20. * 1.6_f64.log10())).abs()
             < 1e-5
     );
+    assert!(m["common_export_gain_db"].is_null());
+    let difference = m["processed_export_gain_db"].as_f64().unwrap()
+        - m["bypass_export_gain_db"].as_f64().unwrap();
+    assert!((difference - 6.).abs() < 1e-6);
     assert!(!t.0.join("out/bypass-matched.wav").exists());
     assert_eq!(
         std::fs::read(t.0.join("out/bypass.wav")).unwrap(),
@@ -196,4 +200,28 @@ fn unity_workflow_writes_measurement_reasons_and_envelopes_without_matching() {
     saved.validate().unwrap();
     saved.master_hpf_hz = f64::NAN;
     assert!(saved.validate().is_err());
+}
+
+#[test]
+fn unmatched_silence_is_not_amplified() {
+    let t = Scratch::new();
+    wav(&t.0.join("01_Kick.wav"), 1, 4410, |_| 0.);
+    let mut s = example();
+    s.channels.truncate(1);
+    s.groups.truncate(1);
+    unity::prepare(&mut s).unwrap();
+    automix::run(s, &t.0, &t.0.join("out"), None).unwrap();
+    let m: serde_json::Value =
+        serde_json::from_reader(std::fs::File::open(t.0.join("out/measurements.json")).unwrap())
+            .unwrap();
+    assert_eq!(m["bypass_export_gain_db"], 0.);
+    assert_eq!(m["processed_export_gain_db"], 0.);
+    for stem in ["bypass", "processed"] {
+        assert!(
+            hound::WavReader::open(t.0.join(format!("out/{stem}.wav")))
+                .unwrap()
+                .samples::<i32>()
+                .all(|x| x.unwrap() == 0)
+        );
+    }
 }

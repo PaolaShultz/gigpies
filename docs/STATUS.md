@@ -45,6 +45,6 @@ code; no spectrogram interpretation or AI decision is in that loop.
 
 Implemented and offline-validated: DI-only bass, unity input trims and faders,
 90 Hz channel HPFs except kick/bass, 40 Hz processed master HPF, measured compressor
-thresholds and loss compensation, common peak-based PCM export attenuation, preserved
+thresholds and loss compensation, independent final PCM output leveling to −0.01 dBFS, preserved
 float sums, and code-generated envelope/spectral reports. No loudness matching in
 this workflow. [Commands and limits](UNITY_PASS.md). Listening acceptance remains open.
