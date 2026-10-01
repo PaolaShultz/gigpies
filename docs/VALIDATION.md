@@ -39,3 +39,29 @@ historical/exhaustive benchmark suite was needed. Detailed measurements, source 
 prepared settings and audio are ignored local artifacts, not publication content.
 Listening, hardware acceptance, true-peak validation and live-device tests remain
 unperformed; these tests do not establish musical quality or acoustic safety.
+
+## Effects and deterministic review pass — 2026-10-01
+
+- Complete normal suite passed: 23 synthetic tests, including oversampled excitation,
+  distinct reverb decay, vocal predelay constraints, deterministic wet routing,
+  maximizer linking/bounds and the full automated review/save/compare workflow.
+- The spectral policy accepts sustained synthetic buildup and rejects silence,
+  smooth noise, brief peaks and protected bass fundamentals. Corrections are bounded.
+- Formatting, locked check, warning-denied Clippy and release build passed.
+- Explicit full-band `finish` experiment completed. Its Rust code selected and logged
+  spectral/return corrections, then rendered and checked the result. No plot-derived
+  correction was supplied to that algorithm. Detailed findings remain local.
+- The opt-in FX export check passed for timeline, equal loudness and clipping/headroom.
+- Rendering the original settings with effects disabled reproduced all four first-pass
+  WAVs byte-for-byte, verified locally by SHA-256.
+
+The normal suite ignores all three private-media tests. Only the new FX export check
+was explicitly invoked in this pass. Historical source variations and the old export
+check were intentionally skipped; a direct legacy equivalence check covered the
+changed renderer. No playback, hardware or true-peak acceptance was performed.
+
+```sh
+cargo test --locked --release --test private_automix fx_pass_listening_files -- --ignored --nocapture
+```
+
+See [FX_PASS.md](FX_PASS.md) for reproducing the automatic review and local comparison.

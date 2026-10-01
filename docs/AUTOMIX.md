@@ -1,5 +1,8 @@
 # First offline automixer
 
+This documents the first pass. For optional FX and code-driven spectral corrections,
+see [the effects/review pass](FX_PASS.md).
+
 Implemented and offline-validated; listening acceptance is pending. No live device,
 network, service or host-audio code is involved. Rust 1.97.1, no sibling dependency.
 

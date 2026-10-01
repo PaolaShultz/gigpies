@@ -32,6 +32,13 @@ coefficient equations and soft-knee compression from:
 
 SHR DAW gate/mixing and SHR PA metering/offline rendering were reviewed as references.
 SHR FX `src/dsp.rs` at `9b9a2a94f8fe79389fba03d065924c0dd335599f` was inspected
-for effects/send-return structure; no FX code was copied and effects remain out of scope.
+for effects/send-return structure during the first pass.
+The subsequent effects pass adapts its `src/dsp.rs` Ring/Tap/allpass/comb reverb and
+chorus implementations into `src/automix/fx_engines.rs`, and its four-times-oversampled
+`src/exciter.rs` into `src/automix/exciter.rs`, including harmonic/alias tests. Static
+configuration and local type paths replace host controls; unused reset paths are omitted.
+[Preserved SHR FX MIT licence](licenses/shr-fx-MIT.txt).
+The new delay, routing, wet-return calibration and deterministic spectral review are
+GigPies implementations; no sibling checkout is changed or linked.
 The gain estimator, routing, file workflow and preset choices are GigPies work.
 Manufacturer guidance and the loudness standard are linked in [AUTOMIX](docs/AUTOMIX.md).

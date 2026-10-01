@@ -24,10 +24,19 @@ checked. Listening is the next evaluation; tests do not establish musical qualit
 See [workflow, presets and limitations](AUTOMIX.md).
 
 Not implemented: live audio or device transport, networking, web/TUI/controller,
-recording, lighting integration, gates/effects or true-peak limiting.
+recording, lighting integration, gates or true-peak limiting.
 No live latency, acoustic safety, listening acceptance or Pi headroom is claimed.
 
 Next: audition the matched pair, assess vocal/snare/bass/guitar balance and revise one
 setting at a time. A second source session and hardware integration follow when useful.
 
 The [archived blueprint](archive/blueprints/blueprint-v2.md) retains the wider scope.
+
+## Optional effects and automatic review pass
+
+Implemented: separate plate/chamber/hall reverbs, vocal predelay validation, chorus,
+filtered delay, oversampled excitation and modest master maximization. The Rust
+`finish` command analyzes the preliminary mix, applies bounded spectral/return/dynamics
+rules, rerenders and records its decisions and post-checks. Corrections are made by
+code; no spectrogram interpretation or AI decision is in that loop.
+[Commands, algorithms and limitations](FX_PASS.md). Listening acceptance remains pending.

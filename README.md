@@ -48,7 +48,7 @@ The first offline automixer now provides causal soundcheck, editable instrument
 presets, frozen settings, full-song stereo rendering and loudness-matched comparisons.
 It builds independently and opens no audio hardware. Mix quality awaits listening.
 
-[**Run the offline automixer →**](docs/AUTOMIX.md)
+[**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
 
 Live-show transport, monitors, lighting and hardware integration remain planned.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.

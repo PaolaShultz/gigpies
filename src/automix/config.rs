@@ -69,6 +69,8 @@ pub struct Group {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Session {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effects: Option<super::effects::FxConfig>,
     pub version: u32,
     pub sample_rate: u32,
     pub block_frames: usize,
@@ -146,6 +148,9 @@ impl Session {
             {
                 return Err(format!("invalid channel {:?}", ch.file).into());
             }
+        }
+        if let Some(fx) = &self.effects {
+            fx.validate(self)?;
         }
         Ok(())
     }
@@ -293,6 +298,7 @@ pub fn example() -> Session {
         }
     }
     Session {
+        effects: None,
         version: 1,
         sample_rate: 44100,
         block_frames: 1024,

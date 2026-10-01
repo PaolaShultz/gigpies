@@ -61,3 +61,10 @@ See [AUTOMIX.md](AUTOMIX.md) for commands and explicit private-media test opt-in
 `src/automix/config.rs` owns editable settings and validation, `dsp.rs` owns signal
 processing, and `render.rs` owns offline files/timeline/reports. Production tests
 remain hardware-free. Failed render directories are partial and must not be published.
+
+The optional FX/review extension is documented in [FX_PASS.md](FX_PASS.md).
+`effects.rs` owns configuration/routing; attributed static engines are in
+`fx_engines.rs` and `exciter.rs`; `analysis.rs` owns deterministic measurements and
+bounded review rules. `scripts/analyze_mix.py` is optional plotting only and cannot
+change settings. All correction decisions remain in Rust and are covered by the
+normal synthetic suite.

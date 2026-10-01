@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Optional plate/chamber/hall, predelayed vocal reverb, chorus/delay and oversampled excitation.
+- Deterministic offline spectral/FX-return/dynamics review with bounded corrections and logs.
+- Modest maximization and equal-loudness previous/new comparison with explicit tail padding.
+
 - First offline automixer: causal soundcheck, editable role DSP and frozen settings.
 - Aligned local A/B rendering, K-weighted listening copies and inspectable histories.
 - Synthetic regressions and opt-in private-media robustness/audition checks.

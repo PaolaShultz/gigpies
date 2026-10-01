@@ -184,13 +184,20 @@ pub fn run(
     for s in &sources {
         total = total.max(s.offset.checked_add(s.frames).ok_or("timeline overflow")?);
     }
-    if total == 0 || total > u64::from(session.sample_rate) * 86400 {
+    let source_frames = total;
+    let tail_frames = session
+        .effects
+        .as_ref()
+        .map(|fx| (fx.tail_seconds * session.sample_rate as f64).round() as u64)
+        .unwrap_or(0);
+    total += tail_frames;
+    if source_frames == 0 || total > u64::from(session.sample_rate) * 86400 {
         return Err("empty or >24 hour timeline".into());
     }
     let freeze = finish_seconds
         .map(|s| (s * session.sample_rate as f64).round() as u64)
         .unwrap_or(0);
-    if finish_seconds.is_some() && (freeze == 0 || freeze > total) {
+    if finish_seconds.is_some() && (freeze == 0 || freeze > source_frames) {
         return Err(
             "soundcheck finish must be at least one frame and within the source timeline".into(),
         );
@@ -211,7 +218,7 @@ pub fn run(
     let mut master_history = BufWriter::new(File::create(out.join("master-history.csv"))?);
     writeln!(
         master_history,
-        "end_frame,output_peak_dbfs,max_limiter_reduction_db,affected_frames"
+        "end_frame,output_peak_dbfs,max_limiter_reduction_db,affected_frames,maximizer_max_reduction_db,maximizer_affected_frames"
     )?;
     let groups: Vec<usize> = session
         .channels
@@ -250,6 +257,10 @@ pub fn run(
         session.limiter_release_ms,
         session.sample_rate,
     );
+    let mut rack = session
+        .effects
+        .as_ref()
+        .map(|fx| super::effects::Rack::new(fx, sources.len(), session.sample_rate));
     let mut dry = hound::WavWriter::create(
         out.join("bypass-bus.tmp.wav"),
         spec(session.sample_rate, 32),
@@ -300,6 +311,11 @@ pub fn run(
                     input[i].add(*v);
                 }
                 let y = strips[i].tick(x.map(|v| v * gains[groups[i]]));
+                let y = if let Some(fx) = &mut rack {
+                    fx.excite(i, y)
+                } else {
+                    y
+                };
                 for v in y.iter().take(sources[i].channels) {
                     processed[i].add(*v);
                     after[i].add(*v);
@@ -307,10 +323,20 @@ pub fn run(
                 let ch = &session.channels[i];
                 let raw = route(x, sources[i].channels, ch.pan, faders[i] * neutral);
                 let cooked = route(y, sources[i].channels, ch.pan, faders[i]);
+                if let Some(fx) = &mut rack {
+                    fx.send(i, cooked);
+                }
                 for j in 0..2 {
                     a[j] += raw[j] * master;
                     b[j] += cooked[j] * master;
                 }
+            }
+            if let Some(fx) = &mut rack {
+                let wet = fx.returns();
+                for j in 0..2 {
+                    b[j] += wet[j] * master;
+                }
+                b = fx.master(b);
             }
             b = limiter.tick(b);
             if a.iter().chain(b.iter()).any(|v| !v.is_finite()) {
@@ -369,10 +395,12 @@ pub fn run(
         }
         writeln!(
             master_history,
-            "{end},{:.4},{:.4},{}",
+            "{end},{:.4},{:.4},{},{:.4},{}",
             db(block_wet.peak),
             limiter.max_reduction,
-            limiter.affected_frames
+            limiter.affected_frames,
+            rack.as_ref().map(|fx| fx.max_reduction()).unwrap_or(0.),
+            rack.as_ref().map(|fx| fx.affected_frames()).unwrap_or(0)
         )?;
         start = end;
     }
@@ -392,7 +420,11 @@ pub fn run(
     let export_db = (session.ceiling_db - db(dry_meter.peak.max(wet_meter.peak))).min(0.);
     let target = match (ld, lw) {
         (Some(d), Some(w)) => Some(
-            (-23_f64)
+            session
+                .effects
+                .as_ref()
+                .map(|fx| fx.listening_target_lufs)
+                .unwrap_or(-23.)
                 .min(d + session.ceiling_db - db(dry_meter.peak))
                 .min(w + session.ceiling_db - db(wet_meter.peak)),
         ),
@@ -411,17 +443,24 @@ pub fn run(
         std::fs::remove_file(input)?;
     }
     let channels:Vec<_>=sources.iter().enumerate().map(|(i,s)|serde_json::json!({"file":session.channels[i].file,"role":session.channels[i].role,"bwf_time_reference":s.reference,"offset_frames":s.offset,"source_frames":s.frames,"tail_padding_frames":total-s.offset-s.frames,"input":s.meter.report(),"post_strip":after[i].report(),"max_compressor_reduction_db":strips[i].max_reduction})).collect();
+    let fx_report = rack.as_ref().map(|fx| serde_json::json!({
+        "send_reference_meters": fx.reference_meters.iter().map(|m|m.report()).collect::<Vec<_>>(),
+        "return_meters_before_master": fx.return_meters.iter().map(|m|m.report()).collect::<Vec<_>>(),
+        "exciter_residual": fx.exciter_meter.report(),
+        "maximizer_max_reduction_db": fx.max_reduction(), "maximizer_affected_frames": fx.affected_frames(),
+        "source_frames":source_frames,"tail_frames":tail_frames
+    }));
     let report = serde_json::json!({"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
         "bypass_bus":dry_meter.report(),"processed_bus":wet_meter.report(),"bypass_lufs":ld,"processed_lufs":lw,"common_export_gain_db":export_db,
         "bypass_export_peak_dbfs":db(dry_meter.peak)+export_db,"processed_export_peak_dbfs":db(wet_meter.peak)+export_db,
         "matched_target_lufs":target,"bypass_matching_gain_db":dry_match,"processed_matching_gain_db":wet_match,
-        "master_max_reduction_db":limiter.max_reduction,"master_affected_frames":limiter.affected_frames,"true_peak":false,
+        "master_max_reduction_db":limiter.max_reduction,"master_affected_frames":limiter.affected_frames,"true_peak":false,"effects":fx_report,
         "calibration_active_seconds":calibrators.iter().map(|c|c.active_seconds).collect::<Vec<_>>()});
     write_json(&out.join("measurements.json"), &report)?;
     std::fs::write(
         out.join("report.txt"),
         format!(
-            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> fader/pan -> master -> linked sample-peak limiter.\nCommon static export attenuation: {export_db:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\nMatching uses one static gain per file, outside the automixer, with sample-peak headroom. Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
+            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> optional exciter -> fader/pan + optional post-fader FX returns -> master -> optional master EQ/maximizer -> linked sample-peak limiter.\nCommon static export attenuation: {export_db:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\nMatching uses one static gain per file, outside the automixer, with sample-peak headroom. Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
             if finish_seconds.is_some() {
                 "causal rehearsal then frozen"
             } else {
@@ -433,5 +472,79 @@ pub fn run(
         ),
     )?;
     println!("Wrote {} frames to {}", total, out.display());
+    Ok(())
+}
+
+/// Compare existing stereo renders with static loudness gains and common tail padding.
+/// No dynamics processing, time shifting or source replacement is performed.
+pub fn compare(old: &Path, new: &Path, out: &Path) -> Result<()> {
+    let rate = hound::WavReader::open(old)?.spec().sample_rate;
+    let mut sources = [Source::open(old, rate)?, Source::open(new, rate)?];
+    if sources.iter().any(|s| s.channels != 2) {
+        return Err("comparison requires stereo WAVs".into());
+    }
+    let frames = sources.iter().map(|s| s.frames).max().unwrap();
+    let mut meters = [Meter::default(), Meter::default()];
+    let mut loud = [Loudness::new(rate), Loudness::new(rate)];
+    for t in 0..frames {
+        for i in 0..2 {
+            let x = sources[i].next(t)?;
+            for v in x {
+                meters[i].add(v);
+            }
+            loud[i].add(x);
+        }
+    }
+    let levels = [loud[0].integrated(), loud[1].integrated()];
+    let target = match levels {
+        [Some(a), Some(b)] => Some(
+            (-23_f64)
+                .min(a - 2. - db(meters[0].peak))
+                .min(b - 2. - db(meters[1].peak)),
+        ),
+        _ => None,
+    };
+    let gains = std::array::from_fn::<_, 2, _>(|i| {
+        target
+            .zip(levels[i])
+            .map(|(t, l)| t - l)
+            .unwrap_or((-2. - db(meters[i].peak)).min(0.))
+    });
+    std::fs::create_dir(out)?;
+    let mut final_metrics = Vec::new();
+    for (i, path) in [old, new].into_iter().enumerate() {
+        let mut src = Source::open(path, rate)?;
+        let mut writer = hound::WavWriter::create(
+            out.join(if i == 0 {
+                "previous-matched.wav"
+            } else {
+                "new-matched.wav"
+            }),
+            spec(rate, 24),
+        )?;
+        let mut meter = Meter::default();
+        let mut loud = Loudness::new(rate);
+        for t in 0..frames {
+            let x = src.next(t)?.map(|v| v * gain(gains[i]));
+            let mut quantized = [0.; 2];
+            for c in 0..2 {
+                if !x[c].is_finite() || x[c].abs() >= 1. {
+                    return Err("comparison export would clip".into());
+                }
+                let v = (x[c] * 8388608.).round() as i32;
+                writer.write_sample(v)?;
+                quantized[c] = v as f64 / 8388608.;
+                meter.add(quantized[c]);
+            }
+            loud.add(quantized);
+        }
+        writer.finalize()?;
+        final_metrics.push(serde_json::json!({"source":path,"source_frames":src.frames,"padding_frames":frames-src.frames,"gain_db":gains[i],"output":meter.report(),"output_lufs":loud.integrated()}));
+    }
+    write_json(
+        &out.join("comparison.json"),
+        &serde_json::json!({"sample_rate":rate,"frames":frames,"target_lufs":target,"files":final_metrics}),
+    )?;
+    println!("Wrote matched comparison to {}", out.display());
     Ok(())
 }

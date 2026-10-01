@@ -129,3 +129,46 @@ fn full_song_listening_files() {
     assert!((loudness[2] - loudness[3]).abs() < 0.05);
     assert!((loudness[2] + 23.).abs() < 0.05);
 }
+
+#[test]
+#[ignore = "requires completed local automatic FX pass; remeasures private exports"]
+fn fx_pass_listening_files() {
+    use gigpies::automix::dsp::{Loudness, Meter, db};
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("artifacts/automix/fx-pass");
+    let mut levels = Vec::new();
+    for path in [
+        "compare-with-first/previous-matched.wav",
+        "compare-with-first/new-matched.wav",
+        "automatic-final/final/processed-matched.wav",
+    ] {
+        let mut reader = hound::WavReader::open(root.join(path)).unwrap();
+        assert_eq!(reader.duration(), 5214480);
+        assert_eq!(reader.spec().sample_rate, 44100);
+        assert_eq!(reader.spec().channels, 2);
+        let mut loud = Loudness::new(44100);
+        let mut meter = Meter::default();
+        let mut frame = [0.; 2];
+        for (i, sample) in reader.samples::<i32>().enumerate() {
+            let v = sample.unwrap() as f64 / 8388608.;
+            meter.add(v);
+            frame[i % 2] = v;
+            if i % 2 == 1 {
+                loud.add(frame);
+            }
+        }
+        assert_eq!(meter.clipped_samples, 0);
+        assert!(db(meter.peak) < -1.99);
+        let level = loud.integrated().unwrap();
+        println!("{path}: {:.3} LUFS, {:.3} dBFS", level, db(meter.peak));
+        levels.push(level);
+    }
+    assert!((levels[0] + 23.).abs() < 0.05);
+    assert!((levels[1] - levels[0]).abs() < 0.05);
+    assert!((levels[2] + 20.5).abs() < 0.05);
+    let report: serde_json::Value = serde_json::from_reader(
+        std::fs::File::open(root.join("automatic-final/review-result.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(report["within_reduction_budget"], true);
+    assert_eq!(report["algorithm"], "bounded_review_v1");
+}

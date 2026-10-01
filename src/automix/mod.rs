@@ -2,4 +2,10 @@
 pub mod config;
 pub mod dsp;
 mod render;
-pub use render::{run, write_json};
+pub use render::{compare, run, write_json};
+
+pub mod effects;
+mod exciter;
+mod fx_engines;
+
+pub mod analysis;

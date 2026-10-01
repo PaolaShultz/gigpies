@@ -15,3 +15,5 @@ The original draft and image capture the broader ambition. Current status is exp
 a feature described in a blueprint is not evidence that it is implemented or verified.
 
 - [Offline automixer](AUTOMIX.md): CLI, soundcheck/freeze, presets, A/B and validation.
+
+- [Effects and automatic review](FX_PASS.md): optional FX, deterministic corrections and comparison.
