@@ -1,6 +1,7 @@
 # Intended architecture
 
-Status: design direction. v0.1.0 implements only offline WAV header inspection.
+Status: live node boundaries remain design direction. Offline soundcheck/rendering
+is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
 
 ## Stagebox / Mixer
 

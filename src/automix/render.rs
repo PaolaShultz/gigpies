@@ -1,0 +1,437 @@
+use super::{config::Session, dsp::*};
+use crate::inventory::Result;
+use serde::Serialize;
+use std::{
+    fs::{File, OpenOptions},
+    io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write},
+    path::Path,
+};
+
+pub fn write_json(path: &Path, value: &impl Serialize) -> Result<()> {
+    let f = OpenOptions::new().write(true).create_new(true).open(path)?;
+    let mut writer = BufWriter::new(f);
+    serde_json::to_writer_pretty(&mut writer, value)?;
+    writer.flush()?;
+    Ok(())
+}
+fn time_reference(path: &Path) -> Result<Option<u64>> {
+    let mut f = File::open(path)?;
+    let length = f.metadata()?.len();
+    let mut header = [0; 12];
+    f.read_exact(&mut header)?;
+    let mut result = None;
+    while f.stream_position()? + 8 <= length {
+        let mut h = [0; 8];
+        f.read_exact(&mut h)?;
+        let n = u32::from_le_bytes(h[4..8].try_into()?) as u64;
+        let start = f.stream_position()?;
+        if start + n > length {
+            return Err("truncated RIFF chunk".into());
+        }
+        if &h[..4] == b"bext" {
+            if n < 346 {
+                return Err("short Broadcast WAV metadata".into());
+            }
+            f.seek(SeekFrom::Start(start + 338))?;
+            let mut t = [0; 8];
+            f.read_exact(&mut t)?;
+            result = Some(u64::from_le_bytes(t));
+        }
+        f.seek(SeekFrom::Start(start + n + (n % 2)))?;
+    }
+    Ok(result)
+}
+struct Source {
+    reader: hound::WavReader<BufReader<File>>,
+    channels: usize,
+    scale: f64,
+    float: bool,
+    frames: u64,
+    position: u64,
+    offset: u64,
+    reference: Option<u64>,
+    meter: Meter,
+}
+impl Source {
+    fn open(path: &Path, rate: u32) -> Result<Self> {
+        let reader = hound::WavReader::open(path)?;
+        let s = reader.spec();
+        if s.sample_rate != rate
+            || !(1..=2).contains(&s.channels)
+            || reader.len() % u32::from(s.channels) != 0
+            || !(s.sample_format == hound::SampleFormat::Float && s.bits_per_sample == 32
+                || s.sample_format == hound::SampleFormat::Int
+                    && [16, 24, 32].contains(&s.bits_per_sample))
+        {
+            return Err(format!("unsupported/mismatched WAV: {}", path.display()).into());
+        }
+        let frames = reader.duration() as u64;
+        Ok(Self {
+            reader,
+            channels: s.channels as usize,
+            scale: 2_f64.powi(i32::from(s.bits_per_sample) - 1),
+            float: s.sample_format == hound::SampleFormat::Float,
+            frames,
+            position: 0,
+            offset: 0,
+            reference: time_reference(path)?,
+            meter: Meter::default(),
+        })
+    }
+    fn next(&mut self, t: u64) -> Result<[f64; 2]> {
+        if t < self.offset || self.position >= self.frames {
+            return Ok([0.; 2]);
+        }
+        let mut x = [0.; 2];
+        for v in x.iter_mut().take(self.channels) {
+            *v = if self.float {
+                self.reader
+                    .samples::<f32>()
+                    .next()
+                    .ok_or("truncated sample payload")?? as f64
+            } else {
+                self.reader
+                    .samples::<i32>()
+                    .next()
+                    .ok_or("truncated sample payload")?? as f64
+                    / self.scale
+            };
+            if !v.is_finite() || v.abs() > 64. {
+                return Err("nonfinite or implausibly large input sample".into());
+            }
+            let clips = self.meter.clipped_samples;
+            self.meter.add(*v);
+            let threshold = if self.float {
+                1.0
+            } else {
+                1.0 - 1.0 / self.scale
+            };
+            self.meter.clipped_samples = clips + u64::from(v.abs() >= threshold);
+        }
+        if self.channels == 1 {
+            x[1] = x[0];
+        }
+        self.position += 1;
+        Ok(x)
+    }
+}
+fn route(x: [f64; 2], channels: usize, pan: f64, fader: f64) -> [f64; 2] {
+    if channels == 1 {
+        let angle = (pan + 1.) * std::f64::consts::FRAC_PI_4;
+        [x[0] * angle.cos() * fader, x[0] * angle.sin() * fader]
+    } else {
+        [
+            x[0] * (1. - pan.max(0.)).sqrt() * fader,
+            x[1] * (1. + pan.min(0.)).sqrt() * fader,
+        ]
+    }
+}
+fn spec(rate: u32, bits: u16) -> hound::WavSpec {
+    hound::WavSpec {
+        channels: 2,
+        sample_rate: rate,
+        bits_per_sample: bits,
+        sample_format: if bits == 32 {
+            hound::SampleFormat::Float
+        } else {
+            hound::SampleFormat::Int
+        },
+    }
+}
+fn export(input: &Path, output: &Path, scale: f64) -> Result<()> {
+    let mut reader = hound::WavReader::open(input)?;
+    let mut writer = hound::WavWriter::create(output, spec(reader.spec().sample_rate, 24))?;
+    for s in reader.samples::<f32>() {
+        let v = s? as f64 * scale;
+        if !v.is_finite() || v.abs() >= 1. {
+            return Err("export would clip".into());
+        }
+        writer.write_sample((v * 8388608.).round() as i32)?;
+    }
+    writer.finalize()?;
+    Ok(())
+}
+/// `finish_seconds`: Some = rehearsal from neutral, then freeze; None = prepared show.
+/// Output must be a new directory. Source files are only opened read-only.
+pub fn run(
+    mut session: Session,
+    root: &Path,
+    out: &Path,
+    finish_seconds: Option<f64>,
+) -> Result<()> {
+    session.validate()?;
+    if let Some(t) = finish_seconds {
+        if !t.is_finite() || t <= 0. {
+            return Err("soundcheck duration must be positive and finite".into());
+        }
+    } else if !session.prepared {
+        return Err("render requires prepared settings from soundcheck".into());
+    }
+    let mut sources: Vec<_> = session
+        .channels
+        .iter()
+        .map(|ch| Source::open(&root.join(&ch.file), session.sample_rate))
+        .collect::<Result<_>>()?;
+    let references: Vec<_> = sources.iter().filter_map(|s| s.reference).collect();
+    if !references.is_empty() && references.len() != sources.len() {
+        return Err("mixed missing/present BWF time references: explicitly prepare a consistent timeline first".into());
+    }
+    let origin = references.iter().min().copied().unwrap_or(0);
+    for s in &mut sources {
+        s.offset = s.reference.unwrap_or(0) - origin;
+    }
+    let mut total = 0;
+    for s in &sources {
+        total = total.max(s.offset.checked_add(s.frames).ok_or("timeline overflow")?);
+    }
+    if total == 0 || total > u64::from(session.sample_rate) * 86400 {
+        return Err("empty or >24 hour timeline".into());
+    }
+    let freeze = finish_seconds
+        .map(|s| (s * session.sample_rate as f64).round() as u64)
+        .unwrap_or(0);
+    if finish_seconds.is_some() && (freeze == 0 || freeze > total) {
+        return Err(
+            "soundcheck finish must be at least one frame and within the source timeline".into(),
+        );
+    }
+    // Validation and source opening precede output creation; never overwrite a prior experiment.
+    std::fs::create_dir(out)?;
+    write_json(&out.join("initial-settings.json"), &session)?;
+    let mut history = BufWriter::new(File::create(out.join("gain-history.csv"))?);
+    writeln!(
+        history,
+        "start_frame,end_frame,group,reference_rms_dbfs,group_peak_dbfs,active,active_seconds,trim_start_db,trim_end_db,next_trim_db,frozen"
+    )?;
+    let mut channel_history = BufWriter::new(File::create(out.join("channel-history.csv"))?);
+    writeln!(
+        channel_history,
+        "end_frame,channel,input_rms_dbfs,input_peak_dbfs,post_strip_rms_dbfs,post_strip_peak_dbfs,max_compressor_reduction_db"
+    )?;
+    let mut master_history = BufWriter::new(File::create(out.join("master-history.csv"))?);
+    writeln!(
+        master_history,
+        "end_frame,output_peak_dbfs,max_limiter_reduction_db,affected_frames"
+    )?;
+    let groups: Vec<usize> = session
+        .channels
+        .iter()
+        .map(|ch| {
+            session
+                .groups
+                .iter()
+                .position(|g| g.name == ch.group)
+                .unwrap()
+        })
+        .collect();
+    let mut calibrators: Vec<_> = session
+        .groups
+        .iter()
+        .map(|_| Calibrator::new(&session.calibration))
+        .collect();
+    let mut current: Vec<_> = session
+        .groups
+        .iter()
+        .map(|g| {
+            if finish_seconds.is_some() {
+                session.calibration.initial_trim_db
+            } else {
+                g.trim_db
+            }
+        })
+        .collect();
+    let mut strips: Vec<_> = session
+        .channels
+        .iter()
+        .map(|ch| Strip::new(ch, session.sample_rate))
+        .collect();
+    let mut limiter = Limiter::new(
+        session.ceiling_db,
+        session.limiter_release_ms,
+        session.sample_rate,
+    );
+    let mut dry = hound::WavWriter::create(
+        out.join("bypass-bus.tmp.wav"),
+        spec(session.sample_rate, 32),
+    )?;
+    let mut wet = hound::WavWriter::create(
+        out.join("processed-bus.tmp.wav"),
+        spec(session.sample_rate, 32),
+    )?;
+    let mut dry_meter = Meter::default();
+    let mut wet_meter = Meter::default();
+    let mut loud_dry = Loudness::new(session.sample_rate);
+    let mut loud_wet = Loudness::new(session.sample_rate);
+    let mut after = vec![Meter::default(); sources.len()];
+    let faders: Vec<_> = session
+        .channels
+        .iter()
+        .map(|ch| gain(ch.fader_db))
+        .collect();
+    let master = gain(session.master_db);
+    let neutral = gain(session.calibration.initial_trim_db);
+    let mut start = 0;
+    while start < total {
+        let mut end = (start + session.block_frames as u64).min(total);
+        if start < freeze {
+            end = end.min(freeze);
+        }
+        let adapting = finish_seconds.is_some() && start < freeze;
+        let targets: Vec<_> = calibrators
+            .iter()
+            .enumerate()
+            .map(|(i, c)| if adapting { c.trim_db } else { current[i] })
+            .collect();
+        let previous = current.clone();
+        let mut input = vec![Meter::default(); sources.len()];
+        let mut processed = vec![Meter::default(); sources.len()];
+        let mut block_wet = Meter::default();
+        let mut gains = vec![0.; current.len()];
+        for t in start..end {
+            let fraction = (t - start + 1) as f64 / (end - start) as f64;
+            for (i, value) in gains.iter_mut().enumerate() {
+                *value = gain(current[i] + (targets[i] - current[i]) * fraction);
+            }
+            let mut a = [0.; 2];
+            let mut b = [0.; 2];
+            for i in 0..sources.len() {
+                let x = sources[i].next(t)?;
+                for v in x.iter().take(sources[i].channels) {
+                    input[i].add(*v);
+                }
+                let y = strips[i].tick(x.map(|v| v * gains[groups[i]]));
+                for v in y.iter().take(sources[i].channels) {
+                    processed[i].add(*v);
+                    after[i].add(*v);
+                }
+                let ch = &session.channels[i];
+                let raw = route(x, sources[i].channels, ch.pan, faders[i] * neutral);
+                let cooked = route(y, sources[i].channels, ch.pan, faders[i]);
+                for j in 0..2 {
+                    a[j] += raw[j] * master;
+                    b[j] += cooked[j] * master;
+                }
+            }
+            b = limiter.tick(b);
+            if a.iter().chain(b.iter()).any(|v| !v.is_finite()) {
+                return Err("nonfinite DSP output".into());
+            }
+            for j in 0..2 {
+                dry.write_sample(a[j] as f32)?;
+                wet.write_sample(b[j] as f32)?;
+                dry_meter.add(a[j]);
+                wet_meter.add(b[j]);
+                block_wet.add(b[j]);
+            }
+            loud_dry.add(a);
+            loud_wet.add(b);
+        }
+        current = targets;
+        for (i, g) in session.groups.iter().enumerate() {
+            let peak = input
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| groups[*j] == i)
+                .map(|(_, m)| m.peak)
+                .fold(0., f64::max);
+            if adapting {
+                calibrators[i].observe(
+                    input[g.reference].rms(),
+                    peak,
+                    (end - start) as f64 / session.sample_rate as f64,
+                );
+            }
+            let c = &calibrators[i];
+            writeln!(
+                history,
+                "{start},{end},{},{:.4},{:.4},{},{:.4},{:.4},{:.4},{:.4},{}",
+                g.name,
+                db(input[g.reference].rms()),
+                db(peak),
+                c.active,
+                c.active_seconds,
+                previous[i],
+                current[i],
+                if adapting { c.trim_db } else { current[i] },
+                !adapting
+            )?;
+        }
+        for i in 0..sources.len() {
+            writeln!(
+                channel_history,
+                "{end},{i},{:.4},{:.4},{:.4},{:.4},{:.4}",
+                db(input[i].rms()),
+                db(input[i].peak),
+                db(processed[i].rms()),
+                db(processed[i].peak),
+                strips[i].max_reduction
+            )?;
+        }
+        writeln!(
+            master_history,
+            "{end},{:.4},{:.4},{}",
+            db(block_wet.peak),
+            limiter.max_reduction,
+            limiter.affected_frames
+        )?;
+        start = end;
+    }
+    history.flush()?;
+    channel_history.flush()?;
+    master_history.flush()?;
+    dry.finalize()?;
+    wet.finalize()?;
+    // Final trim equals the last applied value, not the un-applied last block decision.
+    for (g, trim) in session.groups.iter_mut().zip(&current) {
+        g.trim_db = *trim;
+    }
+    session.prepared = true;
+    write_json(&out.join("prepared.json"), &session)?;
+    let ld = loud_dry.integrated();
+    let lw = loud_wet.integrated();
+    let export_db = (session.ceiling_db - db(dry_meter.peak.max(wet_meter.peak))).min(0.);
+    let target = match (ld, lw) {
+        (Some(d), Some(w)) => Some(
+            (-23_f64)
+                .min(d + session.ceiling_db - db(dry_meter.peak))
+                .min(w + session.ceiling_db - db(wet_meter.peak)),
+        ),
+        _ => None,
+    };
+    let dry_match = target.zip(ld).map(|(t, l)| t - l).unwrap_or(export_db);
+    let wet_match = target.zip(lw).map(|(t, l)| t - l).unwrap_or(export_db);
+    for (stem, matched_db) in [("bypass", dry_match), ("processed", wet_match)] {
+        let input = out.join(format!("{stem}-bus.tmp.wav"));
+        export(&input, &out.join(format!("{stem}.wav")), gain(export_db))?;
+        export(
+            &input,
+            &out.join(format!("{stem}-matched.wav")),
+            gain(matched_db),
+        )?;
+        std::fs::remove_file(input)?;
+    }
+    let channels:Vec<_>=sources.iter().enumerate().map(|(i,s)|serde_json::json!({"file":session.channels[i].file,"role":session.channels[i].role,"bwf_time_reference":s.reference,"offset_frames":s.offset,"source_frames":s.frames,"tail_padding_frames":total-s.offset-s.frames,"input":s.meter.report(),"post_strip":after[i].report(),"max_compressor_reduction_db":strips[i].max_reduction})).collect();
+    let report = serde_json::json!({"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
+        "bypass_bus":dry_meter.report(),"processed_bus":wet_meter.report(),"bypass_lufs":ld,"processed_lufs":lw,"common_export_gain_db":export_db,
+        "bypass_export_peak_dbfs":db(dry_meter.peak)+export_db,"processed_export_peak_dbfs":db(wet_meter.peak)+export_db,
+        "matched_target_lufs":target,"bypass_matching_gain_db":dry_match,"processed_matching_gain_db":wet_match,
+        "master_max_reduction_db":limiter.max_reduction,"master_affected_frames":limiter.affected_frames,"true_peak":false,
+        "calibration_active_seconds":calibrators.iter().map(|c|c.active_seconds).collect::<Vec<_>>()});
+    write_json(&out.join("measurements.json"), &report)?;
+    std::fs::write(
+        out.join("report.txt"),
+        format!(
+            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> fader/pan -> master -> linked sample-peak limiter.\nCommon static export attenuation: {export_db:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\nMatching uses one static gain per file, outside the automixer, with sample-peak headroom. Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
+            if finish_seconds.is_some() {
+                "causal rehearsal then frozen"
+            } else {
+                "frozen prepared show"
+            },
+            session.sample_rate,
+            limiter.max_reduction,
+            limiter.affected_frames
+        ),
+    )?;
+    println!("Wrote {} frames to {}", total, out.display());
+    Ok(())
+}

@@ -9,22 +9,25 @@ Implemented:
 - Synthetic regression tests and Linux CI; no hardware required.
 - Architecture, source-material notes, dependency map and preserved concept sources.
 
-Not implemented: sample analysis, automatic balance, mix rendering, live audio,
-network transport, web/TUI/controller operation, recording or lighting integration.
-No live latency, listening quality, acoustic safety or Pi headroom is claimed.
+## First offline automixer — implemented, offline-validated
 
-## First development thread: automixing
+- Synchronized native-rate streaming soundcheck with bounded activity-aware trim,
+  linked calibration groups, causal history and explicit freeze/save.
+- Editable role presets: HPF, parametric EQ, stereo-linked compression, pan/faders.
+- BWF time-reference alignment, zero-padded tails and conservative master peak control.
+- Frozen-settings rendering, full-song local A/B WAVs and loudness-matched copies.
+- Measurements and gain/reduction histories; input clipping is reported, not repaired.
+- Synthetic DSP/routing/persistence tests; opt-in deterministic private-media variations.
 
-Start with The Complainiacs — Etc: 13 WAV files, including stereo drum tracks.
+The first full-band experiment has been rendered and its file/measurement contracts
+checked. Listening is the next evaluation; tests do not establish musical quality.
+See [workflow, presets and limitations](AUTOMIX.md).
 
-1. Inspect original files and establish their alignment and usable contents.
-2. Measure activity, peaks, average levels and spectral behavior without altering audio.
-3. Produce a simple, reproducible balance and a local stereo comparison render.
-4. Listen, assess and refine one processing decision at a time.
-5. Bring useful DSP from the related projects into explicit, tested integration paths.
+Not implemented: live audio or device transport, networking, web/TUI/controller,
+recording, lighting integration, gates/effects or true-peak limiting.
+No live latency, acoustic safety, listening acceptance or Pi headroom is claimed.
 
-This is a sequence of small experiments, not a commitment to automatic EQ, gates,
-compression or effects before the first balance is understood. The 40-track Dark Ride
-session is additional material when useful. Live hardware integration follows later.
+Next: audition the matched pair, assess vocal/snare/bass/guitar balance and revise one
+setting at a time. A second source session and hardware integration follow when useful.
 
 The [archived blueprint](archive/blueprints/blueprint-v2.md) retains the wider scope.

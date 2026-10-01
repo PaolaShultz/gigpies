@@ -1,8 +1,9 @@
 # Existing components and dependencies
 
 Sibling projects were inspected on 2026-10-01. All remain in development.
-Their own source and status documents own current details; no sibling code was copied
-or linked into this release.
+Their own source and status documents own current details. The offline automixer adapts
+narrow biquad/dynamics equations from SHR PA/DAW with preserved MIT notices; see
+[attribution](../THIRD_PARTY.md). No sibling is linked or modified.
 
 | Project | Useful existing work | Integration limit |
 |---|---|---|

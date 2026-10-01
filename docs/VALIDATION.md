@@ -18,3 +18,24 @@ prove alignment. Archive extraction checked ZIP member integrity while reading.
 No historical/exhaustive tests exist yet. Live audio, hardware, listening, long-running
 benchmarks and automixing acceptance were intentionally outside this foundation pass.
 GitHub Actions separately records the hosted Linux checks for the published commit.
+
+## First offline automixer — 2026-10-01
+
+Passed on the same pinned Rust toolchain:
+
+- Complete normal suite: 14 synthetic DSP, file, schema, persistence, alignment and
+  CLI tests. Calibration prefix equality checks causality; linked stereo tests check
+  image preservation; output checks enforce finite samples and sample-peak headroom.
+- Formatting, locked check, warning-denied Clippy across all targets and release build.
+- Explicit opt-in local source variations: low/high levels, silence, pauses, jumps and
+  clipped material. Trim stays bounded, silence does not raise trim, clipping is reported.
+- Complete native-rate band soundcheck with an explicit stop, then a frozen render.
+- Exported full-song listening files remeasured for matched loudness, length and
+  headroom. All 13 original WAVs compared byte-for-byte by hash against the archive.
+
+Private-media tests remain ignored in the normal suite and were run explicitly for
+this change. [On-demand commands](AUTOMIX.md#tests-and-limits) are documented. No
+historical/exhaustive benchmark suite was needed. Detailed measurements, source hashes,
+prepared settings and audio are ignored local artifacts, not publication content.
+Listening, hardware acceptance, true-peak validation and live-device tests remain
+unperformed; these tests do not establish musical quality or acoustic safety.

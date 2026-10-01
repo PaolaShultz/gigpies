@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/license-MIT-b6a0ec)](LICENSE)
 [![Status](https://img.shields.io/badge/status-experimental-e7a85d)](docs/STATUS.md)
 
-[**Start here**](#run-the-foundation) · [**Architecture**](docs/ARCHITECTURE.md) · [**Roadmap**](docs/STATUS.md) · [**Documentation**](docs/README.md)
+[**Start here**](#run-the-cli) · [**Architecture**](docs/ARCHITECTURE.md) · [**Roadmap**](docs/STATUS.md) · [**Documentation**](docs/README.md)
 
 </div>
 
@@ -44,20 +44,16 @@ These are design boundaries. Node integration is planned; see [architecture](doc
 
 ## Working today
 
-**v0.1.0 is the first public foundation.** It contains a Rust library/CLI, WAV header
-inspection, synthetic regression tests and the project documentation.
+The first offline automixer now provides causal soundcheck, editable instrument
+presets, frozen settings, full-song stereo rendering and loudness-matched comparisons.
+It builds independently and opens no audio hardware. Mix quality awaits listening.
 
-| Available now | Next experiment | Later integrations |
-|---|---|---|
-| Read-only WAV inventory | Measure original multitracks | Local Stagebox audio engine |
-| JSON format/duration reports | Establish a reproducible balance | PA, FX and performer monitors |
-| Hardware-free tests and CI | Render, listen and refine | Brain, recording and lighting |
+[**Run the offline automixer →**](docs/AUTOMIX.md)
 
-Automatic mixing and live-show functions are not implemented yet. Related SHR projects
-supply useful developing components; [the component map](docs/COMPONENTS.md) records
-what exists and what still needs integration and validation.
+Live-show transport, monitors, lighting and hardware integration remain planned.
+[The component map](docs/COMPONENTS.md) records the related developing SHR projects.
 
-## Run the foundation
+## Run the CLI
 
 Install Rust through rustup. This checkout selects **Rust 1.97.1**.
 

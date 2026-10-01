@@ -54,3 +54,10 @@ Before publication inspect staged files, confirm music/private data are absent,
 run `git diff --cached --check`, and run the normal checks above. Version 0.1.0 is
 the first foundation release; tag it `v0.1.0`. Later release notes must distinguish
 implemented, offline-validated and physically verified behavior.
+
+## Offline automixer
+
+See [AUTOMIX.md](AUTOMIX.md) for commands and explicit private-media test opt-ins.
+`src/automix/config.rs` owns editable settings and validation, `dsp.rs` owns signal
+processing, and `render.rs` owns offline files/timeline/reports. Production tests
+remain hardware-free. Failed render directories are partial and must not be published.

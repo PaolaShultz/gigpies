@@ -16,3 +16,22 @@ endorsement or ownership of those marks is claimed.
 The Complainiacs / Dark Ride recordings are local educational experiment material.
 Their source notices remain with local files. They are not covered by this project's
 MIT licence and are not included in Git, tests, CI, packages or releases.
+
+## Offline automixer adaptations
+
+`src/automix/dsp.rs` adapts normalized transposed-direct-form biquads, HPF/bell
+coefficient equations and soft-knee compression from:
+
+- [SHR PA](https://github.com/PaolaShultz/shr-pa), `src/dsp.rs`, inspected commit
+  `ccc816a97f1957549a2a515d94a672dc78c59012`.
+  [Preserved MIT licence](licenses/shr-pa-MIT.txt).
+- [SHR DAW](https://github.com/PaolaShultz/shr-daw), `src/effects/compressor.rs`,
+  `eq.rs`, `channel.rs`, inspected commit `c3d2e6517cc60c7a75a319655246a54130437875`.
+  Stereo maximum detection and attack/release smoothing inform our linked compressor.
+  [Preserved MIT licence](licenses/shr-daw-MIT.txt).
+
+SHR DAW gate/mixing and SHR PA metering/offline rendering were reviewed as references.
+SHR FX `src/dsp.rs` at `9b9a2a94f8fe79389fba03d065924c0dd335599f` was inspected
+for effects/send-return structure; no FX code was copied and effects remain out of scope.
+The gain estimator, routing, file workflow and preset choices are GigPies work.
+Manufacturer guidance and the loudness standard are linked in [AUTOMIX](docs/AUTOMIX.md).

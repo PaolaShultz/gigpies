@@ -13,3 +13,5 @@
 
 The original draft and image capture the broader ambition. Current status is explicit;
 a feature described in a blueprint is not evidence that it is implemented or verified.
+
+- [Offline automixer](AUTOMIX.md): CLI, soundcheck/freeze, presets, A/B and validation.
