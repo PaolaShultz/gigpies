@@ -1,5 +1,8 @@
 # Offline musical balance experiment
 
+The new [manufacturer-reference experiment](PRESET_EXPERIMENT.md) separates published
+parameters, DSP adaptations, processing evidence and static fader changes.
+
 Implemented: synchronized source/group analysis, a bounded static fader optimizer,
 and separate fader-only and processing comparisons. Offline preparation can inspect
 the complete recording. It does not change or claim to replace causal soundcheck.
@@ -109,7 +112,8 @@ The room/kit default is conditioned on kick hits; snare/tom event and microphone
 reports supplement it rather than claiming complete room perceptual coverage.
 
 The deterministic coordinate search uses 0.5 dB moves bounded to ±6 dB from the
-supplied faders and at most 1,024 scored candidates per stage. Stage one moves kit
+supplied faders and a default budget of 512 scored candidates per stage. The budget is editable;
+the earlier local experiment used 1,024 per stage. Stage one moves kit
 microphones and vocal room individually. Stage two moves the complete kit, bass,
 rhythm guitar, lead guitar and direct vocal groups. These are musical fader moves;
 calibration groups and their unity input trims do not change. Each stereo source

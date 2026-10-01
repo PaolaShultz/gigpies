@@ -305,3 +305,36 @@ fn improvement_needs_its_own_held_out_evidence() {
     assert!(!r.accepted);
     assert_eq!(r.deltas_db, vec![0.; 3]);
 }
+
+#[test]
+fn acoustic_roles_enter_policy_but_unsupported_ensembles_are_not_success() {
+    let s = session(&[Role::LeadVocal, Role::AcousticGuitar]);
+    assert!(
+        Policy::for_session(&s)
+            .relationships
+            .iter()
+            .any(|r| r.denominator == vec![1])
+    );
+    let t = Scratch::new();
+    let s = session(&[Role::Other]);
+    let mut wav = hound::WavWriter::create(
+        t.0.join("0.wav"),
+        hound::WavSpec {
+            channels: 1,
+            sample_rate: 8000,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        },
+    )
+    .unwrap();
+    for _ in 0..1600 {
+        wav.write_sample(0_i16).unwrap();
+    }
+    wav.finalize().unwrap();
+    balance::run(s, &t.0, &t.0.join("pass"), None, true).unwrap();
+    let status: serde_json::Value =
+        serde_json::from_reader(std::fs::File::open(t.0.join("pass/status.json")).unwrap())
+            .unwrap();
+    assert_eq!(status["policy_targets_met"], false);
+    assert_eq!(status["accepted_fader_change"], false);
+}

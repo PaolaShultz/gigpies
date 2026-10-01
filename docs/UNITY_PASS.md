@@ -1,5 +1,8 @@
 # Unity-source comparison without loudness matching
 
+The new [manufacturer-reference experiment](PRESET_EXPERIMENT.md) separates published
+parameters, DSP adaptations, processing evidence and static fader changes.
+
 For the next source/group balance experiment, see [BALANCE_PASS.md](BALANCE_PASS.md).
 This unity baseline and its previous renders remain unchanged.
 

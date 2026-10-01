@@ -108,6 +108,7 @@ fn filters_compressor_and_linked_sample_peak_protection() {
     };
     assert!(db(measure(10., Biquad::highpass(100., 0.707, rate))) < -42.);
     let bell = EqBand {
+        kind: Default::default(),
         hz: 1000.,
         q: 1.,
         db: 3.,

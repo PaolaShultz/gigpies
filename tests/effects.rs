@@ -44,6 +44,12 @@ fn vocal_predelay_validation_and_legacy_defaults() {
         }
     }
     assert!(s.validate().is_err());
+    for ch in &mut s.channels {
+        if matches!(ch.role, gigpies::automix::config::Role::LeadVocal) {
+            ch.role = gigpies::automix::config::Role::BackingVocal;
+        }
+    }
+    assert!(s.validate().is_err());
     let mut v = serde_json::to_value(example()).unwrap();
     v.as_object_mut().unwrap().remove("effects");
     let old: Session = serde_json::from_value(v).unwrap();

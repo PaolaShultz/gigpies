@@ -27,9 +27,9 @@ Not implemented: live audio or device transport, networking, web/TUI/controller,
 recording, lighting integration, gates or true-peak limiting.
 No live latency, acoustic safety, listening acceptance or Pi headroom is claimed.
 
-Next: audition the unmatched OLD/A/B musical-balance candidates and record listener
-preference separately from policy compliance. A second source session and hardware
-integration follow when useful.
+Next: review the new manufacturer-reference SOURCE → OUR MIX comparisons and record
+listener preference separately from policy compliance. Earlier rejected candidates
+remain preserved as historical evidence. Hardware integration remains separate.
 
 The [archived blueprint](archive/blueprints/blueprint-v2.md) retains the wider scope.
 
@@ -59,3 +59,19 @@ reduction, and exact unmatched OLD/A/B excerpts. The local processing candidate
 partially restores guitar low-mid cuts after rendering the fader-only candidate.
 Initial policy targets remain hypotheses and some remain unmet; listener preference
 is pending. No playback or hardware changes. [Workflow and limits](BALANCE_PASS.md).
+
+## Manufacturer-reference experiment
+
+Implemented and offline-validated: explicit low/high shelves, broad-Q bells,
+traceable local Yamaha parameter mapping, unsupported-parameter audits and a bounded
+training-only compression adaptation. Six local sessions were assessed; five received
+full-song processing and separate fader experiments. Exact SOURCE → OUR MIX excerpts
+and two independent produced-reference comparisons are ready locally. The normal
+suite passes (41 Rust and four Python tests); listener preference remains unknown.
+
+Only Complainiacs' fader proposal was accepted. Rainfall met its applicable balance
+policy without a fader change; other band targets remain unmet, and Phoenix has no
+applicable ensemble policy. Dark Ride's full-band render is deferred without a
+verified bass DI. [Methods, reference-use limits and results](PRESET_EXPERIMENT.md).
+Manufacturer collections, recordings, settings and detailed private evidence remain
+local. No console emulation or hardware verification is claimed.

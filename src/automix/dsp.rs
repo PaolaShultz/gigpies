@@ -1,5 +1,5 @@
 //! Biquad and dynamics equations adapted from SHR PA/DAW; see THIRD_PARTY.md.
-use super::config::{Calibration, Channel, Compressor, EqBand};
+use super::config::{Calibration, Channel, Compressor, EqBand, EqKind};
 use serde::Serialize;
 use std::f64::consts::{FRAC_1_SQRT_2, PI};
 pub fn gain(db: f64) -> f64 {
@@ -40,6 +40,37 @@ impl Biquad {
             [1. + alpha / a, -2. * w.cos(), 1. - alpha / a],
         )
     }
+    /// RBJ shelf equations, S=1; no console transfer-function equivalence claimed.
+    pub fn equalizer(e: &EqBand, rate: u32) -> Self {
+        if e.kind == EqKind::Bell {
+            return Self::bell(e, rate);
+        }
+        let a = gain(e.db / 2.);
+        let w = 2. * PI * e.hz / rate as f64;
+        let c = w.cos();
+        let t = w.sin() * (2. * a).sqrt();
+        let u = a + 1.;
+        let v = a - 1.;
+        if e.kind == EqKind::LowShelf {
+            Self::new(
+                [
+                    a * (u - v * c + t),
+                    2. * a * (v - u * c),
+                    a * (u - v * c - t),
+                ],
+                [u + v * c + t, -2. * (v + u * c), u + v * c - t],
+            )
+        } else {
+            Self::new(
+                [
+                    a * (u + v * c + t),
+                    -2. * a * (v + u * c),
+                    a * (u + v * c - t),
+                ],
+                [u - v * c + t, 2. * (v - u * c), u - v * c - t],
+            )
+        }
+    }
     pub fn tick(&mut self, x: f64) -> f64 {
         let y = self.b[0] * x + self.z[0];
         self.z = [
@@ -74,7 +105,7 @@ impl Strip {
         if ch.hpf_hz > 0. {
             filters.push([Biquad::highpass(ch.hpf_hz, FRAC_1_SQRT_2, rate); 2]);
         }
-        filters.extend(ch.eq.iter().map(|e| [Biquad::bell(e, rate); 2]));
+        filters.extend(ch.eq.iter().map(|e| [Biquad::equalizer(e, rate); 2]));
         Self {
             filters,
             p: ch.compressor.clone(),

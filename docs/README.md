@@ -19,3 +19,5 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 - [Effects and automatic review](FX_PASS.md): optional FX, deterministic corrections and comparison.
 
 - [Offline musical balance](BALANCE_PASS.md): measurements, policy and OLD/A/B evidence.
+
+- [Manufacturer-reference experiment](PRESET_EXPERIMENT.md): source traceability, DSP mappings and separate processing/fader comparisons.

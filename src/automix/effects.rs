@@ -117,6 +117,7 @@ impl FxConfig {
             || self.master_eq.len() > 4
             || self.master_eq.iter().any(|e| {
                 !in_range(e.hz, 20., s.sample_rate as f64 * 0.4)
+                    || !e.valid_q()
                     || !in_range(e.q, 0.3, 4.)
                     || !in_range(e.db, -3., 3.)
             })
@@ -154,7 +155,7 @@ impl FxConfig {
                         && (!b.sends.iter().any(|v| {
                             matches!(
                                 s.channels[v.channel].role,
-                                Role::LeadVocal | Role::VocalRoom
+                                Role::LeadVocal | Role::BackingVocal | Role::VocalRoom
                             )
                         }) || r.predelay_ms >= 30.)
                 }
@@ -373,7 +374,7 @@ impl Rack {
             eq: p
                 .master_eq
                 .iter()
-                .map(|e| [Biquad::bell(e, rate); 2])
+                .map(|e| [Biquad::equalizer(e, rate); 2])
                 .collect(),
             maximizer: Limiter::new(p.maximizer_threshold_db, p.maximizer_release_ms, rate),
             rate,

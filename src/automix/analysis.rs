@@ -288,6 +288,7 @@ pub fn decisions(
                 continue;
             }
             fx.master_eq.push(EqBand {
+                kind: Default::default(),
                 hz: b.hz,
                 q: 1.4,
                 db: -cut,

@@ -2,9 +2,19 @@ use crate::inventory::Result;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::PathBuf};
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EqKind {
+    #[default]
+    Bell,
+    LowShelf,
+    HighShelf,
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct EqBand {
+    #[serde(default)]
+    pub kind: EqKind,
     pub hz: f64,
     pub q: f64,
     pub db: f64,
@@ -33,6 +43,9 @@ pub enum Role {
     LeadGuitar,
     LeadVocal,
     VocalRoom,
+    AcousticGuitar,
+    BackingVocal,
+    Other,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -149,7 +162,7 @@ impl Session {
                 || ch.eq.len() > 8
                 || ch.eq.iter().any(|e| {
                     !range(e.hz, 10., self.sample_rate as f64 * 0.45)
-                        || !range(e.q, 0.2, 10.)
+                        || !e.valid_q()
                         || !range(e.db, -12., 12.)
                 })
                 || !range(p.threshold_db, -60., 0.)
@@ -173,6 +186,7 @@ impl Channel {
         use Role::*;
         // Engineering starting points, not a manufacturer's factory preset.
         let (hp, bands, threshold, ratio, attack, release, makeup) = match role {
+            AcousticGuitar | BackingVocal | Other => (90., vec![], 0., 1., 10., 100., 0.),
             Kick => (
                 30.,
                 vec![(65., 0.8, 2.), (280., 1., -3.), (3000., 1., 1.5)],
@@ -266,7 +280,12 @@ impl Channel {
             hpf_hz: hp,
             eq: bands
                 .into_iter()
-                .map(|(hz, q, db)| EqBand { hz, q, db })
+                .map(|(hz, q, db)| EqBand {
+                    kind: EqKind::Bell,
+                    hz,
+                    q,
+                    db,
+                })
                 .collect(),
             compressor: Compressor {
                 threshold_db: threshold,
@@ -334,5 +353,16 @@ pub fn example() -> Session {
             down_db_per_second: 60.,
             initial_trim_db: 0.,
         },
+    }
+}
+
+impl EqBand {
+    /// Shelves use a fixed monotonic S=1 response. Q is an explicit 1/sqrt(2)
+    /// sentinel, never a silently ignored console shelf bandwidth.
+    pub fn valid_q(&self) -> bool {
+        match self.kind {
+            EqKind::Bell => range(self.q, 0.1, 10.),
+            _ => (self.q - std::f64::consts::FRAC_1_SQRT_2).abs() < 1e-12,
+        }
     }
 }

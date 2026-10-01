@@ -42,3 +42,8 @@ The new delay, routing, wet-return calibration and deterministic spectral review
 GigPies implementations; no sibling checkout is changed or linked.
 The gain estimator, routing, file workflow and preset choices are GigPies work.
 Manufacturer guidance and the loudness standard are linked in [AUTOMIX](docs/AUTOMIX.md).
+
+The shelf coefficient equations follow Robert Bristow-Johnson's mathematical
+[Audio EQ Cookbook, published by W3C](https://www.w3.org/TR/audio-eq-cookbook/).
+Our implementation fixes shelf slope to S=1. No manufacturer DSP code, firmware,
+manual or preset collection is included. See [reference-use boundaries](docs/PRESET_EXPERIMENT.md).

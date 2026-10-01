@@ -1,5 +1,8 @@
 # First offline automixer
 
+The new [manufacturer-reference experiment](PRESET_EXPERIMENT.md) separates published
+parameters, DSP adaptations, processing evidence and static fader changes.
+
 For the current DI-only comparison with unity source gains, 90/40 Hz low cuts and
 **no loudness matching**, use [UNITY_PASS.md](UNITY_PASS.md). The settings and
 matching commands below describe the earlier experiments.

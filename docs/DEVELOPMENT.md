@@ -29,6 +29,7 @@ cargo fmt --all -- --check
 cargo check --locked
 cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked --all-targets
+python3 -m unittest discover -s scripts -p 'test_*.py'
 cargo build --locked --release
 ```
 
@@ -73,3 +74,6 @@ The [musical balance pass](BALANCE_PASS.md) is owned by `automix/balance.rs`. It
 reuses native source reading/routing and DSP, buffers synchronized energy covariance,
 and searches musical faders without touching input trims. `scripts/balance_excerpts.py`
 is an optional PCM excerpt/export verification tool; it never changes mix settings.
+
+The [manufacturer-reference experiment](PRESET_EXPERIMENT.md) adds explicit shelf
+shapes and local parameter mapping. Numerical collections and media stay ignored.

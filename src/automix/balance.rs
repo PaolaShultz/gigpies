@@ -31,7 +31,10 @@ fn percussion(r: Role) -> bool {
     matches!(r, Role::Kick | Role::Snare | Role::Tom)
 }
 fn guitar(r: Role) -> bool {
-    matches!(r, Role::RhythmGuitar | Role::LeadGuitar)
+    matches!(
+        r,
+        Role::RhythmGuitar | Role::LeadGuitar | Role::AcousticGuitar
+    )
 }
 fn kit(r: Role) -> bool {
     percussion(r) || matches!(r, Role::Overheads | Role::DrumRoom)
@@ -749,7 +752,7 @@ pub fn optimize(m: &Measurement, s: &Session, p: &Policy) -> Result<Optimization
             [
                 kit as fn(Role) -> bool,
                 |r| matches!(r, Role::BassDi),
-                |r| matches!(r, Role::RhythmGuitar),
+                |r| matches!(r, Role::RhythmGuitar | Role::AcousticGuitar),
                 |r| matches!(r, Role::LeadGuitar),
                 |r| matches!(r, Role::LeadVocal),
             ]
@@ -908,7 +911,9 @@ pub fn save_measurement(m: &Measurement, s: &Session, p: &Policy, out: &Path) ->
                 bands[3],
                 bands[4]
             )?;
-            let phrase = matches!(ch.role, Role::LeadVocal) && c.active && !phrase_active;
+            let phrase = matches!(ch.role, Role::LeadVocal | Role::BackingVocal)
+                && c.active
+                && !phrase_active;
             phrase_active = c.active;
             if c.onset || phrase {
                 let spans = if phrase {
@@ -1057,10 +1062,11 @@ pub fn run(
     save_measurement(&after, &a, &p, &out.join("after-A"))?;
     let actual_fit = evaluate(&after, &p, &vec![0.; a.channels.len()], false);
     let actual_hold = evaluate(&after, &p, &vec![0.; a.channels.len()], true);
-    let targets_met = actual_fit
-        .iter()
-        .chain(&actual_hold)
-        .all(|r| r.violation_db.is_some_and(|v| v < 1e-6));
+    let targets_met = !p.relationships.is_empty()
+        && actual_fit
+            .iter()
+            .chain(&actual_hold)
+            .all(|r| r.violation_db.is_some_and(|v| v < 1e-6));
     write_json(
         &out.join("status.json"),
         &serde_json::json!({"technical_checks_passed":true,"policy_targets_met":targets_met,"listener_preferred":null,"actual_fit":actual_fit,"actual_held_out":actual_hold,"accepted_fader_change":result.accepted,"no_playback":true}),
