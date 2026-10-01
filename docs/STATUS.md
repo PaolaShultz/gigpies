@@ -27,8 +27,8 @@ Not implemented: live audio or device transport, networking, web/TUI/controller,
 recording, lighting integration, gates or true-peak limiting.
 No live latency, acoustic safety, listening acceptance or Pi headroom is claimed.
 
-Next: audition the matched pair, assess vocal/snare/bass/guitar balance and revise one
-setting at a time. A second source session and hardware integration follow when useful.
+Next: audition the unmatched unity-source pair, assess vocal/snare/bass/guitar balance
+and revise one setting at a time. A second source session and hardware integration follow when useful.
 
 The [archived blueprint](archive/blueprints/blueprint-v2.md) retains the wider scope.
 
@@ -40,3 +40,11 @@ filtered delay, oversampled excitation and modest master maximization. The Rust
 rules, rerenders and records its decisions and post-checks. Corrections are made by
 code; no spectrogram interpretation or AI decision is in that loop.
 [Commands, algorithms and limitations](FX_PASS.md). Listening acceptance remains pending.
+
+## Unity-source revision
+
+Implemented and offline-validated: DI-only bass, unity input trims and faders,
+90 Hz channel HPFs except kick/bass, 40 Hz processed master HPF, measured compressor
+thresholds and loss compensation, common peak-based PCM export attenuation, preserved
+float sums, and code-generated envelope/spectral reports. No loudness matching in
+this workflow. [Commands and limits](UNITY_PASS.md). Listening acceptance remains open.

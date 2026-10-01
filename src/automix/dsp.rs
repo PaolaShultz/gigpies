@@ -70,7 +70,10 @@ pub struct Strip {
 }
 impl Strip {
     pub fn new(ch: &Channel, rate: u32) -> Self {
-        let mut filters = vec![[Biquad::highpass(ch.hpf_hz, FRAC_1_SQRT_2, rate); 2]];
+        let mut filters = Vec::new();
+        if ch.hpf_hz > 0. {
+            filters.push([Biquad::highpass(ch.hpf_hz, FRAC_1_SQRT_2, rate); 2]);
+        }
         filters.extend(ch.eq.iter().map(|e| [Biquad::bell(e, rate); 2]));
         Self {
             filters,

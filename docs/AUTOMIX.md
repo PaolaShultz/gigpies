@@ -1,5 +1,10 @@
 # First offline automixer
 
+For the current DI-only comparison with unity source gains, 90/40 Hz low cuts and
+**no loudness matching**, use [UNITY_PASS.md](UNITY_PASS.md). The settings and
+matching commands below describe the earlier experiments.
+
+
 This documents the first pass. For optional FX and code-driven spectral corrections,
 see [the effects/review pass](FX_PASS.md).
 

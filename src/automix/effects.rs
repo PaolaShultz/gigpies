@@ -110,7 +110,7 @@ impl FxConfig {
             || !in_range(self.exciter.drive as f64, 0., 0.6)
             || !in_range(self.exciter.tone as f64, 0., 1.)
             || !in_range(self.maximizer_drive_db, 0., 6.)
-            || !in_range(self.maximizer_threshold_db, -30., -2.)
+            || !in_range(self.maximizer_threshold_db, -30., 24.)
             || !in_range(self.maximizer_release_ms, 20., 1000.)
             || !in_range(self.tail_seconds, 0., 15.)
             || !in_range(self.listening_target_lufs, -30., -14.)

@@ -45,10 +45,11 @@ These are design boundaries. Node integration is planned; see [architecture](doc
 ## Working today
 
 The first offline automixer now provides causal soundcheck, editable instrument
-presets, frozen settings, full-song stereo rendering and loudness-matched comparisons.
+presets, frozen settings and full-song stereo rendering. A new unity-source workflow
+keeps source gains intact and exports comparisons without loudness matching.
 It builds independently and opens no audio hardware. Mix quality awaits listening.
 
-[**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
+[**Unity-source comparison →**](docs/UNITY_PASS.md) · [**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
 
 Live-show transport, monitors, lighting and hardware integration remain planned.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.

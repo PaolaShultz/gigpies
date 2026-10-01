@@ -65,3 +65,17 @@ cargo test --locked --release --test private_automix fx_pass_listening_files -- 
 ```
 
 See [FX_PASS.md](FX_PASS.md) for reproducing the automatic review and local comparison.
+
+## Unity-source revision — 2026-10-01
+
+- All 28 normal synthetic tests passed, including five new unity routing, shared
+  peak export, measured compression, partial-window envelope and workflow tests.
+- Formatting, warning-denied Clippy and locked release build passed.
+- Full local DI-only band pass rendered twice to fresh destinations. Code checked
+  envelope and spectral measurements; maximizer reduction remained about 2 dB.
+- Local PCM export verification checks finite samples, length, sample headroom and
+  identical measured export gain against the preserved float sums.
+- Three older private-media tests were intentionally skipped: their historical
+  matched comparisons/source variations do not describe this new workflow.
+
+Measurements do not establish listening acceptance. See [UNITY_PASS.md](UNITY_PASS.md).

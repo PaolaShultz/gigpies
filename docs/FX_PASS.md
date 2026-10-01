@@ -1,5 +1,10 @@
 # Offline effects and automatic review pass
 
+For the current DI-only comparison with unity source gains, 90/40 Hz low cuts and
+**no loudness matching**, use [UNITY_PASS.md](UNITY_PASS.md). The settings and
+matching commands below describe the earlier experiments.
+
+
 This extends the first mix with optional effects and a **code-driven** final review.
 The Rust CLI renders a preliminary mix, measures it, applies deterministic bounded
 corrections, renders a new mix and measures that result. Neither a visual judgement

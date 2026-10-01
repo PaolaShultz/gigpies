@@ -1,4 +1,7 @@
-use super::{config::Session, dsp::*};
+use super::{
+    config::{OutputMode, Session},
+    dsp::*,
+};
 use crate::inventory::Result;
 use serde::Serialize;
 use std::{
@@ -257,6 +260,13 @@ pub fn run(
         session.limiter_release_ms,
         session.sample_rate,
     );
+    let mut master_hp = (session.master_hpf_hz > 0.).then(|| {
+        [Biquad::highpass(
+            session.master_hpf_hz,
+            std::f64::consts::FRAC_1_SQRT_2,
+            session.sample_rate,
+        ); 2]
+    });
     let mut rack = session
         .effects
         .as_ref()
@@ -336,9 +346,18 @@ pub fn run(
                 for j in 0..2 {
                     b[j] += wet[j] * master;
                 }
+            }
+            if let Some(filters) = &mut master_hp {
+                for j in 0..2 {
+                    b[j] = filters[j].tick(b[j]);
+                }
+            }
+            if let Some(fx) = &mut rack {
                 b = fx.master(b);
             }
-            b = limiter.tick(b);
+            if session.output_mode == OutputMode::Matched {
+                b = limiter.tick(b);
+            }
             if a.iter().chain(b.iter()).any(|v| !v.is_finite()) {
                 return Err("nonfinite DSP output".into());
             }
@@ -419,7 +438,7 @@ pub fn run(
     let lw = loud_wet.integrated();
     let export_db = (session.ceiling_db - db(dry_meter.peak.max(wet_meter.peak))).min(0.);
     let target = match (ld, lw) {
-        (Some(d), Some(w)) => Some(
+        (Some(d), Some(w)) if session.output_mode == OutputMode::Matched => Some(
             session
                 .effects
                 .as_ref()
@@ -435,12 +454,16 @@ pub fn run(
     for (stem, matched_db) in [("bypass", dry_match), ("processed", wet_match)] {
         let input = out.join(format!("{stem}-bus.tmp.wav"));
         export(&input, &out.join(format!("{stem}.wav")), gain(export_db))?;
-        export(
-            &input,
-            &out.join(format!("{stem}-matched.wav")),
-            gain(matched_db),
-        )?;
-        std::fs::remove_file(input)?;
+        if session.output_mode == OutputMode::Matched {
+            export(
+                &input,
+                &out.join(format!("{stem}-matched.wav")),
+                gain(matched_db),
+            )?;
+            std::fs::remove_file(input)?;
+        } else {
+            std::fs::rename(input, out.join(format!("{stem}-unity-float.wav")))?;
+        }
     }
     let channels:Vec<_>=sources.iter().enumerate().map(|(i,s)|serde_json::json!({"file":session.channels[i].file,"role":session.channels[i].role,"bwf_time_reference":s.reference,"offset_frames":s.offset,"source_frames":s.frames,"tail_padding_frames":total-s.offset-s.frames,"input":s.meter.report(),"post_strip":after[i].report(),"max_compressor_reduction_db":strips[i].max_reduction})).collect();
     let fx_report = rack.as_ref().map(|fx| serde_json::json!({
@@ -450,17 +473,22 @@ pub fn run(
         "maximizer_max_reduction_db": fx.max_reduction(), "maximizer_affected_frames": fx.affected_frames(),
         "source_frames":source_frames,"tail_frames":tail_frames
     }));
-    let report = serde_json::json!({"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
+    let report = serde_json::json!({"output_mode":session.output_mode,"master_hpf_hz":session.master_hpf_hz,"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
         "bypass_bus":dry_meter.report(),"processed_bus":wet_meter.report(),"bypass_lufs":ld,"processed_lufs":lw,"common_export_gain_db":export_db,
         "bypass_export_peak_dbfs":db(dry_meter.peak)+export_db,"processed_export_peak_dbfs":db(wet_meter.peak)+export_db,
-        "matched_target_lufs":target,"bypass_matching_gain_db":dry_match,"processed_matching_gain_db":wet_match,
+        "matched_target_lufs":target,"bypass_matching_gain_db":(session.output_mode == OutputMode::Matched).then_some(dry_match),"processed_matching_gain_db":(session.output_mode == OutputMode::Matched).then_some(wet_match),
         "master_max_reduction_db":limiter.max_reduction,"master_affected_frames":limiter.affected_frames,"true_peak":false,"effects":fx_report,
         "calibration_active_seconds":calibrators.iter().map(|c|c.active_seconds).collect::<Vec<_>>()});
     write_json(&out.join("measurements.json"), &report)?;
+    let comparison_note = if session.output_mode == OutputMode::Unmatched {
+        "No loudness matching. Unity float buses are preserved, including any values above full scale. PCM copies share only measured peak-overload attenuation."
+    } else {
+        "Matching uses one static gain per file, outside the automixer, with sample-peak headroom."
+    };
     std::fs::write(
         out.join("report.txt"),
         format!(
-            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> optional exciter -> fader/pan + optional post-fader FX returns -> master -> optional master EQ/maximizer -> linked sample-peak limiter.\nCommon static export attenuation: {export_db:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\nMatching uses one static gain per file, outside the automixer, with sample-peak headroom. Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
+            "GigPies offline automixer\nMode: {}\nFrames: {total}; rate: {} Hz. No resampling or independent trimming.\nBypass: neutral trim + same pan/faders/master; no EQ/compression/calibration/limiter.\nProcessed: input trim -> HPF -> bell EQ -> linked compressor + explicit makeup -> optional exciter -> fader/pan + optional post-fader FX returns -> master -> optional master HPF -> optional master EQ/maximizer -> linked sample-peak limiter (matched mode only).\nCommon static export attenuation: {export_db:.3} dB (outside causal engine).\nIntegrated K-weighted loudness: bypass {ld:?}, processed {lw:?}; matched target {target:?} LUFS.\n{comparison_note} Silence/short programmes may have no gated loudness.\nMaster maximum reduction: {:.3} dB; {} affected frames. No true-peak claim.\nFull-scale input samples are reported, not repaired. No automatic polarity or timing correction.\nSee prepared.json, measurements.json and the three history CSVs. See docs/AUTOMIX.md for preset rationale and limitations.\nListening remains required; no playback or hardware verification performed.\n",
             if finish_seconds.is_some() {
                 "causal rehearsal then frozen"
             } else {

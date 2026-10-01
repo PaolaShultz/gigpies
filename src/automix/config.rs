@@ -66,9 +66,20 @@ pub struct Group {
     pub reference: usize,
     pub trim_db: f64,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OutputMode {
+    #[default]
+    Matched,
+    Unmatched,
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Session {
+    #[serde(default)]
+    pub output_mode: OutputMode,
+    #[serde(default)]
+    pub master_hpf_hz: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effects: Option<super::effects::FxConfig>,
     pub version: u32,
@@ -95,7 +106,9 @@ impl Session {
             || self.channels.len() > 64
             || self.groups.is_empty()
             || !range(self.master_db, -60., 12.)
-            || !range(self.ceiling_db, -24., -1.)
+            || !range(self.ceiling_db, -24., -0.1)
+            || !(self.master_hpf_hz == 0.
+                || range(self.master_hpf_hz, 10., self.sample_rate as f64 * 0.45))
             || !range(self.limiter_release_ms, 10., 2000.)
             || !range(c.target_rms_db, -36., -12.)
             || !range(c.peak_headroom_db, -18., -3.)
@@ -132,7 +145,7 @@ impl Session {
                 || ch.file.as_os_str().is_empty()
                 || !range(ch.fader_db, -80., 12.)
                 || !range(ch.pan, -1., 1.)
-                || !range(ch.hpf_hz, 10., self.sample_rate as f64 * 0.45)
+                || !(ch.hpf_hz == 0. || range(ch.hpf_hz, 10., self.sample_rate as f64 * 0.45))
                 || ch.eq.len() > 8
                 || ch.eq.iter().any(|e| {
                     !range(e.hz, 10., self.sample_rate as f64 * 0.45)
@@ -298,6 +311,8 @@ pub fn example() -> Session {
         }
     }
     Session {
+        output_mode: OutputMode::Matched,
+        master_hpf_hz: 0.,
         effects: None,
         version: 1,
         sample_rate: 44100,
