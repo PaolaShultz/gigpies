@@ -9,6 +9,9 @@ use crate::inventory::Result;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 const SIZE: f64 = 8192.;
+/// Shared repeated-contact policy; an isolated contact is reported, not called repaired.
+pub(super) const PCM_CONTACT_FRACTION: f64 = 0.001;
+pub(super) const PCM_CONTACT_WINDOWS: usize = 3;
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Family {
@@ -184,9 +187,9 @@ pub fn full_scale_finding(frames: &[Frame], rate: u32, p: &Policy) -> Finding {
     }
     let affected = rows
         .iter()
-        .filter(|f| f.input_full_scale_fraction >= 0.001)
+        .filter(|f| f.input_full_scale_fraction >= PCM_CONTACT_FRACTION)
         .count();
-    Finding{rule:"input_full_scale_contact",state:if affected>=3 {State::Blocked}else if rows.is_empty(){State::InsufficientEvidence}else{State::WithinTarget},training_windows:rows.len(),consistency:(!rows.is_empty()).then_some(affected as f64/rows.len().max(1) as f64),excess_db:None,reason:if affected>=3{"Repeated full-scale input contact; recoverability and cause unknown. No automatic EQ/compression repair; inspect input gain or recording path."}else{"No repeated full-scale contact above this detector's threshold; this does not prove an unclipped recording."}.into()}
+    Finding{rule:"input_full_scale_contact",state:if affected>=PCM_CONTACT_WINDOWS {State::Blocked}else if rows.is_empty(){State::InsufficientEvidence}else{State::WithinTarget},training_windows:rows.len(),consistency:(!rows.is_empty()).then_some(affected as f64/rows.len().max(1) as f64),excess_db:None,reason:if affected>=PCM_CONTACT_WINDOWS{"Repeated full-scale input contact; recoverability and cause unknown. No automatic EQ/compression repair; inspect input gain or recording path."}else{"No repeated full-scale contact above this detector's threshold; this does not prove an unclipped recording."}.into()}
 }
 pub fn propose_dynamics(s: &Session, g: &Instrument, frames: &[Frame], p: &Policy) -> DynamicsPlan {
     let mask = activity(frames, s.sample_rate, p);
@@ -382,10 +385,10 @@ fn body_finding(q: &Proposal, enabled: bool) -> Finding {
         },
         training_windows: q.before[0].windows,
         consistency: enabled.then_some(q.consistency),
-        excess_db: enabled.then_some(tone::violation(
-            q.before[0].median_body_presence_db,
-            q.range_db,
-        )),
+        excess_db: q
+            .range_db
+            .filter(|_| enabled)
+            .map(|range| tone::violation(q.before[0].median_body_presence_db, range)),
         reason: q.reason.clone(),
     }
 }
@@ -431,7 +434,10 @@ pub fn source_advice(
         a.repeat_soundcheck = profile.capture != Capture::RecordedTrack;
         return a;
     }
-    let excess = tone::violation(q.before[0].median_body_presence_db, q.range_db);
+    let Some(range) = q.range_db else {
+        return a;
+    };
+    let excess = tone::violation(q.before[0].median_body_presence_db, range);
     let largest = q.proposed_eq.iter().map(|e| e.db.abs()).fold(0., f64::max);
     if profile.body_presence_db.is_none()
         || q.consistency < p.minimum_consistency
@@ -452,7 +458,7 @@ pub fn source_advice(
     a.state = "repeat_soundcheck_after_source_adjustment";
     a.blocks_automatic_changes = true;
     a.repeat_soundcheck = true;
-    let lean = q.before[0].median_body_presence_db < q.range_db[0];
+    let lean = q.before[0].median_body_presence_db < range[0];
     a.requested_steps=match profile.capture {
         Capture::AmplifierMicrophone=>vec![
             "Compare the amp heard at the player's position with the primary microphone signal.".into(),
@@ -502,10 +508,10 @@ pub fn run(s: Session, root: &Path, out: &Path, p: Policy, render: bool) -> Resu
                 tone::held(f, &p)
                     && tone::within_section(f, s.sample_rate, &p)
                     && !f.input_is_float
-                    && f.input_full_scale_fraction >= 0.001
+                    && f.input_full_scale_fraction >= PCM_CONTACT_FRACTION
             })
             .count()
-            >= 3;
+            >= PCM_CONTACT_WINDOWS;
         let input_blocked = full_scale.state == State::Blocked || held_contact;
         let advice = source_advice(g, &body, &p, input_blocked);
         let blocked = input_blocked || advice.blocks_automatic_changes || eq_capacity_blocked;

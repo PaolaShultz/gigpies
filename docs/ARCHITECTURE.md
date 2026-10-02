@@ -2,6 +2,8 @@
 
 Status: live node boundaries remain design direction. Offline soundcheck/rendering
 is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
+The [component map](COMPONENTS.md) records module ownership across the `../shr-*`
+projects and their intended integration into GigPies.
 
 ## Stagebox / Mixer
 
@@ -44,6 +46,11 @@ within defined bounds. Musical intent, mix objectives and correction policies wi
 be worked out through small experiments on real tracks.
 A muted-PA pass can analyze source signals; room response, feedback and speaker
 alignment require their own measurement/setup workflow.
+PA measurement and alignment are developed in SHR PA. Its pending task adds
+synchronized reference/mic capture and phase analysis to its existing generator,
+pair delay/polarity and crossover DSP. GigPies is intended to integrate the finished
+PA module; see [ownership and integration](COMPONENTS.md#pa-module-and-planned-integration).
+This remains separate from artistic instrument EQ matching. Live integration is pending.
 
 ## Boundaries to grow later
 
@@ -70,6 +77,15 @@ acoustic measurement steps must be coordinated. Monitor calibration belongs to t
 mapped speaker and physical location and requires measurement; a stage-position
 label or an initial visual EQ choice is not acoustic calibration. Phone/Brain loss
 must preserve the Stagebox's last valid audio state.
+
+### Review after soundcheck
+
+The proposed [musician review after soundcheck](PERFORMER_REVIEW.md) uses existing
+station connections to collect preferences for each instrument. Once everyone is
+ready, the Brain prepares a shared ensemble preview for phones/headphones. Explicit
+“keep my sound” and deterministic controls come first; optional model assistance is
+future research. Preview acceptance remains separate from applying a live revision.
+This extension, like the station interface, is planned.
 
 ### Source-first preparation
 

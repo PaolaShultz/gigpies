@@ -1,5 +1,10 @@
 # Manufacturer-reference offline experiment
 
+**Historical experiment.** Manufacturer parameter provenance does not establish
+a benefit for a supplied source. The [preservation review](SOURCE_PRESERVATION.md)
+revises the universal offline HPF requirement and makes no processing eligible.
+Saved settings and the results below retain their original scope.
+
 This experiment separates published parameter references, our DSP mapping, measured
 processing changes, and static musical fader changes. Manufacturer-derived means
 that numerical starting points have a traceable origin. It does not mean console

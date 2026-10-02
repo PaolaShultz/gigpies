@@ -1,12 +1,21 @@
 # Documentation
 
+[Current artistic FX pass](ARTISTIC_FX.md): finished six-example mixes with our
+expert-selected effects, preserved direct tone, calibration and verification.
+The [source-preservation reassessment](SOURCE_PRESERVATION.md) supplies its channel
+baseline and evidence for withholding unsupported correction.
+The [Complainiacs review](COMPLAINIACS_WORKFLOW_REVIEW.md) retains its preceding
+selection and evidence.
+
 | Document | Owns |
 |---|---|
 | [Architecture](ARCHITECTURE.md) | Intended node responsibilities and processing boundaries |
+| [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |
 | [Status](STATUS.md) | Implemented behavior and next increments |
-| [Components](COMPONENTS.md) | Related projects, reusable work and dependency choices |
+| [Components](COMPONENTS.md) | SHR module ownership, PA integration intent, existing work and dependency choices |
 | [Multitracks](MULTITRACKS.md) | Local source inventory and experiment starting point |
 | [Development](DEVELOPMENT.md) | Directory layout, validation and contribution workflow |
+| [Publication](PUBLICATION.md) | Private directories, reviewed scripts, commit/push hooks and release boundaries |
 | [Validation](VALIDATION.md) | Dated foundation checks and acceptance limits |
 | [Concept review](CONCEPT_REVIEW.md) | Image discrepancies and unresolved claims |
 | [Archive](archive/README.md) | Preserved source drafts |
@@ -25,3 +34,25 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 - [Instrument tone preparation](TONE_PASS.md): known input groups, musician intent, automatic broad EQ and held-out DSP checks.
 
 - [Source rules and soundcheck advice](SOURCE_RULES.md): explicit profiles, coordinated corrections, source-first suggestions and repeat-measurement boundaries.
+
+- [Independent reference review](REFERENCE_REVIEW.md): content alignment, matched-section measurements and prepared two-clip playback.
+
+- [Shared local media](LOCAL_MEDIA.md): common source library, compatibility paths and relocation verification.
+
+- [DI bass and kick](BASS_KICK.md): processing-stage evidence, note-conditioned correction, safeguards and the local Complainiacs result.
+
+- [Kick/snare evidence and rhythmic emphasis](DRUMS.md): processed-output intent,
+  drum tone/dynamics investigation, bass interaction and final-export tradeoffs.
+
+- [Confirmed snare bleed and failure handling](SNARE_BLEED.md): corrected event
+  segmentation, conditional waveform evidence and rejected cleanup trials.
+
+- [Complete listening checkpoint](LISTENING_CHECKPOINT.md): six complete SOURCE → FINAL MIX pairs, bounded selections, source routing and export verification.
+
+- [Complainiacs reassessment](COMPLAINIACS_REASSESSMENT.md): decision provenance,
+  ensemble/export causes, bounded rejected probes and the revised listening checkpoint.
+
+- [Source preservation](SOURCE_PRESERVATION.md): evidence for intervention, optional offline HPFs, abstention defaults and bounded Dark Ride reassessment.
+
+- [Expert artistic effects](ARTISTIC_FX.md): explicit instrument/style profiles,
+  production-engine decay and return calibration, ensemble guards and finished mixes.

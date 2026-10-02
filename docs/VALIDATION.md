@@ -1,5 +1,35 @@
 # Foundation validation — 2026-10-01
 
+## 0.2.0 publication checks — 2026-10-03
+
+Rust 1.97.1, committed lockfile and `CARGO_INCREMENTAL=0`:
+
+- Formatting, locked check, warning-denied all-target Clippy and release build passed.
+- Complete normal Rust suite: 117 passed; three historical private-media tests
+  intentionally ignored. Complete normal Python suite: 34 passed.
+- Release executable reports `gigpies 0.2.0`; application and lockfile versions agree.
+- Complete staged Git tree and existing commit history passed the publication
+  guard. No tracked path matches the private/generated ignore rules. Synthetic
+  ignore probes cover user state, nested artifacts, recordings, caches and media.
+- Cargo source-package listing contains no private directories, recordings or
+  generated archives. No binary release attachment or local audio is published.
+- Publication regressions cover force-added private paths, unreviewed scripts,
+  executable files without an extension, staged secrets hidden by clean working
+  copies, renamed audio, symlinks and leaks deleted by a later outgoing commit.
+
+Versioned commit/push hooks are enabled locally; CI also checks publication
+boundaries. Fresh clones need the documented [hook setup](PUBLICATION.md).
+The script list contains maintained tools and synthetic tests. One-off session
+runners, recordings and complete listening exports remain ignored local data.
+
+Historical media auditions, new full-song rendering, benchmarks, playback and
+physical hardware checks were intentionally skipped for publication. Prior media
+evidence is retained in its owning documents; this release check does not renew
+listener acceptance, PA validation or a true-peak claim. Remote CI is separate from
+these local results and must be checked for the pushed revision.
+
+## Original foundation evidence
+
 Local host: AArch64 Linux; rustc 1.97.1 (8bab26f4f), LLVM 22.1.6.
 
 Passed for v0.1.0:

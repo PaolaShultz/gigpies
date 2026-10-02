@@ -334,6 +334,9 @@ pub struct Rack {
     maximizer: Limiter,
     rate: u32,
     pub return_meters: Vec<super::dsp::Meter>,
+    /// Most recent wet-only samples, after each return's filtering and gain.
+    /// Allocated with the rack; inspection adds no allocation to the sample path.
+    pub return_outputs: Vec<[f64; 2]>,
     pub exciter_meter: super::dsp::Meter,
 }
 impl Rack {
@@ -379,6 +382,7 @@ impl Rack {
             maximizer: Limiter::new(p.maximizer_threshold_db, p.maximizer_release_ms, rate),
             rate,
             return_meters: vec![super::dsp::Meter::default(); p.buses.len()],
+            return_outputs: vec![[0.; 2]; p.buses.len()],
             exciter_meter: Default::default(),
         }
     }
@@ -424,6 +428,7 @@ impl Rack {
                 let hp = r.hp[c].tick(y[c]);
                 r.low[c] += r.low_coefficient * (hp - r.low[c]);
                 let wet = r.low[c] * r.level;
+                self.return_outputs[i][c] = wet;
                 self.return_meters[i].add(wet);
                 sum[c] += wet;
             }

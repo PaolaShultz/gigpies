@@ -2,11 +2,15 @@ name: Rust
 on: [push, pull_request]
 permissions:
   contents: read
+env:
+  CARGO_INCREMENTAL: 0
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check publication boundaries
+        run: python3 scripts/check_publication.py
       - name: Install pinned toolchain
         run: rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
       - run: cargo fmt --all -- --check

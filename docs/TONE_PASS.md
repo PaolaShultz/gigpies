@@ -27,8 +27,7 @@ target/release/gigpies tone-pass prepared.json sources new-result tone-policy.js
 
 Both commands require a new output directory. They preserve all prior settings and
 renders. The source session must satisfy the unity-source contract: prepared,
-unmatched −0.01 dBFS sample-peak export, unity input trims, 90 Hz channel HPFs except
-kick/bass, 40 Hz master HPF and no bass amp. Effects must be disabled for this initial
+unmatched −0.01 dBFS sample-peak export, unity input trims, explicit channel/master HPF choices including bypass, and no bass amp. Effects must be disabled for this initial
 pass; it has no FX-return validation. Neither command plays audio.
 
 Example policy (indices and filenames must match the supplied session):
@@ -49,8 +48,8 @@ Example policy (indices and filenames must match the supplied session):
 The primary path receives correction. Secondary paths contribute to the actual
 coherent stereo sum used for validation, but their processing and level remain
 unchanged. Every index/file mapping is checked. Groups cannot overlap; at most eight
-instruments and four secondary paths per instrument are supported. Two free channel
-EQ slots are required. Original EQ remains in the audit; corrections are appended.
+instruments and four secondary paths per instrument are supported. An actual proposal must fit the available channel
+EQ slots; insufficient capacity preserves the existing settings. Original EQ remains in the audit; corrections are appended.
 Use a saved baseline for each experiment, rather than chaining repeated passes.
 
 ## What “thin” means here
@@ -61,10 +60,14 @@ rule. Intent supplies the acceptable range:
 
 | Intent | Body/presence range |
 |---|---:|
-| `balanced` (default) | −2 to +4 dB |
+| `balanced` (explicit legacy experiment) | −2 to +4 dB |
 | `thin` | −12 to −4 dB |
 | `dark` | +1 to +7 dB |
 | `full` | +2 to +8 dB |
+
+Missing intent is now `unknown`: no target and no automatic EQ. An explicit
+profile with a null body range also withholds EQ without falling back to a name.
+See [source preservation](SOURCE_PRESERVATION.md).
 
 These are legacy compatibility examples, not a future preset catalogue. New work
 uses the explicit numerical profiles in `source-pass`; musical style names will be

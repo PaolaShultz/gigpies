@@ -1,5 +1,9 @@
 # Offline musical balance experiment
 
+The [current workflow reassessment](COMPLAINIACS_WORKFLOW_REVIEW.md) treats the
+numerical relationships below as historical engineering policies, not preferred
+musical balance. No target or protection threshold was changed to admit a mix.
+
 The new [manufacturer-reference experiment](PRESET_EXPERIMENT.md) separates published
 parameters, DSP adaptations, processing evidence and static fader changes.
 
@@ -11,7 +15,7 @@ Technical validation and policy compliance do not establish listener preference.
 ## Commands
 
 Use a new directory for every run. The baseline must already have DI-only bass,
-unity input trims, 90 Hz channel HPFs except kick/bass, a 40 Hz master HPF,
+unity input trims, explicit channel/master HPF settings (including bypass),
 `output_mode: "unmatched"`, and a −0.01 dBFS ceiling. Incompatible settings are
 rejected, not silently converted. Pan, BWF timing, stereo linking, compression,
 EQ, FX and master settings are preserved by the fader pass.
@@ -20,9 +24,9 @@ EQ, FX and master settings are preserved by the fader pass.
 cargo build --locked --release
 # Measure without rendering or changing settings:
 target/release/gigpies balance-analyze baseline-settings.json source-dir new-analysis-dir
-# Measure, search, render A, and measure again:
-target/release/gigpies balance-pass baseline-settings.json source-dir new-pass-dir
-# Optional final argument to either command: an edited policy.json from a prior run.
+# With an explicit reviewed musical policy, search and measure a fader proposal:
+target/release/gigpies balance-pass baseline-settings.json source-dir new-pass-dir policy.json
+# Without a policy, both commands observe and preserve faders; no taste targets.
 ```
 
 `A-settings.json` is the frozen fader candidate. The `A/` directory contains the
@@ -89,7 +93,11 @@ targets**. Ratios used for optimization always use identical windows on both sid
 In particular, an intermittent tom's whole-song RMS is never compared to a continuous
 guitar to choose its fader.
 
-## Editable initial balance policy
+## Explicit historical balance experiment
+
+`Policy::for_session` now supplies no relationships. `Policy::trial_for_session`
+retains the historical ranges below for deliberate experiments. New default runs
+never select these targets from role labels. See [source preservation](SOURCE_PRESERVATION.md).
 
 All the ranges below are engineering hypotheses for audition, not universal or
 research-validated correct-mix values. The masking proxy is the dB ratio of simultaneous
@@ -191,3 +199,33 @@ Private full-song renders and excerpt verification are explicit opt-in preparati
 not normal CI tests. Historical source-variation and older audition tests remain
 ignored unless their own protected behavior changes. No playback, host-audio change,
 hardware verification or listener preference follows from passing these tests.
+
+## SOURCE and paired ensemble review
+
+The [Complainiacs reassessment](COMPLAINIACS_REASSESSMENT.md) adds
+`balance-source-analyze INITIAL_SOURCE.json SOURCES NEW_DIRECTORY` and the
+`scripts/ensemble_review.py` observer. SOURCE bypasses all DSP while retaining the
+supplied initial pan/faders. Processed measurement and optimizer behavior remain.
+Group CSVs add coherent `drums` and `vocal_sum` groups and an
+`incoherent_broadband_dbfs` column; existing fields retain their values.
+
+The paired report fixes activity to explicit SOURCE evidence with training-only
+thresholds, checks identical raw windows/routing, and retains section and raw
+quiet/strong strata. Export gain is separate from pre-master group energy. It never
+turns a relationship into a preferred target or a listener verdict. Existing
+optimizer failures remain failures even when a separately documented artistic
+selection follows revised listener direction. See the reassessment for that
+choice, its remaining room-ratio failures and the bounded rejected EQ probes.
+
+Group CSVs also expose `snare`, `kick`, `toms`, `drum_ambience`,
+`drums_without_snare`, `ensemble` and `ensemble_without_snare`. Both ensemble groups
+include generated FX. Coherent sums retain signed microphone interaction; the
+power of the sum need not equal the sum of separate powers. These are mixtures,
+not separated snare or bleed estimates. All groups are before master/export.
+
+`scripts/snare_context.py SPEC.json training|held_out NEW_REPORT.json` summarizes
+fixed baseline events in these groups. SPEC supplies `rate`, `source_analysis`,
+`diagnosis` and `variants` with `id`/`analysis`. It requires explicit SOURCE bypass
+evidence, unchanged raw inputs and complete event windows; training determines
+quiet/strong and vocal-activity thresholds. Reports retain section, rapid/compound
+contexts, signed interaction and insufficient counts without selecting settings.

@@ -146,6 +146,19 @@ fn no_change_silence_and_insufficient_confidence_do_not_move_faders() {
     );
 }
 #[test]
+fn missing_balance_intent_preserves_ensemble_outside_trial_ranges() {
+    let s = session(&[Role::Kick, Role::RhythmGuitar, Role::LeadVocal]);
+    let m = features(&[-38., -10., -32.], true);
+    let p = Policy::for_session(&s);
+    assert!(p.relationships.is_empty());
+    let r = balance::optimize(&m, &s, &p).unwrap();
+    assert_eq!(r.deltas_db, vec![0.; 3]);
+    assert_eq!(r.evaluations, 0);
+    assert!(!r.accepted);
+    assert!(r.fit_before.is_empty());
+    assert!(!Policy::trial_for_session(&s).relationships.is_empty());
+}
+#[test]
 fn common_gain_cannot_improve_relationships_and_holdout_can_veto() {
     let s = session(&[Role::LeadVocal, Role::RhythmGuitar]);
     let p = policy(&s, 0, 1, false, false, [0., 4.]);
@@ -310,7 +323,7 @@ fn improvement_needs_its_own_held_out_evidence() {
 fn acoustic_roles_enter_policy_but_unsupported_ensembles_are_not_success() {
     let s = session(&[Role::LeadVocal, Role::AcousticGuitar]);
     assert!(
-        Policy::for_session(&s)
+        Policy::trial_for_session(&s)
             .relationships
             .iter()
             .any(|r| r.denominator == vec![1])
@@ -337,4 +350,118 @@ fn acoustic_roles_enter_policy_but_unsupported_ensembles_are_not_success() {
             .unwrap();
     assert_eq!(status["policy_targets_met"], false);
     assert_eq!(status["accepted_fader_change"], false);
+}
+
+#[test]
+fn source_evidence_bypasses_dsp_and_matches_renderer_initial_routing() {
+    let t = Scratch::new();
+    let mut s = session(&[Role::RhythmGuitar, Role::LeadGuitar]);
+    for (i, c) in s.channels.iter_mut().enumerate() {
+        c.pan = if i == 0 { -0.4 } else { 0.4 };
+        c.fader_db = if i == 0 { -2. } else { 1. };
+        c.eq = vec![config::EqBand {
+            kind: config::EqKind::Bell,
+            hz: 250.,
+            q: 0.7,
+            db: 6.,
+        }];
+        c.compressor.threshold_db = -30.;
+        c.compressor.ratio = 4.;
+        c.compressor.makeup_db = 5.;
+        let mut wav = hound::WavWriter::create(
+            t.0.join(&c.file),
+            hound::WavSpec {
+                channels: 1,
+                sample_rate: 8000,
+                bits_per_sample: 24,
+                sample_format: hound::SampleFormat::Int,
+            },
+        )
+        .unwrap();
+        for k in 0..8000 {
+            let x = (k as f64 * 250. * std::f64::consts::TAU / 8000.).sin() * 0.2;
+            wav.write_sample((x * if i == 0 { 1. } else { -0.7 } * 8388608.) as i32)
+                .unwrap();
+        }
+        wav.finalize().unwrap();
+    }
+    let p = Policy::for_session(&s);
+    let m = balance::measure_source(&s, &t.0, &p).unwrap();
+    let processed = balance::measure(&s, &t.0, &p).unwrap();
+    assert!(
+        processed
+            .windows
+            .iter()
+            .any(|w| w.channels[0].max_reduction_db > 1.)
+    );
+    assert!(m.windows.iter().all(|w| {
+        w.channels
+            .iter()
+            .all(|c| c.mean_reduction_db == 0. && c.input_dbfs == c.post_compressor_dbfs)
+    }));
+    gigpies::automix::run(s.clone(), &t.0, &t.0.join("render"), None).unwrap();
+    let mut wav = hound::WavReader::open(t.0.join("render/bypass-unity-float.wav")).unwrap();
+    let samples = wav.samples::<f32>().map(Result::unwrap).collect::<Vec<_>>();
+    for w in &m.windows {
+        let a = w.start_frame as usize * 2;
+        let b = a + w.frames as usize * 2;
+        let power = samples[a..b]
+            .iter()
+            .map(|&x| f64::from(x).powi(2))
+            .sum::<f64>()
+            / (b - a) as f64;
+        assert!((10. * power.log10() - w.master_dbfs).abs() < 0.00001);
+        let coherent = m.energy(w, &[0, 1], 0, &[1.; 3]);
+        let independent = m.energy(w, &[0], 0, &[1.; 3]) + m.energy(w, &[1], 0, &[1.; 3]);
+        assert!(coherent < independent * 0.6);
+    }
+    balance::source_analyze(s.clone(), &t.0, &t.0.join("source")).unwrap();
+    assert!(balance::source_analyze(s, &t.0, &t.0.join("source")).is_err());
+    let csv = std::fs::read_to_string(t.0.join("source/before/groups.csv")).unwrap();
+    assert!(csv.contains("incoherent_broadband_dbfs"));
+    assert!(csv.contains(",vocal_sum,"));
+    assert!(csv.contains(",drums,"));
+}
+
+#[test]
+fn snare_context_retains_signed_interaction_and_the_rest_of_the_ensemble() {
+    let t = Scratch::new();
+    let s = session(&[Role::Snare, Role::Overheads, Role::DrumRoom, Role::BassDi]);
+    let mut m = features(&[-20.; 4], true);
+    // A coherent drum signal, independent bass, and a correlated FX return.
+    let x = [1., -0.75, 0.5, 0., 0.25];
+    for w in &mut m.windows {
+        for b in 0..5 {
+            for i in 0..5 {
+                for j in 0..5 {
+                    w.covariance[(b * 5 + i) * 5 + j] =
+                        0.01 * x[i] * x[j] + if i == 3 && j == 3 { 0.04 } else { 0. };
+                }
+            }
+        }
+    }
+    let out = t.0.join("context");
+    balance::save_measurement(&m, &s, &Policy::for_session(&s), &out).unwrap();
+    let csv = std::fs::read_to_string(out.join("groups.csv")).unwrap();
+    let value = |group: &str| {
+        let line = csv
+            .lines()
+            .skip(1)
+            .find(|l| l.starts_with(&format!("0,{group},")))
+            .unwrap();
+        let db = line.split(',').nth(2).unwrap().parse::<f64>().unwrap();
+        10_f64.powf(db / 10.)
+    };
+    for (group, expected) in [
+        ("ensemble", 0.05),
+        ("ensemble_without_snare", 0.04),
+        ("snare", 0.01),
+        ("drums", 0.005625),
+        ("drums_without_snare", 0.000625),
+        ("drum_ambience", 0.000625),
+    ] {
+        assert!((value(group) - expected).abs() < 1e-7, "{group}");
+    }
+    // Summing independent powers would miss this destructive interaction.
+    assert!(value("drums") < value("snare") + value("drums_without_snare"));
 }

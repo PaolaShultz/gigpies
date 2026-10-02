@@ -27,11 +27,13 @@ def inspect(path):
                 sum_squares += x * x
                 samples += 1
     scale = 8388608
+    with path.open("rb") as stream:
+        sha256 = hashlib.file_digest(stream, "sha256").hexdigest()
     return params, {
         "sample_peak_dbfs": 20 * math.log10(max(peak / scale, 1e-12)),
         "rms_dbfs": 10 * math.log10(max(sum_squares / max(samples, 1) / scale**2, 1e-24)),
         "samples": samples,
-        "sha256": hashlib.file_digest(path.open("rb"), "sha256").hexdigest(),
+        "sha256": sha256,
     }
 
 

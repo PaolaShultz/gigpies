@@ -1,0 +1,52 @@
+{
+  "root_files": [
+    ".gitignore",
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY.md",
+    "rust-toolchain.toml"
+  ],
+  "directories": [
+    ".github",
+    ".githooks",
+    "archive",
+    "docs",
+    "examples",
+    "licenses",
+    "scripts",
+    "sessions",
+    "src",
+    "tests"
+  ],
+  "scripts": [
+    ".githooks/pre-commit",
+    ".githooks/pre-push",
+    "scripts/analyze_mix.py",
+    "scripts/balance_excerpts.py",
+    "scripts/bass_evidence.py",
+    "scripts/check_publication.py",
+    "scripts/drum_evidence.py",
+    "scripts/ensemble_review.py",
+    "scripts/listening_checkpoint.py",
+    "scripts/play_pair.py",
+    "scripts/preset_experiment.py",
+    "scripts/snare_bleed_evidence.py",
+    "scripts/snare_context.py",
+    "scripts/snare_temporal_evidence.py",
+    "scripts/test_ensemble_review.py",
+    "scripts/test_listening_checkpoint.py",
+    "scripts/test_play_pair.py",
+    "scripts/test_preset_experiment.py",
+    "scripts/test_publication.py",
+    "scripts/test_snare_context.py",
+    "scripts/test_snare_temporal_evidence.py"
+  ],
+  "binary_artwork": [
+    "docs/assets/gigpies-concept.png"
+  ]
+}

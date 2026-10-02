@@ -288,6 +288,38 @@ fn healthy_quiet_source_is_not_normalized_or_compressed_to_a_target() {
     assert_eq!(q.finding.state, State::WithinTarget);
     assert_eq!(q.threshold_proposed_db, q.threshold_before_db);
 }
+#[test]
+fn preserved_source_stays_unchanged_but_injected_compressor_fault_can_be_relieved() {
+    let mut c = case(1., false, true);
+    c.s = gigpies::automix::preservation::source_settings(&c.s).unwrap();
+    expert::run(
+        c.s.clone(),
+        &c.root,
+        &c.root.join("healthy"),
+        c.p.clone(),
+        false,
+    )
+    .unwrap();
+    let selected: serde_json::Value =
+        serde_json::from_reader(std::fs::File::open(c.root.join("healthy/settings.json")).unwrap())
+            .unwrap();
+    assert_eq!(selected, serde_json::to_value(&c.s).unwrap());
+    // Known added processing fault relative to an explicit dynamics budget.
+    // This is not a diagnosis of the signal's printed processing history.
+    c.s.channels[0].compressor.ratio = 8.;
+    c.s.channels[0].compressor.threshold_db = -36.;
+    let before = measured(&c);
+    let q = expert::propose_dynamics(&c.s, &c.p.instruments[0], &before, &c.p);
+    assert_eq!(q.finding.state, State::Deviation);
+    let mut candidate = c.s.clone();
+    candidate.channels[0].compressor.threshold_db = q.threshold_proposed_db;
+    let after = tone::measure(&candidate, &c.root, &c.p.instruments[0]).unwrap();
+    let result = expert::validate_dynamics(&before, &after, &q, &c.p.instruments[0], 8000, &c.p);
+    assert!(result.accepted, "{}", result.reason);
+    assert!(result.after[1].median_mean_reduction_db < q.before[1].median_mean_reduction_db);
+    assert_eq!(candidate.channels[0].compressor.makeup_db, 0.);
+    assert_eq!(candidate.channels[0].fader_db, c.s.channels[0].fader_db);
+}
 
 #[test]
 fn numerical_profile_overrides_legacy_demo_name_and_combined_repairs_are_validated() {
@@ -300,7 +332,7 @@ fn numerical_profile_overrides_legacy_demo_name_and_combined_repairs_are_validat
         .body_presence_db = Some([-2., 4.]);
     let m = measured(&c);
     let q = tone::propose(&m, 8000, &c.p.instruments[0], &c.p);
-    assert_eq!(q.range_db, [-2., 4.]);
+    assert_eq!(q.range_db, Some([-2., 4.]));
     assert!(!q.proposed_eq.is_empty());
     expert::run(
         c.s.clone(),

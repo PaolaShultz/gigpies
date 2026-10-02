@@ -1,5 +1,10 @@
 # Unity-source comparison without loudness matching
 
+**Historical explicit experiment.** `unity-pass` still runs the processing and
+compensation described below. For an unchanged source and ensemble, use
+[source preservation](SOURCE_PRESERVATION.md); 90/40 Hz HPFs are no longer a universal
+offline review requirement.
+
 The new [manufacturer-reference experiment](PRESET_EXPERIMENT.md) separates published
 parameters, DSP adaptations, processing evidence and static fader changes.
 

@@ -23,6 +23,11 @@ impl Biquad {
         }
     }
     pub fn highpass(hz: f64, q: f64, rate: u32) -> Self {
+        // Zero is the session schema's explicit bypass. Avoid cancelling poles
+        // at DC: analysis must agree with the renderer's absent filter exactly.
+        if hz == 0. {
+            return Self::new([1., 0., 0.], [1., 0., 0.]);
+        }
         let w = 2. * PI * hz / rate as f64;
         let c = w.cos();
         let alpha = w.sin() / (2. * q);

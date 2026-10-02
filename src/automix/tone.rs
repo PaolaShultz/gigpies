@@ -20,18 +20,20 @@ const SIZE: usize = 8192;
 #[serde(rename_all = "snake_case")]
 pub enum Intent {
     #[default]
+    Unknown,
     Balanced,
     Thin,
     Dark,
     Full,
 }
 impl Intent {
-    pub fn range(self) -> [f64; 2] {
+    pub fn range(self) -> Option<[f64; 2]> {
         match self {
-            Self::Balanced => [-2., 4.],
-            Self::Thin => [-12., -4.],
-            Self::Dark => [1., 7.],
-            Self::Full => [2., 8.],
+            Self::Unknown => None,
+            Self::Balanced => Some([-2., 4.]),
+            Self::Thin => Some([-12., -4.]),
+            Self::Dark => Some([1., 7.]),
+            Self::Full => Some([2., 8.]),
         }
     }
 }
@@ -52,11 +54,11 @@ pub struct Instrument {
     pub profile: Option<super::expert::Profile>,
 }
 impl Instrument {
-    pub fn body_range(&self) -> [f64; 2] {
-        self.profile
-            .as_ref()
-            .and_then(|p| p.body_presence_db)
-            .unwrap_or_else(|| self.intent.range())
+    pub fn body_range(&self) -> Option<[f64; 2]> {
+        match &self.profile {
+            Some(p) => p.body_presence_db,
+            None => self.intent.range(),
+        }
     }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -436,7 +438,7 @@ fn decay_sections(
 #[derive(Serialize)]
 pub struct Proposal {
     pub instrument: String,
-    pub range_db: [f64; 2],
+    pub range_db: Option<[f64; 2]>,
     pub reason: String,
     pub consistency: f64,
     pub evaluated: usize,
@@ -493,13 +495,15 @@ pub fn propose(frames: &[Frame], rate: u32, g: &Instrument, p: &Policy) -> Propo
         before,
         eligible: mask,
     };
-    if g.profile
-        .as_ref()
-        .is_some_and(|p| p.body_presence_db.is_none())
-    {
-        out.reason = "body rule disabled by profile".into();
+    let Some(range) = range else {
+        out.reason = if g.profile.is_some() {
+            "body rule disabled by profile"
+        } else {
+            "unknown tone intent; preserve source"
+        }
+        .into();
         return out;
-    }
+    };
     let needed = ((p.minimum_active_seconds * rate as f64 / SIZE as f64).ceil() as usize).max(3);
     // Holdout values are never used in selection, only checked after the single proposal.
     if out.before[0].windows < needed {
@@ -655,6 +659,10 @@ pub(super) fn validate_changes(
         reason: "no proposal".into(),
         after: summaries,
     };
+    let Some(range) = q.range_db else {
+        v.reason = "no tone objective supplied".into();
+        return v;
+    };
     if before.len() != after.len()
         || before
             .iter()
@@ -685,21 +693,21 @@ pub(super) fn validate_changes(
             return v;
         }
         if require_tone_improvement
-            && violation(new.median_body_presence_db, q.range_db)
-                > violation(old.median_body_presence_db, q.range_db) - 0.25
+            && violation(new.median_body_presence_db, range)
+                > violation(old.median_body_presence_db, range) - 0.25
         {
             v.reason = "no actual improvement in both splits".into();
             return v;
         }
         if !require_tone_improvement
-            && violation(new.median_body_presence_db, q.range_db)
-                > violation(old.median_body_presence_db, q.range_db) + p.max_section_regression_db
+            && violation(new.median_body_presence_db, range)
+                > violation(old.median_body_presence_db, range) + p.max_section_regression_db
         {
             v.reason = "primary tone regressed during another repair".into();
             return v;
         }
-        if violation(new.median_group_body_presence_db, q.range_db)
-            > violation(old.median_group_body_presence_db, q.range_db) + p.max_section_regression_db
+        if violation(new.median_group_body_presence_db, range)
+            > violation(old.median_group_body_presence_db, range) + p.max_section_regression_db
         {
             v.reason = "coherent instrument sum regressed".into();
             return v;
@@ -736,7 +744,7 @@ pub(super) fn validate_changes(
             };
             let a = percentile(ids.iter().map(|&i| measure(&before[i])), 0.5);
             let b = percentile(ids.iter().map(|&i| measure(&after[i])), 0.5);
-            if violation(b, q.range_db) > violation(a, q.range_db) + p.max_section_regression_db {
+            if violation(b, range) > violation(a, range) + p.max_section_regression_db {
                 v.reason = "individual section regressed".into();
                 return v;
             }
@@ -749,12 +757,6 @@ pub(super) fn validate_changes(
 /// Write a single frozen proposal, validate actual DSP, then render only accepted changes.
 pub fn run(s: Session, root: &Path, out: &Path, p: Policy, render: bool) -> Result<()> {
     p.validate(&s)?;
-    if p.instruments
-        .iter()
-        .any(|g| s.channels[g.primary].eq.len() > 6)
-    {
-        return Err("tone preparation needs two free EQ slots".into());
-    }
     std::fs::create_dir(out)?;
     write_json(&out.join("policy.json"), &p)?;
     write_json(&out.join("before-settings.json"), &s)?;
@@ -764,16 +766,24 @@ pub fn run(s: Session, root: &Path, out: &Path, p: Policy, render: bool) -> Resu
         let before = measure(&s, root, g)?;
         let proposal = propose(&before, s.sample_rate, g, &p);
         let mut candidate = s.clone();
-        candidate.channels[g.primary]
-            .eq
-            .extend(proposal.proposed_eq.clone());
+        let capacity_blocked =
+            candidate.channels[g.primary].eq.len() + proposal.proposed_eq.len() > 8;
+        if !capacity_blocked {
+            candidate.channels[g.primary]
+                .eq
+                .extend(proposal.proposed_eq.clone());
+        }
         candidate.validate()?;
-        let after = if proposal.proposed_eq.is_empty() {
+        let after = if proposal.proposed_eq.is_empty() || capacity_blocked {
             before.clone()
         } else {
             measure(&candidate, root, g)?
         };
-        let validation = validate_candidate(&before, &after, &proposal, s.sample_rate, &p);
+        let mut validation = validate_candidate(&before, &after, &proposal, s.sample_rate, &p);
+        if capacity_blocked {
+            validation.accepted = false;
+            validation.reason = "insufficient EQ capacity; preserve existing processing".into();
+        }
         if validation.accepted {
             accepted.channels[g.primary] = candidate.channels[g.primary].clone();
         }

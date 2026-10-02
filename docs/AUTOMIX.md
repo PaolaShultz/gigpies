@@ -1,5 +1,9 @@
 # First offline automixer
 
+For current offline source decisions, see [source preservation](SOURCE_PRESERVATION.md).
+The preset, calibration and matching workflow below is the historical first experiment;
+new sources do not require those processors.
+
 The new [manufacturer-reference experiment](PRESET_EXPERIMENT.md) separates published
 parameters, DSP adaptations, processing evidence and static fader changes.
 
@@ -60,6 +64,9 @@ precision its omission is negligible for this experiment. If the bypass sum need
 headroom, the exporter applies one common static attenuation to **both** base WAVs
 and records it. This export safety step is outside the causal engine. The measured
 bus values precede that export gain; explicit export peak values follow it.
+`bypass_lufs` and `processed_lufs` are legacy **pre-export bus** fields;
+`loudness_meter_stage: "before_export_gain"` and the text report make that stage
+explicit. Measure the finalized PCM separately for finished-file loudness.
 RMS/peak report floors are −240 dBFS for digital silence.
 Temporary 32-bit float bus WAVs are removed on success. Failed runs may leave a
 partial directory; a completed run has `report.txt`. Do not use partial runs as evidence.

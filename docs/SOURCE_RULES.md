@@ -12,6 +12,10 @@ We will define and test profiles instrument by instrument. The older `tone-pass`
 named examples remain readable for compatibility; `source-pass` requires explicit
 numerical profiles. A profile's display name never selects settings.
 
+The [source-preservation review](SOURCE_PRESERVATION.md) makes unchanged sources
+and ensembles eligible. Profiles are explicit experiments; measured deviations
+from them do not establish a defective recording or preferred musical balance.
+
 ## Flow
 
 ```mermaid
@@ -46,7 +50,7 @@ target/release/gigpies source-pass prepared.json sources new-result source-polic
 Both commands analyze, propose and validate. Only `source-pass` renders. Outputs
 must be new directories. The [tone pass's input contract](TONE_PASS.md) still
 applies: unity trims, preserved native rate/timing/pan, linked stereo processing,
-90/40 Hz channel/master HPFs, effects disabled and unmatched −0.01 dBFS sample-peak
+explicit channel/master HPFs including bypass, effects disabled and unmatched −0.01 dBFS sample-peak
 finalization. Neither faders nor compressor makeup are changed by these rules.
 
 Example policy, with **temporary laboratory values**, not a manufacturer preset or
@@ -281,3 +285,40 @@ input manifests, configurations, measurements and a local reproduction script.
 
 The earlier Complainiacs listening evidence above is superseded by the stronger
 correction and single comparison pair in [TONE_DECAY.md](TONE_DECAY.md).
+
+## DI bass and kick extension
+
+The [bass/kick rule](BASS_KICK.md) adds explicit DI identity, stage-separated evidence,
+confidence-limited pitch analysis, bounded static EQ, actual transient checks and
+separate fader assessment through `bass-analyze` / `bass-correct`. It uses its own
+instrument-specific policy rather than applying guitar body/presence limits to bass.
+Both rule families share the repeated PCM-contact thresholds; isolated events remain
+reported with their source limitations. The Complainiacs trial changes only bass EQ
+and retains the accepted guitar correction.
+
+## Kick/snare evidence and explicit rhythmic balance
+
+The [drum extension](DRUMS.md) separates source/EQ/compressor/makeup/routing evidence,
+static-EQ sensitivity, recovery-conditioned relief and the musician's processed-output
+rhythmic preference. Reduction maxima and band overlap cannot independently trigger
+correction. A documented neutral basis is required for an automatic artistic offset;
+unknown intent abstains. Actual processing/fader/combined outcomes and pending
+listener preference remain separate. General drum tone-target selection is still
+unimplemented; measured EQ probes can remain unselected when fault evidence is weak.
+
+The [confirmed-snare-bleed investigation](SNARE_BLEED.md) adds conditional event
+features and frozen reference-prediction probes. It distinguishes a detector defect
+from a valid processing veto and insufficient source identity. Listener-confirmed
+bleed is never negated by an empty automatic spill class. Quiet snare-like and
+compound events stay protected; correlation alone does not authorize subtraction.
+
+The [temporal follow-up](SNARE_BLEED.md#temporal-follow-up-frozen-representation-audit)
+keeps missing isolated-decay references distinct from valid processing failures.
+Frozen representation distance never supplies a source label. Drum recovery now
+ends at the next cluster's earliest retained rise, protecting quiet precursors
+as well as the selected strongest peaks.
+
+[Joint-reference diagnostics](SNARE_BLEED.md#joint-kickoverhead-reference-experiment)
+now distinguish a numerically stable fit from evidence supporting removal. They
+retain quiet/compound and eventless-interval failures, freeze choices before full-song
+evaluation, and always withhold processing without independent source labels.

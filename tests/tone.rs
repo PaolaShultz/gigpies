@@ -104,6 +104,48 @@ fn propose(f: &Fixture) -> (Vec<tone::Frame>, tone::Proposal) {
     (m, q)
 }
 #[test]
+fn missing_intent_preserves_designed_tone_even_outside_legacy_targets() {
+    let mut f = fixture(true, 1., 0.1, false);
+    f.session = gigpies::automix::preservation::source_settings(&f.session).unwrap();
+    f.session.channels[0].eq = vec![
+        config::EqBand {
+            kind: Default::default(),
+            hz: 250.,
+            q: 0.7,
+            db: 0.1
+        };
+        8
+    ];
+    let mut value = serde_json::to_value(&f.policy).unwrap();
+    value["instruments"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("intent");
+    f.policy = serde_json::from_value(value).unwrap();
+    let (_, q) = propose(&f);
+    assert!(q.before[0].windows > 3);
+    assert!(q.before[0].median_body_presence_db < -2.);
+    assert_eq!(q.range_db, None);
+    assert_eq!(q.evaluated, 0);
+    assert!(q.proposed_eq.is_empty());
+    tone::run(
+        f.session.clone(),
+        &f.root,
+        &f.root.join("preserved"),
+        f.policy.clone(),
+        false,
+    )
+    .unwrap();
+    let selected: config::Session = serde_json::from_reader(
+        std::fs::File::open(f.root.join("preserved/settings.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(selected).unwrap(),
+        serde_json::to_value(&f.session).unwrap()
+    );
+}
+#[test]
 fn measured_thin_source_is_corrected_but_explicit_thin_intent_is_respected() {
     let mut f = fixture(false, 1., 0.1, false);
     let (m, q) = propose(&f);

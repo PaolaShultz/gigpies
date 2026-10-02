@@ -163,9 +163,13 @@ fn wav(path: &std::path::Path, kind: &str) {
     w.finalize().unwrap();
 }
 #[test]
-fn spectral_code_corrects_persistent_buildup_not_silence_noise_or_transients() {
+fn explicit_spectral_experiment_proposes_cuts_only_for_persistent_features() {
     let t = Scratch::new();
-    let p = Policy::default();
+    let p = Policy {
+        max_eq_cut_db: 1.5,
+        max_eq_bands: 2,
+        ..Default::default()
+    };
     for kind in ["silence", "noise", "transient", "bass", "persistent"] {
         let file = t.0.join(format!("{kind}.wav"));
         wav(&file, kind);
@@ -191,6 +195,23 @@ fn spectral_code_corrects_persistent_buildup_not_silence_noise_or_transients() {
     }
 }
 #[test]
+fn default_review_does_not_treat_spectral_prominence_or_wet_ratio_as_a_defect() {
+    let t = Scratch::new();
+    let file = t.0.join("designed-tone.wav");
+    wav(&file, "persistent");
+    let p = Policy::default();
+    let spectrum = analysis::analyze(&file, &p).unwrap();
+    let mut s = settings();
+    let before = serde_json::to_value(&s).unwrap();
+    let meters = serde_json::json!({"effects":{"maximizer_max_reduction_db":8.,"send_reference_meters":[{"rms_dbfs":-30.}],"return_meters_before_master":[{"rms_dbfs":-90.}]}});
+    assert!(
+        analysis::decisions(&mut s, &spectrum, &meters, &p)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(serde_json::to_value(s).unwrap(), before);
+}
+#[test]
 fn review_reduces_excess_dynamics_and_caps_return_correction() {
     let mut s = settings();
     let spec = analysis::Spectrum {
@@ -203,7 +224,12 @@ fn review_reduces_excess_dynamics_and_caps_return_correction() {
         bands: vec![],
     };
     let m = serde_json::json!({"effects":{"maximizer_max_reduction_db":4.5,"send_reference_meters":[{"rms_dbfs":-30.}],"return_meters_before_master":[{"rms_dbfs":-90.}]}});
-    let changes = analysis::decisions(&mut s, &spec, &m, &Policy::default()).unwrap();
+    let policy = Policy {
+        max_master_reduction_db: Some(3.),
+        max_return_adjustment_db: 12.,
+        ..Default::default()
+    };
+    let changes = analysis::decisions(&mut s, &spec, &m, &policy).unwrap();
     assert_eq!(changes.len(), 2);
     let p = s.effects.unwrap();
     assert_eq!(p.maximizer_drive_db, 1.);

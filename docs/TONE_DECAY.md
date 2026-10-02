@@ -137,3 +137,13 @@ loosening the remaining guards or automatically increasing the EQ search budget.
 Original media hashes were checked; temporary pilot copies and the disposable pilot
 render were removed after preserving reports and reproduction scripts. Original
 recordings, previous renders and the new full mix/listening pair remain local.
+
+## Later ensemble reassessment and meter correction
+
+The [checkpoint reassessment](COMPLAINIACS_REASSESSMENT.md) retains this source EQ,
+but raises both known guitar paths together and lowers vocal prominence. Restoring
+the guitar body ratio also reduced its presence relative to the unchanged vocal;
+source-policy success did not establish preferred ensemble balance. The −9.34 LUFS
+number above is the renderer's **pre-export bus** meter. The finished guitar-corrected
+file measures approximately −15.8 LUFS. See the reassessment for actual finished
+meters and the limits of the later recorded guitar-acceptance provenance.

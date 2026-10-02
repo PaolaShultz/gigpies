@@ -1,15 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-10-03
 
-- Optional plate/chamber/hall, predelayed vocal reverb, chorus/delay and oversampled excitation.
-- Deterministic offline spectral/FX-return/dynamics review with bounded corrections and logs.
-- Modest maximization and equal-loudness previous/new comparison with explicit tail padding.
+- Offline soundcheck, frozen settings, production DSP and complete stereo rendering.
+- Source preservation: optional offline filters, explicit tone/balance intent,
+  independent makeup/faders and a legitimate unchanged-source selection.
+- Contextual bass, drum, coherent ensemble and snare-spill analysis, with bounded
+  proposals, held-out verification and explicit uncertainty.
+- Expert-selected artistic reverb/delay/chorus recipes, calibrated through the
+  production engines while retaining accepted direct tone and balance.
+- Verified listening checkpoints with independently finalized −0.01 dBFS sample
+  peaks, exact parent-gain excerpts and declared effects tails. Legacy loudness-matched
+  experiments remain explicit historical options.
+- Reusable local evidence and listening tools; recordings, private settings and
+  generated outputs remain outside Git and releases.
+- Publication checks in Git hooks and CI reject private paths, media, common secret
+  formats and scripts absent from the reviewed publication list.
+- Documented musician review/tone-map proposals and modular SHR PA ownership.
 
-- First offline automixer: causal soundcheck, editable role DSP and frozen settings.
-- Aligned local A/B rendering, K-weighted listening copies and inspectable histories.
-- Synthetic regressions and opt-in private-media robustness/audition checks.
-- No live transport or hardware/listening acceptance claim.
+This is an experimental offline release. Live GigPies integration, adaptive EQ
+matching and acoustic hardware validation remain pending. Passing software checks
+does not establish musical acceptance or true-peak compliance.
 
 ## 0.1.0 — 2026-10-01
 

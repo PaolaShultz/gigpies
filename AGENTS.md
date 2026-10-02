@@ -4,6 +4,12 @@ Read README.md, docs/STATUS.md and the relevant owning document before changing 
 Build part by part, starting with offline band automixing. Ask questions when a concrete
 next step needs an answer; do not front-load the whole project's unknowns.
 
+The system is modular across GigPies and the related `../shr-*` projects. Follow
+the ownership map in docs/COMPONENTS.md: PA processing, measurement and alignment
+are developed in `../shr-pa`, with the finished PA module intended for integration
+here. Keep module tasks and algorithms in their owning project; avoid parallel
+implementations in GigPies. Track integration and hardware acceptance separately.
+
 Use Rust 1.97.1, edition 2024, and committed Cargo.lock. Keep sibling repositories
 read-only unless the user explicitly authorizes changes there. Avoid path dependencies.
 Distinguish planned, implemented, offline-validated and hardware-verified behavior.
@@ -25,3 +31,6 @@ their on-demand command. Report run and intentionally skipped classes.
 
 Before committing inspect live Git state and staged content; preserve unrelated edits.
 Never publish private audio or state. Publication follows the user's authorized scope.
+Follow docs/PUBLICATION.md. Enable the versioned hooks when absent and run the
+publication guard against the complete index. New scripts need a reviewed entry in
+scripts/publication-policy.json; private user data and one-off runners stay ignored.

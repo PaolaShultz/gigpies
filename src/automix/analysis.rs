@@ -59,7 +59,8 @@ pub struct Policy {
     pub minimum_band_power_fraction: f64,
     pub max_eq_cut_db: f64,
     pub max_eq_bands: usize,
-    pub max_master_reduction_db: f64,
+    /// None preserves intentional master dynamics; a budget must be explicit.
+    pub max_master_reduction_db: Option<f64>,
     pub max_return_adjustment_db: f64,
 }
 impl Default for Policy {
@@ -70,10 +71,12 @@ impl Default for Policy {
             prominence_db: 4.,
             occupancy_fraction: 0.40,
             minimum_band_power_fraction: 0.04,
-            max_eq_cut_db: 1.5,
-            max_eq_bands: 2,
-            max_master_reduction_db: 3.,
-            max_return_adjustment_db: 12.,
+            // Spectral prominence and return ratios alone are not diagnoses.
+            // Explicit experimental policies can enable these taste decisions.
+            max_eq_cut_db: 0.,
+            max_eq_bands: 0,
+            max_master_reduction_db: None,
+            max_return_adjustment_db: 0.,
         }
     }
 }
@@ -87,7 +90,9 @@ impl Policy {
             || !valid(self.minimum_band_power_fraction, 0.01, 0.3)
             || !valid(self.max_eq_cut_db, 0., 2.)
             || self.max_eq_bands > 2
-            || !valid(self.max_master_reduction_db, 1., 6.)
+            || self
+                .max_master_reduction_db
+                .is_some_and(|v| !valid(v, 1., 6.))
             || !valid(self.max_return_adjustment_db, 0., 12.)
         {
             return Err("invalid automated review policy".into());
@@ -297,17 +302,18 @@ pub fn decisions(
         }
     }
     if let Some(gr) = metrics["effects"]["maximizer_max_reduction_db"].as_f64()
-        && gr > p.max_master_reduction_db
+        && let Some(limit) = p.max_master_reduction_db
+        && gr > limit
     {
         let before = fx.maximizer_drive_db;
-        fx.maximizer_drive_db = (before - (gr - p.max_master_reduction_db)).max(0.);
+        fx.maximizer_drive_db = (before - (gr - limit)).max(0.);
         log.push(Decision {
             parameter: "effects.maximizer_drive_db".into(),
             before,
             after: fx.maximizer_drive_db,
             reason: format!(
                 "Measured peak reduction {gr:.2} dB exceeds {} dB budget; back off drive.",
-                p.max_master_reduction_db
+                limit
             ),
         });
     }
@@ -364,7 +370,7 @@ pub fn finish(mut s: Session, root: &Path, out: &Path, policy: Policy) -> Result
         &serde_json::json!({
             "algorithm": "bounded_review_v1", "actions": changes.len(),
             "post_review_maximizer_reduction_db": final_reduction,
-            "within_reduction_budget": final_reduction <= policy.max_master_reduction_db + 0.01,
+            "within_reduction_budget": policy.max_master_reduction_db.map(|limit| final_reduction <= limit + 0.01),
             "remaining_spectral_candidates": after.bands.iter().filter(|b| b.eligible_range && b.local_prominence_db >= policy.prominence_db && b.hot_window_fraction >= policy.occupancy_fraction && b.hot_time_span_fraction >= 0.4 && b.power_fraction >= policy.minimum_band_power_fraction).collect::<Vec<_>>(),
             "note": "One bounded review; residual prominence is allowed. No iterative spectrum flattening or listening-quality claim."
         }),

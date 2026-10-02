@@ -1,0 +1,816 @@
+//! Explicit artistic FX preparation. Source tone and artistic faders are frozen.
+//! Profiles propose a space; measured fit is not a verdict on musical quality.
+use super::{
+    balance::validate_baseline,
+    config::Session,
+    dsp::{Biquad, Strip, db, gain},
+    effects::{
+        Bus, ChorusConfig, DelayConfig, Effect, ExciterConfig, FxConfig, Rack, ReverbConfig,
+        ReverbKind, Send,
+    },
+    render::{Source, route, write_json},
+};
+use crate::inventory::Result;
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeSet,
+    f64::consts::FRAC_1_SQRT_2,
+    path::{Path, PathBuf},
+};
+
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Style {
+    Metal,
+    Rock,
+    Punk,
+    Ska,
+    Pop,
+    Acoustic,
+    Folk,
+    Jazz,
+    Electronic,
+    Ambient,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Family {
+    Kick,
+    Bass,
+    Snare,
+    Toms,
+    Percussion,
+    RhythmGuitar,
+    LeadGuitar,
+    Acoustic,
+    LeadVocal,
+    BackingVocal,
+    Keys,
+    Winds,
+    Strings,
+    RoomCapture,
+    Unknown,
+    SuppliedFx,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Input {
+    pub channel: usize,
+    pub file: PathBuf,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Group {
+    pub name: String,
+    pub family: Family,
+    pub inputs: Vec<Input>,
+    /// Provenance supplied by setup/operator, never inferred from a filename.
+    pub identity_basis: String,
+    pub existing_space_reported: bool,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Policy {
+    pub style: Style,
+    pub style_basis: String,
+    pub tempo_bpm: Option<f64>,
+    /// Amplitude of the generated wet signal. Zero preserves the entire baseline.
+    pub amount: f64,
+    pub groups: Vec<Group>,
+    pub training: Vec<[f64; 2]>,
+    pub held_out: Vec<[f64; 2]>,
+}
+impl Policy {
+    pub fn validate(&self, s: &Session) -> Result<()> {
+        validate_baseline(s)?;
+        if s.effects.is_some()
+            || s.master_db != 0.
+            || self.style_basis.trim().is_empty()
+            || !self.amount.is_finite()
+            || !(0. ..=1.).contains(&self.amount)
+            || self
+                .tempo_bpm
+                .is_some_and(|v| !v.is_finite() || !(40. ..=300.).contains(&v))
+            || self.groups.is_empty()
+            || self.groups.len() > 64
+        {
+            return Err("ambience requires a frozen unity-trim baseline without FX, explicit style and bounded amount/tempo".into());
+        }
+        let mut seen = BTreeSet::new();
+        let mut names = BTreeSet::new();
+        for g in &self.groups {
+            if g.name.is_empty()
+                || !g
+                    .name
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+                || !names.insert(&g.name)
+                || g.identity_basis.trim().is_empty()
+                || g.inputs.is_empty()
+                || g.family == Family::SuppliedFx
+            {
+                return Err("name and identify input groups; supplied FX returns must be excluded from the source session".into());
+            }
+            for i in &g.inputs {
+                if !seen.insert(i.channel)
+                    || !s.channels.get(i.channel).is_some_and(|c| c.file == i.file)
+                {
+                    return Err(
+                        "ambience input identity differs, overlaps or is out of bounds".into(),
+                    );
+                }
+            }
+        }
+        if seen.len() != s.channels.len() {
+            return Err("every source needs an explicit FX routing disposition".into());
+        }
+        let mut spans = Vec::new();
+        for set in [&self.training, &self.held_out] {
+            if set.is_empty() || set.len() > 8 {
+                return Err("supply one to eight training and held-out spans".into());
+            }
+            for &[a, b] in set {
+                if !a.is_finite()
+                    || !b.is_finite()
+                    || a < 0.
+                    || b - a < 1.
+                    || b - a > 60.
+                    || b > 86400.
+                {
+                    return Err("invalid ambience evaluation span".into());
+                }
+                if spans.iter().any(|&(x, y)| a < y && b > x) {
+                    return Err("training and held-out spans must not overlap".into());
+                }
+                spans.push((a, b));
+            }
+        }
+        Ok(())
+    }
+}
+
+fn empty_fx(rate: u32) -> FxConfig {
+    FxConfig {
+        buses: vec![],
+        exciter: ExciterConfig {
+            tune_hz: 2500_f64.min(rate as f64 * 0.2) as f32,
+            drive: 0.,
+            tone: 0.,
+            bright: false,
+        },
+        exciter_amount: 0.,
+        master_eq: vec![],
+        maximizer_drive_db: 0.,
+        maximizer_threshold_db: 24.,
+        maximizer_release_ms: 120.,
+        tail_seconds: 6.,
+        listening_target_lufs: -20.5,
+    }
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Frame {
+    pub start: f64,
+    pub end: f64,
+    pub group_power: Vec<f64>,
+    pub return_power: Vec<f64>,
+    pub dry_power: f64,
+    pub wet_power: f64,
+    pub mixed_power: f64,
+    pub dry_peak: f64,
+    pub mixed_peak: f64,
+}
+fn inside(f: &Frame, spans: &[[f64; 2]]) -> bool {
+    spans
+        .iter()
+        .any(|s| f.start >= s[0] - 1e-9 && f.end <= s[1] + 1e-9)
+}
+
+/// Continuous production strip/routing/FX state from sample zero. Only requested
+/// spans are retained; no audio is written and held-out frames never tune settings.
+pub fn measure(
+    s: &Session,
+    root: &Path,
+    p: &Policy,
+    fx: Option<&FxConfig>,
+    spans: &[[f64; 2]],
+) -> Result<Vec<Frame>> {
+    p.validate(s)?;
+    let mut proposed = s.clone();
+    proposed.effects = fx.cloned();
+    proposed.validate()?;
+    let mut sources = s
+        .channels
+        .iter()
+        .map(|c| Source::open(&root.join(&c.file), s.sample_rate))
+        .collect::<Result<Vec<_>>>()?;
+    let refs = sources
+        .iter()
+        .filter_map(|s| s.reference)
+        .collect::<Vec<_>>();
+    if !refs.is_empty() && refs.len() != sources.len() {
+        return Err("mixed BWF references".into());
+    }
+    let origin = refs.iter().min().copied().unwrap_or(0);
+    for src in &mut sources {
+        src.offset = src.reference.unwrap_or(0) - origin;
+    }
+    let total = sources
+        .iter()
+        .map(|x| x.offset.checked_add(x.frames).ok_or("timeline overflow"))
+        .collect::<std::result::Result<Vec<_>, _>>()?
+        .into_iter()
+        .max()
+        .unwrap_or(0);
+    let end = (spans.iter().map(|x| x[1]).fold(0., f64::max) * s.sample_rate as f64).round() as u64;
+    if end == 0 || end > total {
+        return Err("evaluation extends beyond source timeline".into());
+    }
+    let mut strips = s
+        .channels
+        .iter()
+        .map(|c| Strip::new(c, s.sample_rate))
+        .collect::<Vec<_>>();
+    let mut rack = fx.map(|f| Rack::new(f, s.channels.len(), s.sample_rate));
+    let mut which = vec![0; s.channels.len()];
+    for (g, group) in p.groups.iter().enumerate() {
+        for input in &group.inputs {
+            which[input.channel] = g;
+        }
+    }
+    let mut hp = [[Biquad::highpass(s.master_hpf_hz, FRAC_1_SQRT_2, s.sample_rate); 2]; 2];
+    let nb = fx.map_or(0, |f| f.buses.len());
+    let mut bus_hp = vec![[Biquad::highpass(s.master_hpf_hz, FRAC_1_SQRT_2, s.sample_rate); 2]; nb];
+    let mut group_hp =
+        vec![[Biquad::highpass(s.master_hpf_hz, FRAC_1_SQRT_2, s.sample_rate); 2]; p.groups.len()];
+    let size = (s.sample_rate / 50) as u64;
+    let mut frames = Vec::new();
+    let mut groups = vec![[0.; 2]; p.groups.len()];
+    let blank = |start, end| Frame {
+        start,
+        end,
+        group_power: vec![0.; p.groups.len()],
+        return_power: vec![0.; nb],
+        dry_power: 0.,
+        wet_power: 0.,
+        mixed_power: 0.,
+        dry_peak: 0.,
+        mixed_peak: 0.,
+    };
+    let mut f = blank(0., 0.);
+    for t in 0..end {
+        groups.fill([0.; 2]);
+        let mut dry = [0.; 2];
+        for (i, src) in sources.iter_mut().enumerate() {
+            let y = route(
+                strips[i].tick(src.next(t)?),
+                src.channels,
+                s.channels[i].pan,
+                gain(s.channels[i].fader_db),
+            );
+            for c in 0..2 {
+                dry[c] += y[c];
+                groups[which[i]][c] += y[c];
+            }
+            if let Some(r) = &mut rack {
+                r.send(i, y);
+            }
+        }
+        let wet = rack.as_mut().map_or([0.; 2], Rack::returns);
+        for c in 0..2 {
+            let d = hp[0][c].tick(dry[c]);
+            let w = hp[1][c].tick(wet[c]);
+            let mix = d + w;
+            if !mix.is_finite() {
+                return Err("nonfinite FX output".into());
+            }
+            f.dry_power += d * d;
+            f.wet_power += w * w;
+            f.mixed_power += mix * mix;
+            f.dry_peak = f.dry_peak.max(d.abs());
+            f.mixed_peak = f.mixed_peak.max(mix.abs());
+        }
+        for (g, x) in groups.iter().enumerate() {
+            for (c, &v) in x.iter().enumerate() {
+                f.group_power[g] += group_hp[g][c].tick(v).powi(2);
+            }
+        }
+        if let Some(r) = &rack {
+            for (i, x) in r.return_outputs.iter().enumerate() {
+                for (c, &v) in x.iter().enumerate() {
+                    f.return_power[i] += bus_hp[i][c].tick(v).powi(2);
+                }
+            }
+        }
+        if (t + 1) % size == 0 || t + 1 == end {
+            f.end = (t + 1) as f64 / s.sample_rate as f64;
+            let count = ((f.end - f.start) * s.sample_rate as f64).round() * 2.;
+            f.dry_power /= count;
+            f.wet_power /= count;
+            f.mixed_power /= count;
+            for v in f.group_power.iter_mut().chain(f.return_power.iter_mut()) {
+                *v /= count;
+            }
+            if inside(&f, spans) {
+                frames.push(f);
+            } else {
+                drop(f);
+            }
+            if frames.len() > 24000 {
+                return Err("FX evidence exceeds bounded window count".into());
+            }
+            f = blank((t + 1) as f64 / s.sample_rate as f64, 0.);
+        }
+    }
+    Ok(frames)
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Activity {
+    pub p95_dbfs: f64,
+    pub active_fraction: f64,
+    pub onsets_per_second: f64,
+    pub active_seconds: f64,
+}
+fn activity(frames: &[Frame], g: usize) -> Activity {
+    let mut levels = frames
+        .iter()
+        .map(|f| db(f.group_power[g].sqrt()))
+        .collect::<Vec<_>>();
+    levels.sort_by(f64::total_cmp);
+    let p95 = levels
+        .get((levels.len().saturating_sub(1) as f64 * 0.95).round() as usize)
+        .copied()
+        .unwrap_or(-240.);
+    let gate = (p95 - 24.).max(-65.);
+    let mut active = 0.;
+    let mut duration = 0.;
+    let mut onsets = 0.;
+    let mut last = -1.;
+    let mut prev = -240.;
+    let mut previous_end = -1.;
+    for f in frames {
+        let level = db(f.group_power[g].sqrt());
+        let dt = f.end - f.start;
+        duration += dt;
+        if (f.start - previous_end).abs() > 0.001 {
+            prev = level;
+        }
+        if level >= gate {
+            active += dt;
+            if level - prev >= 5. && f.start - last >= 0.1 {
+                onsets += 1.;
+                last = f.start;
+            }
+        }
+        prev = level;
+        previous_end = f.end;
+    }
+    Activity {
+        p95_dbfs: p95,
+        active_fraction: active / duration.max(1e-9),
+        onsets_per_second: onsets / duration.max(1e-9),
+        active_seconds: active,
+    }
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Decision {
+    pub group: String,
+    pub family: Family,
+    pub activity: Activity,
+    pub reason: String,
+    pub expected_benefit: String,
+    pub musical_risk: String,
+    pub bus_names: Vec<String>,
+    pub desired_decay_seconds: Option<f64>,
+    pub measured_decay_seconds: Option<f64>,
+}
+fn reverb_recipe(style: Style, family: Family) -> Option<(ReverbKind, f64, f64, f64, f64)> {
+    use Family::*;
+    let tight = matches!(style, Style::Metal | Style::Punk);
+    let natural = matches!(style, Style::Acoustic | Style::Folk | Style::Jazz);
+    let spacious = matches!(style, Style::Ambient);
+    // (type, desired energy-decay seconds, predelay ms, wet/source dB, wet LPF Hz)
+    Some(match family {
+        Kick | Bass | RoomCapture | Unknown | SuppliedFx => return None,
+        Snare => (
+            if natural {
+                ReverbKind::Chamber
+            } else {
+                ReverbKind::Plate
+            },
+            if tight { 0.5 } else { 0.8 },
+            12.,
+            -20.,
+            6500.,
+        ),
+        Toms | Percussion => (
+            ReverbKind::Chamber,
+            if tight { 0.45 } else { 0.7 },
+            18.,
+            -22.,
+            5500.,
+        ),
+        LeadVocal => (
+            if natural || spacious {
+                ReverbKind::Hall
+            } else {
+                ReverbKind::Plate
+            },
+            if spacious {
+                1.8
+            } else if tight {
+                0.8
+            } else {
+                1.2
+            },
+            45.,
+            if tight { -19. } else { -17. },
+            6500.,
+        ),
+        BackingVocal => (
+            ReverbKind::Chamber,
+            if tight { 0.7 } else { 1.1 },
+            35.,
+            -20.,
+            5500.,
+        ),
+        RhythmGuitar => (
+            if style == Style::Ska {
+                ReverbKind::Plate
+            } else {
+                ReverbKind::SmallRoom
+            },
+            if style == Style::Ska { 0.65 } else { 0.35 },
+            18.,
+            if tight { -28. } else { -24. },
+            5000.,
+        ),
+        LeadGuitar => (
+            ReverbKind::Plate,
+            if tight { 0.7 } else { 1.0 },
+            28.,
+            -20.,
+            5500.,
+        ),
+        Acoustic => (
+            ReverbKind::Chamber,
+            if spacious { 1.5 } else { 0.75 },
+            22.,
+            -22.,
+            6500.,
+        ),
+        Keys => (
+            if spacious {
+                ReverbKind::Hall
+            } else {
+                ReverbKind::Chamber
+            },
+            if spacious { 1.8 } else { 0.85 },
+            25.,
+            -24.,
+            6000.,
+        ),
+        Winds | Strings => (
+            if natural {
+                ReverbKind::Chamber
+            } else {
+                ReverbKind::Hall
+            },
+            if spacious { 1.8 } else { 0.85 },
+            22.,
+            -20.,
+            6500.,
+        ),
+    })
+}
+/// Calibrate this engine's unitless decay against its filtered impulse response.
+/// Returns measured -60 dB remaining-energy time after the requested predelay.
+fn measured_decay(
+    kind: ReverbKind,
+    decay: f32,
+    predelay: f32,
+    rate: u32,
+    highpass: f64,
+    lowpass: f64,
+) -> f64 {
+    let mut fx = empty_fx(rate);
+    fx.buses.push(Bus {
+        name: "impulse".into(),
+        effect: Effect::Reverb(ReverbConfig {
+            kind,
+            predelay_ms: predelay,
+            decay,
+            damping: 0.55,
+        }),
+        sends: vec![Send { channel: 0, db: 0. }],
+        hpf_hz: highpass,
+        lowpass_hz: lowpass,
+        return_db: 0.,
+        target_wet_db: -20.,
+    });
+    let mut rack = Rack::new(&fx, 1, rate);
+    let mut energy = Vec::with_capacity((rate * 6) as usize);
+    for i in 0..rate * 6 {
+        if i == 0 {
+            rack.send(0, [1.; 2]);
+        }
+        let y = rack.returns();
+        energy.push(y[0] * y[0] + y[1] * y[1]);
+    }
+    let total = energy.iter().sum::<f64>();
+    let mut remaining = 0.;
+    let mut crossing = energy.len() - 1;
+    for (i, &e) in energy.iter().enumerate().rev() {
+        remaining += e;
+        if remaining >= total * 1e-6 {
+            crossing = i;
+            break;
+        }
+    }
+    (crossing as f64 / rate as f64 - predelay as f64 / 1000.).max(0.)
+}
+fn fit_decay(
+    kind: ReverbKind,
+    wanted: f64,
+    predelay: f32,
+    rate: u32,
+    highpass: f64,
+    lowpass: f64,
+) -> (f32, f64) {
+    let mut lo = 0.;
+    let mut hi = 0.9;
+    let mut best = (
+        0.,
+        measured_decay(kind, 0., predelay, rate, highpass, lowpass),
+    );
+    for _ in 0..6 {
+        let mid = (lo + hi) * 0.5;
+        let actual = measured_decay(kind, mid, predelay, rate, highpass, lowpass);
+        if (actual - wanted).abs() < (best.1 - wanted).abs() {
+            best = (mid, actual);
+        }
+        if actual < wanted {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    best
+}
+
+pub fn propose(
+    s: &Session,
+    p: &Policy,
+    observations: &[Frame],
+) -> Result<(FxConfig, Vec<usize>, Vec<Decision>)> {
+    p.validate(s)?;
+    let mut fx = empty_fx(s.sample_rate);
+    let mut owners = Vec::new();
+    let mut decisions = Vec::new();
+    for (g, group) in p.groups.iter().enumerate() {
+        let a = activity(observations, g);
+        let mut d=Decision{group:group.name.clone(),family:group.family,activity:a.clone(),reason:String::new(),expected_benefit:"Requested spatial finish while retaining the accepted direct sound".into(),musical_risk:"Added tails can mask articulation, change coherent stereo and consume export headroom; listening remains required".into(),bus_names:vec![],desired_decay_seconds:None,measured_decay_seconds:None};
+        if p.amount == 0.
+            || a.active_seconds < 0.5
+            || reverb_recipe(p.style, group.family).is_none()
+        {
+            d.reason=if p.amount==0.{"Explicit zero FX amount; preserve baseline"}else if a.active_seconds<0.5{"Insufficient active source in training; no invented FX level"}else{"Keep low-end/recorded ambience or unclassified source intact; no additional FX prescription"}.into();
+            decisions.push(d);
+            continue;
+        }
+        let (kind, mut duration, predelay, mut target, lp) =
+            reverb_recipe(p.style, group.family).unwrap();
+        let busy = a.active_fraction > 0.75 || a.onsets_per_second > 3.;
+        if busy {
+            duration *= 0.75;
+            target -= 2.;
+        }
+        if group.existing_space_reported {
+            duration *= 0.8;
+            target -= 4.;
+        }
+        let lp = lp.min(s.sample_rate as f64 * 0.4);
+        let hp = if matches!(group.family, Family::LeadVocal | Family::BackingVocal) {
+            220.
+        } else {
+            180.
+        };
+        let (decay, actual) = fit_decay(kind, duration, predelay as f32, s.sample_rate, hp, lp);
+        let name = format!("{}_space", group.name);
+        d.bus_names.push(name.clone());
+        d.desired_decay_seconds = Some(duration);
+        d.measured_decay_seconds = Some(actual);
+        d.reason = format!(
+            "Explicit {:?}/{:?} spatial profile; busy training phrase={busy}; reported existing space={}; engine decay calibrated by impulse, no source-quality diagnosis",
+            p.style, group.family, group.existing_space_reported
+        );
+        let sends = group
+            .inputs
+            .iter()
+            .map(|x| Send {
+                channel: x.channel,
+                db: 0.,
+            })
+            .collect::<Vec<_>>();
+        fx.buses.push(Bus {
+            name,
+            effect: Effect::Reverb(ReverbConfig {
+                kind,
+                predelay_ms: predelay as f32,
+                decay,
+                damping: 0.55,
+            }),
+            sends: sends.clone(),
+            hpf_hz: hp,
+            lowpass_hz: lp,
+            return_db: 0.,
+            target_wet_db: target.max(-40.),
+        });
+        owners.push(g);
+        if let Some(bpm) = p.tempo_bpm
+            && matches!(group.family, Family::LeadVocal | Family::LeadGuitar)
+            && matches!(
+                p.style,
+                Style::Rock
+                    | Style::Metal
+                    | Style::Pop
+                    | Style::Ska
+                    | Style::Electronic
+                    | Style::Ambient
+            )
+        {
+            let quarter = 60000. / bpm;
+            let name = format!("{}_echo", group.name);
+            d.bus_names.push(name.clone());
+            fx.buses.push(Bus {
+                name,
+                effect: Effect::Delay(DelayConfig {
+                    left_ms: (quarter * 0.5).clamp(20., 1000.) as f32,
+                    right_ms: (quarter * 0.75).clamp(20., 1000.) as f32,
+                    feedback: if busy { 0.12 } else { 0.2 },
+                    damping: 0.6,
+                }),
+                sends: sends.clone(),
+                hpf_hz: 250.,
+                lowpass_hz: 4500_f64.min(s.sample_rate as f64 * 0.4),
+                return_db: 0.,
+                target_wet_db: if busy { -27. } else { -24. },
+            });
+            owners.push(g);
+        }
+        if group.family == Family::Keys && matches!(p.style, Style::Pop | Style::Electronic) {
+            let name = format!("{}_chorus", group.name);
+            d.bus_names.push(name.clone());
+            fx.buses.push(Bus {
+                name,
+                effect: Effect::Chorus(ChorusConfig {
+                    rate_hz: 0.3,
+                    depth_ms: 1.,
+                    base_ms: 17.,
+                    ensemble: false,
+                }),
+                sends,
+                hpf_hz: 200.,
+                lowpass_hz: 6500_f64.min(s.sample_rate as f64 * 0.4),
+                return_db: 0.,
+                target_wet_db: -28.,
+            });
+            owners.push(g);
+        }
+        decisions.push(d);
+    }
+    if fx.buses.len() > 12 {
+        return Err("FX plan exceeds 12 buses; explicitly group compatible sends rather than silently drop sources".into());
+    }
+    fx.validate(s)?;
+    Ok((fx, owners, decisions))
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct Check {
+    pub span: [f64; 2],
+    pub dry_rms_dbfs: f64,
+    pub wet_to_dry_db: Option<f64>,
+    pub mixed_rms_change_db: f64,
+    pub crest_loss_db: f64,
+    pub peak_change_db: f64,
+    pub passed: bool,
+}
+pub fn checks(frames: &[Frame], spans: &[[f64; 2]]) -> Vec<Check> {
+    spans
+        .iter()
+        .map(|&span| {
+            let chosen = frames
+                .iter()
+                .filter(|f| inside(f, &[span]))
+                .collect::<Vec<_>>();
+            let n = chosen.len().max(1) as f64;
+            let d = chosen.iter().map(|f| f.dry_power).sum::<f64>() / n;
+            let w = chosen.iter().map(|f| f.wet_power).sum::<f64>() / n;
+            let m = chosen.iter().map(|f| f.mixed_power).sum::<f64>() / n;
+            let dp = chosen.iter().map(|f| f.dry_peak).fold(0., f64::max);
+            let mp = chosen.iter().map(|f| f.mixed_peak).fold(0., f64::max);
+            let rms = db(m.sqrt()) - db(d.sqrt());
+            let peak = db(mp) - db(dp);
+            let crest = rms - peak;
+            let ratio = if d > 1e-13 && w > 0. {
+                Some(db((w / d).sqrt()))
+            } else {
+                None
+            };
+            let passed = !chosen.is_empty()
+                && rms <= 2.
+                && crest <= 3.
+                && peak <= 2.
+                && ratio.is_none_or(|v| v <= -12.);
+            Check {
+                span,
+                dry_rms_dbfs: db(d.sqrt()),
+                wet_to_dry_db: ratio,
+                mixed_rms_change_db: rms,
+                crest_loss_db: crest,
+                peak_change_db: peak,
+                passed,
+            }
+        })
+        .collect()
+}
+
+pub fn run(s: Session, root: &Path, out: &Path, p: Policy) -> Result<()> {
+    p.validate(&s)?;
+    if out.exists() {
+        return Err("output exists".into());
+    }
+    std::fs::create_dir(out)?;
+    write_json(&out.join("before-settings.json"), &s)?;
+    write_json(&out.join("policy.json"), &p)?;
+    let observed = measure(&s, root, &p, None, &p.training)?;
+    let (mut fx, owners, decisions) = propose(&s, &p, &observed)?;
+    write_json(&out.join("decisions.json"), &decisions)?;
+    write_json(&out.join("seed-fx.json"), &fx)?;
+    let seed = measure(&s, root, &p, Some(&fx), &p.training)?;
+    let mut calibration = Vec::new();
+    for (i, b) in fx.buses.iter_mut().enumerate() {
+        let g = owners[i];
+        let gate = (decisions[g].activity.p95_dbfs - 24.).max(-65.);
+        let active = seed
+            .iter()
+            .filter(|f| db(f.group_power[g].sqrt()) >= gate)
+            .collect::<Vec<_>>();
+        let dry = active.iter().map(|f| f.group_power[g]).sum::<f64>();
+        let wet = active.iter().map(|f| f.return_power[i]).sum::<f64>();
+        if dry <= 1e-12 || wet <= 1e-18 {
+            return Err(
+                "selected FX bus has insufficient measured response; preserve baseline".into(),
+            );
+        }
+        let measured = db((wet / dry).sqrt());
+        let ideal = b.target_wet_db - measured;
+        b.return_db = ideal.clamp(-18., 18.) + db(p.amount);
+        if b.return_db < -60. {
+            b.return_db = -60.;
+        }
+        calibration.push(serde_json::json!({"bus":b.name,"measured_seed_wet_source_db":measured,"artistic_profile_target_db":b.target_wet_db,"requested_return_db":ideal,"bounded_return_db":b.return_db,"amount":p.amount,"note":"Calibrates this requested effect; never changes source gain, makeup or artistic fader. Target is a listening hypothesis."}));
+    }
+    // One training-only adjustment of return levels; no held-out feedback.
+    let mut candidate = s.clone();
+    if !fx.buses.is_empty() {
+        candidate.effects = Some(fx);
+    }
+    candidate.validate()?;
+    write_json(&out.join("calibration.json"), &calibration)?;
+    write_json(&out.join("candidate-settings.json"), &candidate)?;
+    let training = measure(&s, root, &p, candidate.effects.as_ref(), &p.training)?;
+    let train_checks = checks(&training, &p.training);
+    write_json(&out.join("training-checks.json"), &train_checks)?;
+    if train_checks.iter().any(|x| !x.passed) {
+        write_json(
+            &out.join("selection.json"),
+            &serde_json::json!({"selected":"baseline","reason":"training protection failure","listener_accepted":null}),
+        )?;
+        return Err(
+            "FX training protection failed; baseline retained and no ready mix published".into(),
+        );
+    }
+    write_json(
+        &out.join("frozen-before-held-out.json"),
+        &serde_json::json!({"settings":"candidate-settings.json","training_passed":true,"held_out_retries":0,"musical_acceptance":null}),
+    )?;
+    let held = measure(&s, root, &p, candidate.effects.as_ref(), &p.held_out)?;
+    let held_checks = checks(&held, &p.held_out);
+    write_json(&out.join("held-out-checks.json"), &held_checks)?;
+    if held_checks.iter().any(|x| !x.passed) {
+        write_json(
+            &out.join("selection.json"),
+            &serde_json::json!({"selected":"baseline","reason":"held-out protection failure; no retry","listener_accepted":null}),
+        )?;
+        return Err(
+            "FX held-out protection failed; baseline retained and no ready mix published".into(),
+        );
+    }
+    write_json(&out.join("settings.json"), &candidate)?;
+    write_json(
+        &out.join("selection.json"),
+        &serde_json::json!({"selected":if candidate.effects.is_some(){"expert_fx_preview"}else{"baseline"},"reason":"Explicit artistic request; bounded rule selection and production-DSP checks passed","listener_accepted":null,"protection_limits":{"wet_ensemble_max_db":-12.,"rms_rise_max_db":2.,"peak_rise_max_db":2.,"crest_loss_max_db":3.},"limits":"No source reverb detector, acoustic safety claim or automatic musical-quality verdict. Full export/tail verification remains required."}),
+    )?;
+    Ok(())
+}

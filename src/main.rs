@@ -8,7 +8,7 @@ fn run() -> gigpies::inventory::Result<()> {
             env!("CARGO_PKG_VERSION")
         ),
         [arg] if arg == "--help" || arg == "-h" => println!(
-            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies tone-pass <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies tone-analyze <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies source-pass <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies source-analyze <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
+            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies ambience-plan <prepared.json> <source-dir> <new-output-dir> <fx-policy.json>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies preserve-source <initial-source-settings.json> <new-output-dir>\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-source-analyze <initial-source-settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies tone-pass <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies tone-analyze <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies source-pass <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies source-analyze <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies reference-review <ours.wav> <reference.wav> <new-output-dir> [excerpt-start-seconds]\n  gigpies snare-reference-fit <source-dir> <pilot-dir> <new-model.json> <start-seconds> <end-seconds>\n  gigpies snare-reference-evaluate <source-dir> <review-dir> <model.json> <new-audit.json>\n  gigpies snare-predict <source-dir> <pilot-dir> <new-predictions.json> <start-seconds> <end-seconds>\n  gigpies snare-bleed-verify <source-dir> <pilot-dir> <new-output-dir> <start-seconds> <end-seconds>\n  gigpies snare-bleed <baseline.json> <source-dir> <new-output-dir> <bleed-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-events <measurement.json> <new-diagnosis.json>\n  gigpies drum-verify <baseline.json> <candidate.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-correct <prepared.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-analyze <prepared.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies bass-analyze <prepared.json> <source-dir> <new-output-dir> <bass-policy.json> <start-seconds> <end-seconds>\n  gigpies bass-correct <prepared.json> <source-dir> <new-output-dir> <bass-policy.json> <start-seconds> <end-seconds>\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
         ),
         [arg] if arg == "--version" || arg == "-V" => {
             println!("gigpies {}", env!("CARGO_PKG_VERSION"))
@@ -20,10 +20,22 @@ fn run() -> gigpies::inventory::Result<()> {
         [command, path] if command == "preset" => {
             gigpies::automix::write_json(Path::new(path), &gigpies::automix::config::example())?;
         }
+        [command, input, output] if command == "preserve-source" => {
+            let session = serde_json::from_reader(std::fs::File::open(input)?)?;
+            gigpies::automix::preservation::prepare(session, Path::new(output))?;
+        }
         [command, input, output] if command == "fx-preset" => {
             let mut session = serde_json::from_reader(std::fs::File::open(input)?)?;
             gigpies::automix::effects::add_pass(&mut session)?;
             gigpies::automix::write_json(Path::new(output), &session)?;
+        }
+        [command, config, root, out, policy] if command == "ambience-plan" => {
+            gigpies::automix::ambience::run(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+            )?;
         }
         [command, config, root, out, seconds] if command == "soundcheck" => {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;
@@ -86,6 +98,10 @@ fn run() -> gigpies::inventory::Result<()> {
                 command == "balance-pass",
             )?;
         }
+        [command, config, root, out] if command == "balance-source-analyze" => {
+            let session = serde_json::from_reader(std::fs::File::open(config)?)?;
+            gigpies::automix::balance::source_analyze(session, Path::new(root), Path::new(out))?;
+        }
         [command, config, root, out] if command == "unity-pass" => {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;
             gigpies::automix::unity::run(session, Path::new(root), Path::new(out))?;
@@ -97,6 +113,128 @@ fn run() -> gigpies::inventory::Result<()> {
                 Path::new(root),
                 Path::new(out),
                 Default::default(),
+            )?;
+        }
+        [command, ours, reference, out] if command == "reference-review" => {
+            gigpies::automix::reference::run(
+                Path::new(ours),
+                Path::new(reference),
+                Path::new(out),
+                None,
+            )?;
+        }
+        [command, ours, reference, out, start] if command == "reference-review" => {
+            gigpies::automix::reference::run(
+                Path::new(ours),
+                Path::new(reference),
+                Path::new(out),
+                Some(start.to_str().ok_or("invalid start")?.parse()?),
+            )?;
+        }
+        [command, root, pilot, out, start, end] if command == "snare-reference-fit" => {
+            gigpies::automix::bleed_reference::fit_saved(
+                Path::new(root),
+                Path::new(pilot),
+                Path::new(out),
+                [
+                    start.to_str().ok_or("invalid start")?.parse()?,
+                    end.to_str().ok_or("invalid end")?.parse()?,
+                ],
+            )?;
+        }
+        [command, root, review, frozen, out] if command == "snare-reference-evaluate" => {
+            gigpies::automix::bleed_reference::evaluate_saved(
+                Path::new(root),
+                Path::new(review),
+                Path::new(frozen),
+                Path::new(out),
+            )?;
+        }
+        [command, root, pilot, out, start, end]
+            if command == "snare-predict" || command == "snare-bleed-verify" =>
+        {
+            let start = start.to_str().ok_or("invalid start")?.parse()?;
+            let end = end.to_str().ok_or("invalid end")?.parse()?;
+            if command == "snare-predict" {
+                gigpies::automix::bleed::predict_saved(
+                    Path::new(root),
+                    Path::new(pilot),
+                    Path::new(out),
+                    start,
+                    end,
+                )?;
+            } else {
+                gigpies::automix::bleed::inspect_frozen(
+                    Path::new(root),
+                    Path::new(pilot),
+                    Path::new(out),
+                    start,
+                    end,
+                )?;
+            }
+        }
+        [command, config, root, out, policy, start, end] if command == "snare-bleed" => {
+            gigpies::automix::bleed::run(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+                start.to_str().ok_or("invalid start")?.parse()?,
+                end.to_str().ok_or("invalid end")?.parse()?,
+            )?;
+        }
+        [command, input, out] if command == "drum-events" => {
+            gigpies::automix::drums::redetect(Path::new(input), Path::new(out))?;
+        }
+        [command, config, candidate, root, out, policy, start, end] if command == "drum-verify" => {
+            gigpies::automix::drums::verify(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                serde_json::from_reader(std::fs::File::open(candidate)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+                start.to_str().ok_or("invalid start")?.parse()?,
+                end.to_str().ok_or("invalid end")?.parse()?,
+            )?;
+        }
+        [command, config, root, out, policy, start, end] if command == "drum-correct" => {
+            gigpies::automix::drums::correct(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+                start.to_str().ok_or("invalid start")?.parse()?,
+                end.to_str().ok_or("invalid end")?.parse()?,
+            )?;
+        }
+        [command, config, root, out, policy, start, end] if command == "drum-analyze" => {
+            gigpies::automix::drums::analyze(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+                start.to_str().ok_or("invalid start")?.parse()?,
+                end.to_str().ok_or("invalid end")?.parse()?,
+            )?;
+        }
+        [command, config, root, out, policy, start, end] if command == "bass-correct" => {
+            gigpies::automix::bass::run(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+                start.to_str().ok_or("invalid start")?.parse()?,
+                end.to_str().ok_or("invalid end")?.parse()?,
+            )?;
+        }
+        [command, config, root, out, policy, start, end] if command == "bass-analyze" => {
+            gigpies::automix::bass::analyze(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+                start.to_str().ok_or("invalid start")?.parse()?,
+                end.to_str().ok_or("invalid end")?.parse()?,
             )?;
         }
         [command, old, new, out] if command == "compare" => {

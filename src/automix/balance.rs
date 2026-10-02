@@ -73,7 +73,15 @@ pub struct Policy {
     pub section_seconds: f64,
 }
 impl Policy {
+    /// Missing musical intent supplies no objective for moving a fader.
     pub fn for_session(s: &Session) -> Self {
+        let mut p = Self::trial_for_session(s);
+        p.description = "Observation only: no musical balance objective supplied. Preserve faders; measurements do not establish preferred balance.".into();
+        p.relationships.clear();
+        p
+    }
+    /// Historical engineering ranges, available only as an explicit experiment.
+    pub fn trial_for_session(s: &Session) -> Self {
         let select = |f: fn(Role) -> bool| {
             s.channels
                 .iter()
@@ -278,26 +286,25 @@ pub fn validate_baseline(s: &Session) -> Result<()> {
     s.validate()?;
     if !s.prepared
         || s.output_mode != OutputMode::Unmatched
-        || s.master_hpf_hz != 40.
         || s.ceiling_db != -0.01
         || s.calibration.initial_trim_db != 0.
         || s.groups.iter().any(|g| g.trim_db != 0.)
-        || s.channels.iter().any(|c| {
-            matches!(c.role, Role::BassAmp)
-                || c.hpf_hz
-                    != if matches!(c.role, Role::Kick | Role::BassDi) {
-                        0.
-                    } else {
-                        90.
-                    }
-        })
+        || s.channels.iter().any(|c| matches!(c.role, Role::BassAmp))
     {
-        return Err("balance requires prepared DI-only unity trims, 90/40 Hz HPFs and unmatched -0.01 dBFS export".into());
+        return Err("offline review requires prepared DI-only routing, unity trims and unmatched -0.01 dBFS export; HPFs are explicit source choices".into());
     }
     Ok(())
 }
 /// Native-rate linked DSP, unchanged metadata offsets and pan. Only features are buffered.
 pub fn measure(s: &Session, root: &Path, p: &Policy) -> Result<Measurement> {
+    measure_mode(s, root, p, false)
+}
+/// SOURCE evidence uses the supplied initial faders/pan and bypasses all DSP.
+/// It cannot redefine SOURCE from a later mix; callers must retain provenance.
+pub fn measure_source(s: &Session, root: &Path, p: &Policy) -> Result<Measurement> {
+    measure_mode(s, root, p, true)
+}
+fn measure_mode(s: &Session, root: &Path, p: &Policy, source: bool) -> Result<Measurement> {
     validate_baseline(s)?;
     p.validate(s.channels.len())?;
     let mut sources = s
@@ -343,9 +350,7 @@ pub fn measure(s: &Session, root: &Path, p: &Policy) -> Result<Measurement> {
             Strip::new(&c, s.sample_rate)
         })
         .collect::<Vec<_>>();
-    let mut rack = s
-        .effects
-        .as_ref()
+    let mut rack = if source { None } else { s.effects.as_ref() }
         .map(|fx| super::effects::Rack::new(fx, count, s.sample_rate));
     let mut filters = vec![
         EDGES.map(|hz| [Biquad::highpass(
@@ -383,8 +388,8 @@ pub fn measure(s: &Session, root: &Path, p: &Policy) -> Result<Measurement> {
         for frame in t..t + frames {
             for i in 0..count {
                 let x = sources[i].next(frame)?;
-                let before = flat[i].tick(x);
-                let after = strips[i].tick(x);
+                let before = if source { x } else { flat[i].tick(x) };
+                let after = if source { x } else { strips[i].tick(x) };
                 in_power[i] += (x[0] * x[0] + x[1] * x[1]) / 2.;
                 pre[i] += (before[0] * before[0] + before[1] * before[1]) / 2.;
                 post[i] += (after[0] * after[0] + after[1] * after[1]) / 2.;
@@ -412,7 +417,8 @@ pub fn measure(s: &Session, root: &Path, p: &Policy) -> Result<Measurement> {
             }
             values[count][0] = rack.as_mut().map(|r| r.returns()).unwrap_or([0.; 2]);
             let sum = std::array::from_fn(|c| {
-                master_hp[c].tick(values.iter().map(|v| v[0][c]).sum::<f64>() * gain(s.master_db))
+                let x = values.iter().map(|v| v[0][c]).sum::<f64>() * gain(s.master_db);
+                if source { x } else { master_hp[c].tick(x) }
             });
             let processed = if let Some(r) = &mut rack {
                 let y = r.master(sum);
@@ -740,7 +746,10 @@ pub fn optimize(m: &Measurement, s: &Session, p: &Policy) -> Result<Optimization
     let mut evaluations = 0;
     let fit_before = evaluate(m, p, &g, false);
     let held_out_before = evaluate(m, p, &g, true);
-    for stage in [true, false] {
+    for stage in [true, false]
+        .into_iter()
+        .filter(|_| !p.relationships.is_empty())
+    {
         let moves = if stage {
             s.channels
                 .iter()
@@ -945,7 +954,22 @@ pub fn save_measurement(m: &Measurement, s: &Session, p: &Policy, out: &Path) ->
     }
     file.flush()?;
     type GroupSelector = (&'static str, fn(Role) -> bool);
-    let group_specs: [GroupSelector; 8] = [
+    let group_specs: [GroupSelector; 17] = [
+        ("ensemble", |_| true),
+        ("ensemble_without_snare", |r| !matches!(r, Role::Snare)),
+        ("snare", |r| matches!(r, Role::Snare)),
+        ("kick", |r| matches!(r, Role::Kick)),
+        ("toms", |r| matches!(r, Role::Tom)),
+        ("drum_ambience", |r| {
+            matches!(r, Role::Overheads | Role::DrumRoom)
+        }),
+        ("drums_without_snare", |r| {
+            kit(r) && !matches!(r, Role::Snare)
+        }),
+        ("drums", kit),
+        ("vocal_sum", |r| {
+            matches!(r, Role::LeadVocal | Role::VocalRoom)
+        }),
         ("drum_close", percussion),
         ("overheads", |r| matches!(r, Role::Overheads)),
         ("drum_room", |r| matches!(r, Role::DrumRoom)),
@@ -958,10 +982,10 @@ pub fn save_measurement(m: &Measurement, s: &Session, p: &Policy, out: &Path) ->
     let mut groups = BufWriter::new(File::create(out.join("groups.csv"))?);
     writeln!(
         groups,
-        "start_frame,group,broadband_dbfs,40_120_dbfs,120_500_dbfs,500_1500_dbfs,1500_5000_dbfs"
+        "start_frame,group,broadband_dbfs,40_120_dbfs,120_500_dbfs,500_1500_dbfs,1500_5000_dbfs,incoherent_broadband_dbfs"
     )?;
     for (name, select) in group_specs {
-        let indices = if name == "generated_fx" {
+        let mut indices = if name == "generated_fx" {
             vec![s.channels.len()]
         } else {
             s.channels
@@ -971,14 +995,24 @@ pub fn save_measurement(m: &Measurement, s: &Session, p: &Policy, out: &Path) ->
                 .map(|(i, _)| i)
                 .collect()
         };
+        if matches!(name, "ensemble" | "ensemble_without_snare") {
+            indices.push(s.channels.len());
+        }
         for w in &m.windows {
             let b = (0..BANDS)
                 .map(|b| power_db(m.energy(w, &indices, b, &g)))
                 .collect::<Vec<_>>();
             writeln!(
                 groups,
-                "{},{},{:.5},{:.5},{:.5},{:.5},{:.5}",
-                w.start_frame, name, b[0], b[1], b[2], b[3], b[4]
+                "{},{},{:.5},{:.5},{:.5},{:.5},{:.5},{:.5}",
+                w.start_frame,
+                name,
+                b[0],
+                b[1],
+                b[2],
+                b[3],
+                b[4],
+                power_db(indices.iter().map(|&i| m.energy(w, &[i], 0, &g)).sum())
             )?;
         }
     }
@@ -1022,7 +1056,7 @@ pub fn save_measurement(m: &Measurement, s: &Session, p: &Policy, out: &Path) ->
     write_json(&out.join("microphone-relationships.json"), &pairs)?;
     write_json(
         &out.join("targets.json"),
-        &serde_json::json!({"fit":evaluate(m,p,&vec![0.;s.channels.len()],false),"held_out":evaluate(m,p,&vec![0.;s.channels.len()],true),"bands_hz":["broadband","40-120","120-500","500-1500","1500-5000"],"filter":"Difference of two second-order Butterworth highpasses; overlapping responses, not rectangular FFT bands.","scope":"post-channel/pre-master routed energy, with excitation; generated FX measured separately. Whole-recording offline preparation. No auditory model or listener preference."}),
+        &serde_json::json!({"fit":evaluate(m,p,&vec![0.;s.channels.len()],false),"held_out":evaluate(m,p,&vec![0.;s.channels.len()],true),"bands_hz":["broadband","40-120","120-500","500-1500","1500-5000"],"filter":"Difference of two second-order Butterworth highpasses; overlapping responses, not rectangular FFT bands.","scope":"Routed energy before master/export; processed analysis includes channel DSP/excitation, source analysis bypasses it (see source scope.json). Generated FX measured separately. No auditory model or listener preference."}),
     )?;
     Ok(())
 }
@@ -1072,4 +1106,47 @@ pub fn run(
         &serde_json::json!({"technical_checks_passed":true,"policy_targets_met":targets_met,"listener_preferred":null,"actual_fit":actual_fit,"actual_held_out":actual_hold,"accepted_fader_change":result.accepted,"no_playback":true}),
     )?;
     Ok(())
+}
+
+/// Artistic offset at processed channel outputs. Absolute faders and makeup do
+/// not establish how much emphasis is already present. Unknown basis abstains.
+pub fn rhythmic_emphasis_delta(
+    current: Option<[f64; 2]>,
+    desired: [f64; 2],
+) -> Result<Option<[f64; 2]>> {
+    if !desired
+        .iter()
+        .chain(current.iter().flatten())
+        .all(|x| x.is_finite() && (-3. ..=3.).contains(x))
+    {
+        return Err("rhythmic emphasis must be finite and within +/-3 dB".into());
+    }
+    let Some(current) = current else {
+        return Ok(None);
+    };
+    let delta = [desired[0] - current[0], desired[1] - current[1]];
+    if delta.iter().any(|x| x.abs() > 3.) {
+        return Err("rhythmic adjustment exceeds 3 dB budget".into());
+    }
+    Ok(Some(delta))
+}
+
+/// Read-only SOURCE analysis; never writes modified settings or renders audio.
+pub fn source_analyze(s: Session, root: &Path, out: &Path) -> Result<()> {
+    if out.exists() {
+        return Err("output already exists".into());
+    }
+    let p = Policy::for_session(&s);
+    let m = measure_source(&s, root, &p)?;
+    std::fs::create_dir(out)?;
+    write_json(&out.join("source-settings.json"), &s)?;
+    save_measurement(&m, &s, &p, &out.join("before"))?;
+    write_json(
+        &out.join("scope.json"),
+        &serde_json::json!({
+            "mode": "source_bypass", "settings_are_initial_source_routing": "caller must verify",
+            "meter_stage": "initial faders/pan, no channel or master DSP, before export gain",
+            "targets_are_descriptive_only": true, "listener_preferred": null
+        }),
+    )
 }
