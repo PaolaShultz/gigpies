@@ -81,6 +81,12 @@ impl Source {
             meter: Meter::default(),
         })
     }
+    pub(super) fn is_float(&self) -> bool {
+        self.float
+    }
+    pub(super) fn full_scale_samples(&self) -> u64 {
+        self.meter.clipped_samples
+    }
     pub(super) fn next(&mut self, t: u64) -> Result<[f64; 2]> {
         if t < self.offset || self.position >= self.frames {
             return Ok([0.; 2]);

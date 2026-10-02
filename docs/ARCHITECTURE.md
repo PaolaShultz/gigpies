@@ -70,3 +70,16 @@ acoustic measurement steps must be coordinated. Monitor calibration belongs to t
 mapped speaker and physical location and requires measurement; a stage-position
 label or an initial visual EQ choice is not acoustic calibration. Phone/Brain loss
 must preserve the Stagebox's last valid audio state.
+
+### Source-first preparation
+
+The [offline source-rule coordinator](SOURCE_RULES.md) can request a source
+adjustment when confident measurements imply substantial EQ, or an input-path
+review when PCM repeatedly touches full scale. For a known amp mic, distinguish
+what the player hears at the amp from what the microphone captures: compare both,
+change one amp/placement variable if needed, and repeat the same soundcheck phrases.
+No physical cause is inferred from the spectrum alone. A live source-review request
+keeps existing processing while waiting for a fresh capture; personal monitor
+adjustments remain available. The current implementation produces the advice in
+local reports; web delivery, capture-state coordination and hardware integration
+remain planned.

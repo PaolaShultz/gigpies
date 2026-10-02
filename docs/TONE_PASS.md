@@ -1,5 +1,8 @@
 # Instrument tone preparation
 
+The [source-rule coordinator](SOURCE_RULES.md) adds explicit numerical profiles,
+sustained-compression relief, input-contact checks and source-first soundcheck advice.
+
 Implemented and tested offline for guitar body/presence correction. Source identity
 comes from setup: one instrument may have a primary microphone and secondary paths.
 The algorithm does not infer a room microphone, microphone position, or independent
@@ -61,7 +64,9 @@ rule. Intent supplies the acceptable range:
 | `dark` | +1 to +7 dB |
 | `full` | +2 to +8 dB |
 
-These are our initial engineering hypotheses, not manufacturer presets, calibrated
+These are legacy compatibility examples, not a future preset catalogue. New work
+uses the explicit numerical profiles in `source-pass`; musical style names will be
+designed separately. These are our initial engineering hypotheses, not manufacturer presets, calibrated
 perceptual scores, or genre-specific voicings. “Dark” currently means a higher body
 ratio; it does not model every aspect of dark guitar tone. A musician's explicit
 thin intent changes the target instead of being treated as a fault.
@@ -126,9 +131,9 @@ The activity/secondary gates cannot reliably distinguish all bleed from quiet di
 playing. Known source assignments and an intentional soundcheck remain important.
 
 **Narrow ringing detection and correction remain unimplemented.** A persistent FFT
-peak can be a played fundamental or harmonic. This pass explicitly logs abstention
-from notching rather than claiming a microphone defect or cutting musical notes.
-Pitch changes and repeated decay evidence are the next distinct detector to build.
+peak can be a played fundamental or harmonic. This pass does not apply narrow notches or claim a microphone defect from such peaks.
+Such a detector would need pitch/decay evidence. Ringing was an example of a future
+fault class, not a diagnosis of the Complainiacs tracks.
 There are no automatic master notches, source normalization, LUFS targets, added
 makeup compensation, time alignment or polarity changes.
 

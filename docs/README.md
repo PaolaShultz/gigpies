@@ -23,3 +23,5 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 - [Manufacturer-reference experiment](PRESET_EXPERIMENT.md): source traceability, DSP mappings and separate processing/fader comparisons.
 
 - [Instrument tone preparation](TONE_PASS.md): known input groups, musician intent, automatic broad EQ and held-out DSP checks.
+
+- [Source rules and soundcheck advice](SOURCE_RULES.md): explicit profiles, coordinated corrections, source-first suggestions and repeat-measurement boundaries.

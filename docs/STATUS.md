@@ -84,6 +84,22 @@ held-out rejection. Original routing, faders and secondary paths are preserved.
 The listener reported improved overall balance from the manufacturer-reference pass
 but insufficient Complainiacs guitar body. The new pass addresses that automatically;
 its full-song correction improved held-out body/presence by 1.6 dB while the
-selected tone range remains unmet. Listening preference remains pending. Narrow
-ringing detection is a separate,
-unimplemented step. See [tone preparation](TONE_PASS.md).
+selected tone range remains unmet. Listening preference remains pending. Other fault
+classes are future work; no ringing fault is asserted in this source. See [tone preparation](TONE_PASS.md).
+
+## Source rules and source-first advice
+
+Implemented offline: explicit numerical profiles with instrument/capture matching,
+body/presence correction, sustained-compression relief, PCM full-scale-contact
+abstention, combined-rule validation and separate remaining-target reports. Profile
+names do not select processing. Large live-capture mismatches produce setup-specific
+source-adjustment advice and retain current settings for a repeat soundcheck.
+Historical recordings can receive a bounded improvement with limitations recorded.
+Style catalogues, other instrument families, live musician UI and physical capture
+control remain planned. See [source rules](SOURCE_RULES.md).
+
+Offline validation: 68 Rust and four Python tests pass. Five local guitar pilots
+and a full-song Complainiacs check preserve the existing accepted full-song settings;
+a labelled injected compression fault demonstrates bounded partial relief. Reports
+separate remaining target deviations from accepted changes. No new listening round
+or playback was added. Detailed outcomes are in [source rules](SOURCE_RULES.md).

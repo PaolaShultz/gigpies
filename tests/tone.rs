@@ -50,6 +50,8 @@ fn fixture(stereo: bool, scale: f64, room: f64, pauses: bool) -> Fixture {
             secondary: vec![1],
             secondary_files: vec!["1.wav".into()],
             intent: Intent::Balanced,
+            capture: None,
+            profile: None,
         }],
         section_seconds: 2.,
         minimum_active_seconds: 1.,

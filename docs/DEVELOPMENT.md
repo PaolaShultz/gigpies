@@ -82,3 +82,11 @@ The [tone pass](TONE_PASS.md) is owned by `automix/tone.rs`. It reuses the exist
 FFT and production DSP, accepts explicit instrument-path identity, and has focused
 normal regressions in `tests/tone.rs`. Its spectral targets are editable intent
 choices in a separate policy; it does not change the session persistence schema.
+
+The [source-rule coordinator](SOURCE_RULES.md), `automix/expert.rs`, owns explicit
+profile applicability, sustained-compression plans, source advice and joint
+validation. `tone.rs` owns guitar spectral measurements and EQ search. New rules
+must separate detection, proposed changes, actual validation and remaining defects;
+never assign processing from display names. `tests/expert.rs` uses synthetic media
+and is part of the normal suite. Public profile/rule examples are our parameters;
+manufacturer collections and private media stay local.

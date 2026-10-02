@@ -46,6 +46,18 @@ pub struct Instrument {
     pub secondary_files: Vec<std::path::PathBuf>,
     #[serde(default)]
     pub intent: Intent,
+    #[serde(default)]
+    pub capture: Option<super::expert::Capture>,
+    #[serde(default)]
+    pub profile: Option<super::expert::Profile>,
+}
+impl Instrument {
+    pub fn body_range(&self) -> [f64; 2] {
+        self.profile
+            .as_ref()
+            .and_then(|p| p.body_presence_db)
+            .unwrap_or_else(|| self.intent.range())
+    }
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -101,6 +113,9 @@ impl Policy {
         }
         let mut used = BTreeSet::new();
         for g in &self.instruments {
+            if let Some(profile) = &g.profile {
+                profile.validate(s, g)?;
+            }
             if g.name.is_empty()
                 || g.primary >= s.channels.len()
                 || s.channels[g.primary].file != g.primary_file
@@ -130,6 +145,9 @@ impl Policy {
 pub struct Frame {
     pub seconds: f64,
     pub raw_dbfs: f64,
+    pub raw_secondary_relative_db: f64,
+    pub input_full_scale_fraction: f64,
+    pub input_is_float: bool,
     pub primary_dbfs: f64,
     pub secondary_relative_db: f64,
     pub crest_db: f64,
@@ -145,7 +163,7 @@ pub struct Frame {
 fn power_db(p: f64) -> f64 {
     db(p.max(0.).sqrt())
 }
-fn percentile(values: impl Iterator<Item = f64>, p: f64) -> f64 {
+pub(super) fn percentile(values: impl Iterator<Item = f64>, p: f64) -> f64 {
     let mut v = values.collect::<Vec<_>>();
     if v.is_empty() {
         return 0.;
@@ -233,10 +251,12 @@ pub fn measure(s: &Session, root: &Path, g: &Instrument) -> Result<Vec<Frame>> {
         .collect::<Vec<_>>();
     let mut frames = vec![];
     for start in (0..total.saturating_sub(SIZE as u64 - 1)).step_by(SIZE) {
+        let full_scale_before = sources[g.primary].full_scale_samples();
         let mut main = vec![[0.; 2]; SIZE];
         let mut group = main.clone();
         let (mut raw, mut power, mut secondary, mut peak, mut gr, mut max_gr) =
             (0., 0., 0., 0_f64, 0., 0_f64);
+        let mut raw_secondary = 0.;
         for j in 0..SIZE {
             let mut other = [0.; 2];
             for (slot, &i) in indices.iter().enumerate() {
@@ -255,6 +275,7 @@ pub fn measure(s: &Session, root: &Path, g: &Instrument) -> Result<Vec<Frame>> {
                     gr += strips[slot].reduction_db();
                     max_gr = max_gr.max(strips[slot].reduction_db());
                 } else {
+                    raw_secondary += (x[0] * x[0] + x[1] * x[1]) / 2.;
                     for c in 0..2 {
                         other[c] += y[c];
                     }
@@ -268,6 +289,12 @@ pub fn measure(s: &Session, root: &Path, g: &Instrument) -> Result<Vec<Frame>> {
         frames.push(Frame {
             seconds: start as f64 / s.sample_rate as f64,
             raw_dbfs: power_db(raw / SIZE as f64),
+            raw_secondary_relative_db: power_db(raw_secondary / SIZE as f64)
+                - power_db(raw / SIZE as f64),
+            input_is_float: sources[g.primary].is_float(),
+            input_full_scale_fraction: (sources[g.primary].full_scale_samples() - full_scale_before)
+                as f64
+                / (SIZE * sources[g.primary].channels) as f64,
             primary_dbfs: power_db(power / SIZE as f64),
             secondary_relative_db: power_db(secondary / SIZE as f64)
                 - power_db(power / SIZE as f64),
@@ -285,14 +312,14 @@ pub fn measure(s: &Session, root: &Path, g: &Instrument) -> Result<Vec<Frame>> {
     }
     Ok(frames)
 }
-fn within_section(f: &Frame, rate: u32, p: &Policy) -> bool {
+pub(super) fn within_section(f: &Frame, rate: u32, p: &Policy) -> bool {
     (f.seconds / p.section_seconds) as u64
         == ((f.seconds + (SIZE - 1) as f64 / rate as f64) / p.section_seconds) as u64
 }
-fn held(f: &Frame, p: &Policy) -> bool {
+pub(super) fn held(f: &Frame, p: &Policy) -> bool {
     (f.seconds / p.section_seconds) as u64 % 2 == 1
 }
-fn violation(x: f64, range: [f64; 2]) -> f64 {
+pub(super) fn violation(x: f64, range: [f64; 2]) -> f64 {
     (range[0] - x).max(0.) + (x - range[1]).max(0.)
 }
 fn band(hz: f64, db: f64) -> EqBand {
@@ -312,7 +339,7 @@ pub struct Summary {
     pub median_crest_db: f64,
     pub p10_crest_db: f64,
 }
-fn summary(frames: &[Frame], mask: &[bool], p: &Policy, hold: bool) -> Summary {
+pub(super) fn summary(frames: &[Frame], mask: &[bool], p: &Policy, hold: bool) -> Summary {
     let v = frames
         .iter()
         .zip(mask)
@@ -367,7 +394,7 @@ pub fn propose(frames: &[Frame], rate: u32, g: &Instrument, p: &Policy) -> Propo
         summary(frames, &mask, p, false),
         summary(frames, &mask, p, true),
     ];
-    let range = g.intent.range();
+    let range = g.body_range();
     let mut out = Proposal {
         instrument: g.name.clone(),
         range_db: range,
@@ -380,6 +407,13 @@ pub fn propose(frames: &[Frame], rate: u32, g: &Instrument, p: &Policy) -> Propo
         before,
         eligible: mask,
     };
+    if g.profile
+        .as_ref()
+        .is_some_and(|p| p.body_presence_db.is_none())
+    {
+        out.reason = "body rule disabled by profile".into();
+        return out;
+    }
     let needed = ((p.minimum_active_seconds * rate as f64 / SIZE as f64).ceil() as usize).max(3);
     // Holdout values are never used in selection, only checked after the single proposal.
     if out.before[0].windows < needed {
@@ -506,6 +540,26 @@ pub fn validate_candidate(
     rate: u32,
     p: &Policy,
 ) -> Validation {
+    if q.proposed_eq.is_empty() {
+        return Validation {
+            accepted: false,
+            reason: "no proposal".into(),
+            after: [
+                summary(after, &q.eligible, p, false),
+                summary(after, &q.eligible, p, true),
+            ],
+        };
+    }
+    validate_changes(before, after, q, rate, p, true)
+}
+pub(super) fn validate_changes(
+    before: &[Frame],
+    after: &[Frame],
+    q: &Proposal,
+    rate: u32,
+    p: &Policy,
+    require_tone_improvement: bool,
+) -> Validation {
     let summaries = [
         summary(after, &q.eligible, p, false),
         summary(after, &q.eligible, p, true),
@@ -515,9 +569,6 @@ pub fn validate_candidate(
         reason: "no proposal".into(),
         after: summaries,
     };
-    if q.proposed_eq.is_empty() {
-        return v;
-    }
     if before.len() != after.len()
         || before
             .iter()
@@ -534,10 +585,18 @@ pub fn validate_candidate(
             v.reason = "insufficient held-out evidence".into();
             return v;
         }
-        if violation(new.median_body_presence_db, q.range_db)
-            > violation(old.median_body_presence_db, q.range_db) - 0.25
+        if require_tone_improvement
+            && violation(new.median_body_presence_db, q.range_db)
+                > violation(old.median_body_presence_db, q.range_db) - 0.25
         {
             v.reason = "no actual improvement in both splits".into();
+            return v;
+        }
+        if !require_tone_improvement
+            && violation(new.median_body_presence_db, q.range_db)
+                > violation(old.median_body_presence_db, q.range_db) + p.max_section_regression_db
+        {
+            v.reason = "primary tone regressed during another repair".into();
             return v;
         }
         if violation(new.median_group_body_presence_db, q.range_db)
@@ -625,7 +684,7 @@ pub fn run(s: Session, root: &Path, out: &Path, p: Policy, render: bool) -> Resu
             &out.join(format!("instrument-{n}-eligible.json")),
             &proposal.eligible,
         )?;
-        reports.push(serde_json::json!({"identity":g,"proposal":proposal,"validation":validation,"original_eq":s.channels[g.primary].eq,"candidate_eq":candidate.channels[g.primary].eq,"applied_eq":accepted.channels[g.primary].eq,"narrow_resonance":{"action":"no automatic notch","reason":"persistent spectral peaks alone cannot distinguish played harmonics from ringing; pitch/decay evidence is not yet implemented"},"tradeoff":"More body can mask bass or vocals. Faders and other source paths are unchanged. No room/microphone-position inference or console-emulation claim."}));
+        reports.push(serde_json::json!({"identity":g,"proposal":proposal,"validation":validation,"original_eq":s.channels[g.primary].eq,"candidate_eq":candidate.channels[g.primary].eq,"applied_eq":accepted.channels[g.primary].eq,"tradeoff":"More body can mask bass or vocals. Faders and other source paths are unchanged. No room/microphone-position inference or console-emulation claim."}));
     }
     accepted.validate()?;
     write_json(&out.join("decisions.json"), &reports)?;
