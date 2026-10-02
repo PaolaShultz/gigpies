@@ -103,3 +103,13 @@ and a full-song Complainiacs check preserve the existing accepted full-song sett
 a labelled injected compression fault demonstrates bounded partial relief. Reports
 separate remaining target deviations from accepted changes. No new listening round
 or playback was added. Detailed outcomes are in [source rules](SOURCE_RULES.md).
+
+## Guitar decay revision
+
+The prior ending veto treated a fading spectrum as steady tone. The new temporal
+rule preserves dynamics checks on that fade while allowing a stronger static guitar
+correction. Complainiacs now accepts +5 dB at 300 Hz / −3 dB at 2400 Hz; held-out
+body/presence improves from −8.49 to −2.36 dB. One current → new mix pair is ready
+locally. Listener preference is pending. The four other saved session pilots retain
+their settings. 71 Rust and four Python tests pass. See [evidence, rules and
+limitations](TONE_DECAY.md).

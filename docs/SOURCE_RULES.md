@@ -99,7 +99,9 @@ bundle is blocked. Do not delete a player's settings silently to make room.
 
 Uses the [existing guitar measurement/search](TONE_PASS.md), now with the profile's
 explicit range. Training consistency, minimum evidence, sparse-spectrum exclusion,
-coherent microphone summing and section guards still apply. A confident deviation
+coherent microphone summing and section guards still apply. The
+[temporal revision](TONE_DECAY.md) separates fading spectral balance from steady
+tone and retains actual level/compression/crest checks on the excluded fade. A confident deviation
 is distinct from an available repair: an EQ budget or source action can prevent a
 change even when the detector has enough evidence.
 
@@ -276,3 +278,6 @@ as errors and formatting pass. Three historical private-media tests remain ignor
 the five local pilots and full-song analysis above were run explicitly. Original
 source hashes were verified. Temporary pilot media were removed after retaining
 input manifests, configurations, measurements and a local reproduction script.
+
+The earlier Complainiacs listening evidence above is superseded by the stronger
+correction and single comparison pair in [TONE_DECAY.md](TONE_DECAY.md).

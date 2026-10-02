@@ -374,3 +374,145 @@ fn training_sections_constrain_a_misleading_average() {
     let effort = |q: &tone::Proposal| q.proposed_eq.iter().map(|e| e.db.abs()).sum::<f64>();
     assert!(effort(&bounded) < effort(&unconstrained));
 }
+
+// Two ordinary sections followed by a known synthetic temporal condition. No
+// filename, song position or desired EQ gain is supplied to the classifier.
+fn temporal_fixture(mode: &str, scale: f64) -> Fixture {
+    let mut f = fixture(false, 1., 0., false);
+    f.session.sample_rate = 16000;
+    f.session.channels.truncate(1);
+    unity::prepare(&mut f.session).unwrap();
+    f.policy.section_seconds = 12.;
+    f.policy.minimum_active_seconds = 3.;
+    f.policy.instruments[0].secondary.clear();
+    f.policy.instruments[0].secondary_files.clear();
+    let mut w = hound::WavWriter::create(
+        f.root.join("0.wav"),
+        hound::WavSpec {
+            channels: 1,
+            sample_rate: 16000,
+            bits_per_sample: 24,
+            sample_format: hound::SampleFormat::Int,
+        },
+    )
+    .unwrap();
+    for k in 0..16000 * 36 {
+        let t = k as f64 / 16000.;
+        let tail = (t - 24.).max(0.);
+        let (body, presence) = if t < 24. {
+            (0.04, 0.1)
+        } else {
+            match mode {
+                "fading" => (0.08 * gain(-2. * tail), 0.1 * gain(-4. * tail)),
+                "steady_dark" => (0.1, 0.025),
+                "uniform_fade" => (0.1 * gain(-tail), 0.025 * gain(-tail)),
+                "step" => {
+                    if tail < 6. {
+                        (0.04, 0.1)
+                    } else {
+                        (0.04, 0.003)
+                    }
+                }
+                "renewed" => {
+                    let age = tail % 4.;
+                    (0.08 * gain(-3. * age), 0.1 * gain(-6. * age))
+                }
+                _ => unreachable!(),
+            }
+        };
+        let x = scale
+            * (body * (std::f64::consts::TAU * 220. * t).sin()
+                + presence * (std::f64::consts::TAU * 1800. * t).sin());
+        w.write_sample((x * 8388607.) as i32).unwrap();
+    }
+    w.finalize().unwrap();
+    f
+}
+
+#[test]
+fn fading_balance_is_separate_from_steady_tone_but_still_has_dsp_guards() {
+    for scale in [1., 0.03] {
+        let f = temporal_fixture("fading", scale);
+        let (before, q) = propose(&f);
+        assert!(
+            q.temporal_sections
+                .iter()
+                .any(|x| x.section == 2 && x.fading_spectral_balance)
+        );
+        assert!(q.fading_mask.iter().any(|x| *x));
+        assert!(!q.proposed_eq.is_empty());
+        assert!(
+            before
+                .iter()
+                .zip(&q.eligible)
+                .filter(|(x, _)| x.seconds >= 24. && x.seconds + 8191. / 16000. < 30.)
+                .all(|(_, on)| !*on)
+        );
+        let mut s = f.session.clone();
+        s.channels[0].eq.extend(q.proposed_eq.clone());
+        let after = tone::measure(&s, &f.root, &f.policy.instruments[0]).unwrap();
+        assert!(tone::validate_candidate(&before, &after, &q, 16000, &f.policy).accepted);
+        for fault in 0..3 {
+            let mut bad = after.clone();
+            let i = q.fading_mask.iter().position(|x| *x).unwrap();
+            match fault {
+                0 => bad[i].primary_dbfs = before[i].primary_dbfs + 7.,
+                1 => bad[i].max_reduction_db = before[i].max_reduction_db + 2.,
+                _ => bad[i].crest_db = before[i].crest_db - 2.,
+            }
+            let v = tone::validate_candidate(&before, &bad, &q, 16000, &f.policy);
+            assert!(!v.accepted && v.reason.starts_with("fading-window"));
+        }
+    }
+}
+
+#[test]
+fn dark_playing_uniform_fades_steps_and_repeated_attacks_are_not_exempted() {
+    for mode in ["steady_dark", "uniform_fade", "step", "renewed"] {
+        let f = temporal_fixture(mode, 1.);
+        let (frames, q) = propose(&f);
+        assert!(!q.fading_mask.iter().any(|x| *x), "{mode}");
+        if mode == "steady_dark" {
+            assert!(
+                frames
+                    .iter()
+                    .zip(&q.eligible)
+                    .any(|(x, on)| x.seconds >= 24. && *on)
+            );
+            let g = temporal_fixture("fading", 1.);
+            let (_, strong) = propose(&g);
+            let effort = |q: &tone::Proposal| q.proposed_eq.iter().map(|e| e.db.abs()).sum::<f64>();
+            assert!(effort(&q) < effort(&strong));
+        }
+    }
+}
+
+#[test]
+fn temporal_classification_never_uses_another_split_or_insufficient_history() {
+    let f = temporal_fixture("fading", 1.);
+    let (frames, q) = propose(&f);
+    let mut changed = frames.clone();
+    for x in changed
+        .iter_mut()
+        .filter(|x| (x.seconds / 12.) as u64 % 2 == 1)
+    {
+        x.primary_dbfs -= x.seconds * 4.;
+        x.body_presence_db += x.seconds * 3.;
+    }
+    let other = tone::propose(&changed, 16000, &f.policy.instruments[0], &f.policy);
+    assert_eq!(
+        serde_json::to_value(&q.proposed_eq).unwrap(),
+        serde_json::to_value(&other.proposed_eq).unwrap()
+    );
+    for (i, x) in frames
+        .iter()
+        .enumerate()
+        .filter(|(_, x)| ((x.seconds / 12.) as u64).is_multiple_of(2))
+    {
+        assert_eq!(q.fading_mask[i], other.fading_mask[i], "{}", x.seconds);
+    }
+    let short = &frames[48..51];
+    let q = tone::propose(short, 16000, &f.policy.instruments[0], &f.policy);
+    assert!(!q.fading_mask.iter().any(|x| *x));
+    assert!(q.proposed_eq.is_empty());
+}

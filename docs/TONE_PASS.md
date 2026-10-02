@@ -2,6 +2,8 @@
 
 The [source-rule coordinator](SOURCE_RULES.md) adds explicit numerical profiles,
 sustained-compression relief, input-contact checks and source-first soundcheck advice.
+The [temporal revision](TONE_DECAY.md) separates fading spectral balance from the
+steady-tone target and documents the stronger Complainiacs correction.
 
 Implemented and tested offline for guitar body/presence correction. Source identity
 comes from setup: one instrument may have a primary microphone and secondary paths.
@@ -86,7 +88,9 @@ thin intent changes the target instead of being treated as a fault.
   Each comparison band must contain at least 1% of primary spectral power.
   Sparse notes/decays with too little energy in either band are insufficient
   evidence for this broad-tone judgement; their dynamics still need separate review.
-  Body/presence below −30 dB also fails eligibility.
+  Body/presence below −30 dB also fails eligibility. The temporal rule in
+  [TONE_DECAY.md](TONE_DECAY.md) additionally excludes confidently fading spectral
+  balance from this target while retaining separate actual-DSP guards on those windows.
 - Require at least three windows and three active seconds per split by default.
   At least 70% of eligible training windows must agree on the direction of the
   deficit/excess. This consistency fraction is a heuristic, not a probability.
@@ -147,14 +151,15 @@ The biquad response prediction is checked against measured sine gain. These fast
 synthetic regressions remain in the normal suite. Private music is opt-in through
 the commands above; no media downloads or listening happen in tests.
 
-The local experiment used a 24-second pilot before full-song rendering. The final
+The initial local experiment used a 24-second pilot before full-song rendering. Its
 whole-song search selected **+1 dB at 300 Hz and −1 dB at 2400 Hz**, both Q=0.7.
 It found a body deficit in 93.4% of eligible training windows. Actual held-out
 primary body/presence improved from −8.49 to −6.87 dB; the coherent two-path sum
 improved from −5.67 to −4.44 dB. P95 window-maximum compressor reduction fell from
 1.64 to 1.37 dB; median crest changed from 13.95 to 13.88 dB.
 
-**The tone target remains unmet.** The body-heavy ending constrains a static EQ
+**Historical result, superseded by [the temporal revision](TONE_DECAY.md).**
+The old rule let the fading ending constrain a static EQ
 shared with the thinner main playing sections. Larger pilot corrections were vetoed
 for the whole song. The final algorithm includes training-section constraints in
 selection, then uses held-out sections only for acceptance. This song informed

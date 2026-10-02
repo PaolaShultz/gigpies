@@ -355,6 +355,84 @@ pub(super) fn summary(frames: &[Frame], mask: &[bool], p: &Policy, hold: bool) -
         p10_crest_db: percentile(v.iter().map(|f| f.crest_db), 0.1),
     }
 }
+/// A temporal observation, not a diagnosis of an isolated note or a physical cause.
+#[derive(Clone, Serialize)]
+pub struct DecaySection {
+    pub section: u64,
+    pub start_seconds: f64,
+    pub windows: usize,
+    pub span_seconds: f64,
+    pub level_drop_db: f64,
+    pub body_presence_rise_db: f64,
+    pub fading_spectral_balance: bool,
+}
+/// Classify within each split's own section. Held-out audio cannot label training audio.
+/// Four temporal bins distinguish sustained fading/darkening from a single step.
+fn decay_sections(
+    frames: &[Frame],
+    rate: u32,
+    p: &Policy,
+    high: f64,
+) -> (Vec<bool>, Vec<DecaySection>) {
+    let mut sections = BTreeMap::<(u64, u64), Vec<usize>>::new();
+    for (i, f) in frames.iter().enumerate() {
+        let section = (f.seconds / p.section_seconds) as u64;
+        let chunk = ((f.seconds - section as f64 * p.section_seconds) / 6.) as u64;
+        let chunk_end = (section as f64 * p.section_seconds + (chunk + 1) as f64 * 6.)
+            .min((section + 1) as f64 * p.section_seconds);
+        if within_section(f, rate, p)
+            && f.seconds + (SIZE - 1) as f64 / (rate as f64) < chunk_end
+            && f.raw_dbfs > p.activity_floor_dbfs
+            && f.raw_dbfs > high - p.relative_activity_db
+            && f.raw_secondary_relative_db <= p.max_secondary_relative_db
+        {
+            sections.entry((section, chunk)).or_default().push(i);
+        }
+    }
+    let mut mask = vec![false; frames.len()];
+    let mut evidence = vec![];
+    for ((section, chunk), ids) in sections {
+        if ids.len() < 8 {
+            continue;
+        }
+        let span = frames[*ids.last().unwrap()].seconds - frames[ids[0]].seconds;
+        if span < 3. {
+            continue;
+        }
+        let mut levels = [0.; 4];
+        let mut ratios = [0.; 4];
+        for bin in 0..4 {
+            let part = &ids[bin * ids.len() / 4..(bin + 1) * ids.len() / 4];
+            levels[bin] = percentile(part.iter().map(|&i| frames[i].primary_dbfs), 0.5);
+            ratios[bin] = percentile(part.iter().map(|&i| frames[i].body_presence_db), 0.5);
+        }
+        let level_drop_db = levels[0] - levels[3];
+        let body_presence_rise_db = ratios[3] - ratios[0];
+        let fading = level_drop_db >= 6.
+            && body_presence_rise_db >= 6.
+            && (0..3).all(|j| levels[j] - levels[j + 1] >= 0.5 && ratios[j + 1] - ratios[j] >= -1.)
+            && (0..3).filter(|&j| ratios[j + 1] - ratios[j] >= 0.5).count() >= 2
+            && ids.windows(2).all(|w| {
+                frames[w[1]].seconds - frames[w[0]].seconds < 1.5 * SIZE as f64 / rate as f64
+                    && frames[w[1]].primary_dbfs - frames[w[0]].primary_dbfs <= 6.
+            });
+        if fading {
+            for &i in &ids {
+                mask[i] = true;
+            }
+        }
+        evidence.push(DecaySection {
+            section,
+            start_seconds: section as f64 * p.section_seconds + chunk as f64 * 6.,
+            windows: ids.len(),
+            span_seconds: span,
+            level_drop_db,
+            body_presence_rise_db,
+            fading_spectral_balance: fading,
+        });
+    }
+    (mask, evidence)
+}
 #[derive(Serialize)]
 pub struct Proposal {
     pub instrument: String,
@@ -363,6 +441,9 @@ pub struct Proposal {
     pub consistency: f64,
     pub evaluated: usize,
     pub training_sections_guarded: usize,
+    pub temporal_sections: Vec<DecaySection>,
+    /// Baseline temporal mask also receives separate actual-DSP guards.
+    pub fading_mask: Vec<bool>,
     pub proposed_eq: Vec<EqBand>,
     pub predicted_training_ratio_db: Option<f64>,
     pub before: [Summary; 2],
@@ -378,10 +459,13 @@ pub fn propose(frames: &[Frame], rate: u32, g: &Instrument, p: &Policy) -> Propo
             .map(|f| f.raw_dbfs),
         0.95,
     );
+    let (fading_mask, temporal_sections) = decay_sections(frames, rate, p, high);
     let mask = frames
         .iter()
-        .map(|f| {
-            within_section(f, rate, p)
+        .enumerate()
+        .map(|(i, f)| {
+            !fading_mask[i]
+                && within_section(f, rate, p)
                 && f.body_power_fraction >= 0.01
                 && f.presence_power_fraction >= 0.01
                 && f.raw_dbfs > p.activity_floor_dbfs
@@ -402,6 +486,8 @@ pub fn propose(frames: &[Frame], rate: u32, g: &Instrument, p: &Policy) -> Propo
         consistency: 0.,
         evaluated: 0,
         training_sections_guarded: 0,
+        temporal_sections,
+        fading_mask,
         proposed_eq: vec![],
         predicted_training_ratio_db: None,
         before,
@@ -577,6 +663,19 @@ pub(super) fn validate_changes(
     {
         v.reason = "timeline mismatch".into();
         return v;
+    }
+    // These windows do not define steady tone, but correction must still preserve them.
+    // The 6 dB limit matches the maximum body boost in the fixed search grid.
+    for (i, (old, new)) in before.iter().zip(after).enumerate() {
+        if q.fading_mask[i]
+            && (new.primary_dbfs > old.primary_dbfs + 6.05
+                || new.max_reduction_db > old.max_reduction_db + p.max_added_reduction_db
+                || new.crest_db < old.crest_db - p.max_crest_loss_db)
+        {
+            v.reason =
+                "fading-window level, compression or transient guard rejected correction".into();
+            return v;
+        }
     }
     for (old, new) in q.before.iter().zip(&v.after) {
         if new.windows < 3
