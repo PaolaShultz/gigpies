@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.1 — 2026-10-03
+
+- Deterministic offline EQ matching against versioned measured maps or provisional
+  artistic directions, with bounded broad filters fitted through production DSP.
+- Frozen baseline and source identities, persisted proposals, exact 0% and reset,
+  and a 0–100% amount that scales proposed filter gains in dB.
+- Existing EQ, effects, unity input trims and coherent groups are retained;
+  insufficient evidence and filter-capacity limits produce explicit abstention or errors.
+- CLI map import, selection and amount controls, plus an accessible local HTML
+  review with response curves and a downloadable selection.
+- Reference provenance, licensing, capture limits and uncertainty documented;
+  authored style maps remain provisional artistic choices.
+- Synthetic correction and production regressions validated. The deliberately
+  coloured Dark Ride pilot abstained; all six existing complete mixes are retained.
+- Planned MiniLab console controls and second-Pi LAN/protocol work documented.
+
+Musical acceptance remains pending. EQ matching does not recreate distortion,
+dynamics, performance or ambience. Live control and hardware validation remain planned.
+
 ## 0.2.0 — 2026-10-03
 
 - Offline soundcheck, frozen settings, production DSP and complete stereo rendering.

@@ -1,5 +1,31 @@
 # Foundation validation — 2026-10-01
 
+## 0.2.1 publication checks — 2026-10-03
+
+Rust 1.97.1, committed lockfile and `CARGO_INCREMENTAL=0`:
+
+- Formatting, locked check, warning-denied all-target Clippy and release build passed.
+- Complete normal Rust suite: **126 passed**, including nine matching regressions;
+  three historical private-media tests intentionally ignored. Complete normal
+  Python suite: **34 passed**.
+- Release executable reports `gigpies 0.2.1`; manifest and lockfile versions agree.
+- The complete staged tree passes the publication guard. The local review page's
+  inline script was reviewed and added to the explicit script list; it downloads
+  a selection request and has no network, playback or hardware control path.
+- Cargo source-package listing contains no private directories, recordings or audio
+  archives. Changed-document local link targets and staged whitespace checks pass.
+
+The [matching evidence](EQ_MATCHING.md#validation-and-bounded-pilot--2026-10-03)
+records synthetic recovery, the real pilot's conservative miss and preserved mix
+comparators. New full-song auditions, historical exhaustive renderers, playback and
+hardware checks were intentionally skipped for publication. Musical acceptance is
+pending; no true-peak claim is made. Existing recordings, maps, private evidence and
+complete exports remain local. Publication logs are retained under ignored
+`artifacts/publication-0.2.1/`.
+
+Versioned commit/push hooks are enabled locally. Remote CI is separate from these
+local results and must be checked for the pushed revision.
+
 ## 0.2.0 publication checks — 2026-10-03
 
 Rust 1.97.1, committed lockfile and `CARGO_INCREMENTAL=0`:

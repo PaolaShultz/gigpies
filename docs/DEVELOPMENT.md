@@ -56,7 +56,7 @@ Preserve source licences when adapting code. The skeleton starts no hardware.
 Hardware sessions and audible playback require a specific authorized task.
 
 Before publication inspect staged files, confirm music/private data are absent,
-run `git diff --cached --check`, and run the normal checks above. Version 0.2.0 is
+run `git diff --cached --check`, and run the normal checks above. Version 0.2.1 is
 the current offline release. Release notes must distinguish
 implemented, offline-validated and physically verified behavior.
 Run `python3 scripts/check_publication.py` after staging. The guard checks the
@@ -164,3 +164,9 @@ zero amount, source identity, invalid input/FX-return refusal, held-out isolatio
 and overload rejection. The checkpoint contract accepts an explicitly declared
 production FX tail while retaining pinned SOURCE files; Python regressions reject
 unexplained duration changes, altered offsets and inconsistent tail metadata.
+
+`automix::matching` owns [frozen EQ matching](EQ_MATCHING.md), map imports and the
+local review page. `tests/matching.rs` covers production-DSP preservation, recovery,
+noise/cancellation abstention, persistence and nonlinear interactions. SHA-256 pins
+inputs/settings; serde_json float round trips preserve those identities. The page
+exports a selection request for offline validation and has no live control path.

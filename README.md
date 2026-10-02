@@ -17,7 +17,7 @@
 ## A prepared show. Room to perform.
 
 GigPies is an experimental live-band sound system built in **Rust for Raspberry Pi**.
-Version **0.2.0** delivers the offline processing and review workflow described below.
+Version **0.2.1** delivers the offline processing and review workflow described below.
 Soundcheck prepares a baseline mix. During the show, deterministic rules make bounded
 corrections when meaningful exceptions occur. The live core needs no Internet or
 external AI service.
@@ -61,6 +61,10 @@ spatial choices with production-engine calibration and separate ensemble checks.
 It builds independently and opens no audio hardware. Mix quality awaits listening.
 
 [**Source rules →**](docs/SOURCE_RULES.md) · [**Automatic guitar tone →**](docs/TONE_PASS.md) · [**Manufacturer-reference experiment →**](docs/PRESET_EXPERIMENT.md) · [**Musical balance experiment →**](docs/BALANCE_PASS.md) · [**Unity-source comparison →**](docs/UNITY_PASS.md) · [**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
+
+The [frozen EQ matcher](docs/EQ_MATCHING.md) adds versioned reference maps, broad
+production-EQ fitting, an exact 0–100% amount/reset contract and a local HTML review
+page. Artistic directions remain provisional; unchanged tone stays eligible.
 
 Live-show transport, monitors, lighting and hardware integration remain planned.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.

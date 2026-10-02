@@ -44,7 +44,8 @@
     "scripts/test_preset_experiment.py",
     "scripts/test_publication.py",
     "scripts/test_snare_context.py",
-    "scripts/test_snare_temporal_evidence.py"
+    "scripts/test_snare_temporal_evidence.py",
+    "src/automix/matching/review.html"
   ],
   "binary_artwork": [
     "docs/assets/gigpies-concept.png"

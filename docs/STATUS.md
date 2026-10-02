@@ -1,13 +1,38 @@
 # Status and next steps
 
-## 0.2.0 — offline release
+## 0.2.1 — frozen EQ matching, offline-validated
 
-The versioned release includes the source-preserving decision workflow, contextual
+Versioned measured maps and provisional artistic directions now feed a deterministic
+broad-filter matcher using production EQ response. Saved baseline/source identities,
+0–100% amount, exact reset, capacity refusal, CLI commands and a local HTML review
+page are implemented. Existing EQ, effects, input groups, trims and routing are retained.
+See [algorithm, research, controls and evidence](EQ_MATCHING.md).
+
+126 normal Rust and 34 Python tests pass. Synthetic injected coloration receives a
+bounded correction. The deliberately coloured Dark Ride pilot abstains because its
+reference uncertainty masks the known change; this conservative miss is retained,
+with no retuning or new audition. All six current complete productions remain unchanged;
+five focused regressions and Dark Ride's clean control match retained production
+observations. No listening improvement or hardware readiness is claimed.
+
+See [release validation](VALIDATION.md#021-publication-checks--2026-10-03) and
+[release notes](../CHANGELOG.md). Publication hooks and CI enforce private-data
+and reviewed-script boundaries.
+
+## 0.2.0 — previous offline release
+
+The previous release introduced the source-preserving decision workflow, contextual
 analysis, explicit artistic FX and verified listening tools described below.
-Local release checks pass: 117 Rust tests, 34 Python tests, formatting, Clippy and
-the locked release build. Publication hooks and CI enforce private-data and reviewed
-script boundaries. See [release validation](VALIDATION.md#020-publication-checks--2026-10-03)
-and [release notes](../CHANGELOG.md). Musical and hardware acceptance remain separate.
+Its local release checks passed: 117 Rust tests, 34 Python tests, formatting, Clippy
+and the locked release build. See [0.2.0 validation](VALIDATION.md#020-publication-checks--2026-10-03).
+Musical and hardware acceptance remain separate.
+
+## Next hardware session
+
+The user plans a second Pi connected by cable, initial LAN/protocol measurements,
+and a compact screen/MiniLab control surface. The proposed mapping and two-Codex
+handoff workflow are recorded in [next-session notes](NEXT_SESSION.md). These are
+planned; no MIDI, network service or hardware operation was added.
 
 ## PA module ownership and planned integration
 

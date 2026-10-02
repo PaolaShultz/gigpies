@@ -133,12 +133,18 @@ impl Strip {
     pub fn reduction_db(&self) -> f64 {
         -self.reduction
     }
-    pub fn tick(&mut self, mut x: [f64; 2]) -> [f64; 2] {
+    pub fn tick(&mut self, x: [f64; 2]) -> [f64; 2] {
+        self.tick_with_eq_tap(x).1
+    }
+    /// Offline observation of the actual EQ output and complete strip output.
+    /// Both share the same filter state and linked compressor used by `tick`.
+    pub fn tick_with_eq_tap(&mut self, mut x: [f64; 2]) -> ([f64; 2], [f64; 2]) {
         for f in &mut self.filters {
             for i in 0..2 {
                 x[i] = f[i].tick(x[i]);
             }
         }
+        let eq_output = x;
         let target = compression_db(db(x[0].abs().max(x[1].abs())), &self.p);
         let c = if target < self.reduction {
             self.attack
@@ -148,7 +154,7 @@ impl Strip {
         self.reduction = target + c * (self.reduction - target);
         self.max_reduction = self.max_reduction.max(-self.reduction);
         let g = gain(self.reduction + self.p.makeup_db);
-        x.map(|v| v * g)
+        (eq_output, x.map(|v| v * g))
     }
 }
 /// Decisions inspect completed blocks only, and affect the following block.

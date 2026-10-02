@@ -73,7 +73,9 @@ Follow-up user proposal, 2026-10-02: choose a sound such as “dark metal guitar
 the planned HTML interface, calculate an EQ toward that reference and let the player
 control how much is applied. This supplies an explicit artistic destination and
 fits the preservation contract. It does not require declaring the starting sound
-defective. This profile library and slider are not implemented yet.
+defective. The offline [EQ matching backend and local review page](EQ_MATCHING.md) now
+implement versioned maps, bounded fitting, amount and reset. The multi-musician
+network workflow remains planned.
 
 The underlying technique is matching EQ: compare a measured spectrum with a stored
 reference and calculate a filter response. Established implementations support saved

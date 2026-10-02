@@ -78,7 +78,8 @@ Active dependencies are intentionally small:
 |---|---|
 | hound 3.5.1 | WAV metadata reading; already used by SHR projects |
 | serde 1.0.229 | Typed report serialization |
-| serde_json 1.0.151 | JSON command output |
+| serde_json 1.0.151 | JSON settings/reports with exact float round trips |
+| sha2 0.10.9 | SHA-256 identities for frozen matching inputs/settings |
 
 Rust 1.97.1 and edition 2024 match the current related projects.
 `Cargo.lock` owns the complete resolution.

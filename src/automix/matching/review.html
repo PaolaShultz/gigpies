@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GigPies tone review</title><style>
+body{font:18px system-ui;max-width:960px;margin:2rem auto;padding:0 1rem;color:#172330;background:#f5f7fa}h1{font-size:2rem}label{display:block;margin-top:1rem}select,input,button{font:inherit;min-height:44px;margin:.3rem .5rem .3rem 0}input[type=range]{width:min(100%,500px)}button{padding:.4rem 1rem}svg{width:100%;height:auto;background:white;border:1px solid #61778c}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.35rem;border-bottom:1px solid #c5ccd4}#status{font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere}details{margin:1rem 0}a{color:#104c8c}:focus-visible{outline:3px solid #955c00;outline-offset:3px}</style>
+<main><h1>Choose your instrument’s tone</h1><p id="scope"></p><p>A direction expresses your taste. Keeping your current sound is a complete choice. Listening acceptance is pending.</p>
+<label for="profile">Tone map</label><select id="profile"></select>
+<p id="basis"></p><p id="status" role="status" aria-live="polite"></p>
+<label for="amount">Amount <output id="value" for="amount">0%</output></label><input id="amount" type="range" min="0" max="100" step="1" value="0"><label for="number">Amount as a number, percent</label><input id="number" type="number" min="0" max="100" step="1" value="0">
+<button id="reset" type="button">Reset to baseline</button>
+<p>0% restores the frozen EQ and effects. Band gains scale in dB: 50% of a −3 dB proposal is −1.5 dB. Faders and makeup stay separate.</p>
+<svg viewBox="0 0 800 280" role="img" aria-labelledby="curve-title curve-description"><title id="curve-title">Proposed EQ change</title><desc id="curve-description">Frequency increases from left to right on a logarithmic scale. Gain is in dB. The table below gives the filter values.</desc><g id="plot"></g></svg>
+<p>The curve shows the proposed change. Existing EQ is retained. Broad filters have small skirts beyond the supported matching range.</p>
+<table><caption>Appended filters at this amount</caption><thead><tr><th>Frequency, Hz</th><th>Q</th><th>Gain, dB</th></tr></thead><tbody id="bands"></tbody></table>
+<details><summary>Baseline, evidence and limitations</summary><pre id="evidence"></pre></details>
+<button id="download" type="button">Save selection for validation</button><p id="saved" role="status"></p>
+<p>This local page saves your choice. Run the following command with this review’s state and original source directory to validate and create render settings:</p><pre>gigpies eq-match-apply state.json SOURCE_DIRECTORY NEW_OUTPUT selection.json
+gigpies render NEW_OUTPUT/settings.json SOURCE_DIRECTORY NEW_RENDER</pre>
+<p>Review the saved checks before rendering. A failed amount restores 0%. There is no playback or live system control on this page.</p></main>
+<script type="application/json" id="data">__MATCH_DATA__</script><script>
+'use strict';const d=JSON.parse(document.getElementById('data').textContent),s=d.state,$=id=>document.getElementById(id);const ns='http://www.w3.org/2000/svg';
+s.choices.forEach((c,i)=>{const o=document.createElement('option');o.value=i;o.textContent=c.map.label+' (v'+c.map.version+')';$('profile').append(o)});
+$('profile').value=Math.max(0,s.choices.findIndex(c=>c.map.id===s.selected_map));$('amount').value=Math.round(s.amount_percent);
+$('scope').textContent=s.request.group.name+' · '+s.request.group.inputs.map(x=>x.file).join(', ');
+function draw(){const i=Number($('profile').value),c=s.choices[i],a=Number($('amount').value);$('number').value=a;$('value').textContent=a+'%';$('basis').textContent=c.map.basis;$('status').textContent=(c.eligible?'Available for review. ':'Withheld: use 0% to keep the baseline. ')+c.proposal.reason;$('download').disabled=!c.eligible&&a>0;$('bands').replaceChildren();c.proposal.bands.forEach(b=>{const tr=document.createElement('tr');[b.hz,b.q,(b.db*a/100).toFixed(2)].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});$('bands').append(tr)});if(!c.proposal.bands.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No added EQ';tr.append(td);$('bands').append(tr)}
+$('evidence').textContent=JSON.stringify({baseline_id:s.baseline_id,map:c.map,checks:c.checks,baseline_curves:d.baseline,last_attempt:s.last_attempt},null,2);$('plot').replaceChildren();
+const node=(tag,attrs,text)=>{const n=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));if(text)n.textContent=text;$('plot').append(n);return n};
+[-6,-3,0,3,6].forEach(g=>{const y=140-g*16;node('line',{x1:48,y1:y,x2:775,y2:y,stroke:g===0?'#526577':'#d5dce3'});node('text',{x:5,y:y+5,'font-size':14},g+' dB')});
+const x=hz=>48+727*Math.log(hz/d.hz[0])/Math.log(d.hz.at(-1)/d.hz[0]);[50,100,250,500,1000,2000,5000,10000].filter(h=>h<=d.hz.at(-1)).forEach(h=>node('text',{x:x(h),y:265,'text-anchor':'middle','font-size':13},h>=1000?h/1000+'k':String(h)));
+node('polyline',{points:d.hz.map((h,j)=>x(h)+','+(140-d.curves[i][a][j]*16)).join(' '),fill:'none',stroke:'#185ab4','stroke-width':3});$('saved').textContent='Selection has not been applied.';}
+$('amount').addEventListener('input',draw);$('number').addEventListener('change',()=>{const n=Number($('number').value);if(!Number.isFinite(n))return;$('amount').value=Math.round(Math.min(100,Math.max(0,n)));draw()});$('profile').addEventListener('change',()=>{$('amount').value=0;draw()});$('reset').addEventListener('click',()=>{$('amount').value=0;draw()});
+$('download').addEventListener('click',()=>{const c=s.choices[Number($('profile').value)],v={frozen_id:s.frozen_id,map_id:c.map.id,map_version:c.map.version,amount_percent:Number($('amount').value)},blob=new Blob([JSON.stringify(v,null,2)+'\n'],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='selection.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);$('saved').textContent='Selection saved. Validate it with the command below.'});draw();
+</script></html>

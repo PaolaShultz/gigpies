@@ -56,3 +56,6 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 
 - [Expert artistic effects](ARTISTIC_FX.md): explicit instrument/style profiles,
   production-engine decay and return calibration, ensemble guards and finished mixes.
+
+- [Frozen EQ matching](EQ_MATCHING.md): reference catalogue, provisional maps, amount/reset, CLI/local review and validation.
+- [Next hardware session](NEXT_SESSION.md): MiniLab console idea, second Pi, LAN measurements and Codex handoffs.

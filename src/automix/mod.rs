@@ -20,6 +20,9 @@ pub mod balance;
 /// Intent-conditioned offline guitar tone preparation.
 pub mod tone;
 
+/// Frozen spectral matching, artistic maps and offline musician review.
+pub mod matching;
+
 /// Explicit source profiles and bounded processing rules.
 pub mod expert;
 
