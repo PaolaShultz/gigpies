@@ -20,7 +20,8 @@ in the existing SHR Lux provenance. This project includes no music or source arc
 
 - Kick, snare, stereo overheads, stereo drum room, three toms.
 - Bass DI and bass amp.
-- Two electric guitars.
+- Two electric-guitar files; filenames alone do not establish separate performances.
+  The current tone experiment treats them as two known paths for one guitar.
 - Lead vocal and vocal room.
 
 Use the original 13 WAVs for mixing. SHR Lux's prepared four-source lighting simulation

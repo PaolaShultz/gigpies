@@ -8,7 +8,7 @@ fn run() -> gigpies::inventory::Result<()> {
             env!("CARGO_PKG_VERSION")
         ),
         [arg] if arg == "--help" || arg == "-h" => println!(
-            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
+            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies tone-pass <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies tone-analyze <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
         ),
         [arg] if arg == "--version" || arg == "-V" => {
             println!("gigpies {}", env!("CARGO_PKG_VERSION"))
@@ -29,6 +29,19 @@ fn run() -> gigpies::inventory::Result<()> {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;
             let seconds = seconds.to_str().ok_or("invalid seconds")?.parse()?;
             gigpies::automix::run(session, Path::new(root), Path::new(out), Some(seconds))?;
+        }
+        [command, config, root, out, policy]
+            if command == "tone-pass" || command == "tone-analyze" =>
+        {
+            let session = serde_json::from_reader(std::fs::File::open(config)?)?;
+            let policy = serde_json::from_reader(std::fs::File::open(policy)?)?;
+            gigpies::automix::tone::run(
+                session,
+                Path::new(root),
+                Path::new(out),
+                policy,
+                command == "tone-pass",
+            )?;
         }
         [command, config, root, out, policy] if command == "finish" => {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;

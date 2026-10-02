@@ -77,3 +77,8 @@ is an optional PCM excerpt/export verification tool; it never changes mix settin
 
 The [manufacturer-reference experiment](PRESET_EXPERIMENT.md) adds explicit shelf
 shapes and local parameter mapping. Numerical collections and media stay ignored.
+
+The [tone pass](TONE_PASS.md) is owned by `automix/tone.rs`. It reuses the existing
+FFT and production DSP, accepts explicit instrument-path identity, and has focused
+normal regressions in `tests/tone.rs`. Its spectral targets are editable intent
+choices in a separate policy; it does not change the session persistence schema.

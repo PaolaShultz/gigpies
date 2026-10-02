@@ -71,6 +71,15 @@ impl Biquad {
             )
         }
     }
+    /// Squared magnitude of this filter's steady-state response (analysis only).
+    pub fn power_response(&self, hz: f64, rate: u32) -> f64 {
+        let w = 2. * PI * hz / rate as f64;
+        let real_b = self.b[0] + self.b[1] * w.cos() + self.b[2] * (2. * w).cos();
+        let imag_b = -self.b[1] * w.sin() - self.b[2] * (2. * w).sin();
+        let real_a = 1. + self.a[0] * w.cos() + self.a[1] * (2. * w).cos();
+        let imag_a = -self.a[0] * w.sin() - self.a[1] * (2. * w).sin();
+        (real_b * real_b + imag_b * imag_b) / (real_a * real_a + imag_a * imag_a)
+    }
     pub fn tick(&mut self, x: f64) -> f64 {
         let y = self.b[0] * x + self.z[0];
         self.z = [

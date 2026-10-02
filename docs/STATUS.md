@@ -75,3 +75,15 @@ applicable ensemble policy. Dark Ride's full-band render is deferred without a
 verified bass DI. [Methods, reference-use limits and results](PRESET_EXPERIMENT.md).
 Manufacturer collections, recordings, settings and detailed private evidence remain
 local. No console emulation or hardware verification is claimed.
+
+## Instrument tone preparation
+
+Implemented offline: explicit known guitar input groups, intent-conditioned
+body/presence measurement, a fixed-budget broad-EQ search, actual DSP validation and
+held-out rejection. Original routing, faders and secondary paths are preserved.
+The listener reported improved overall balance from the manufacturer-reference pass
+but insufficient Complainiacs guitar body. The new pass addresses that automatically;
+its full-song correction improved held-out body/presence by 1.6 dB while the
+selected tone range remains unmet. Listening preference remains pending. Narrow
+ringing detection is a separate,
+unimplemented step. See [tone preparation](TONE_PASS.md).

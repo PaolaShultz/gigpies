@@ -51,3 +51,22 @@ Keep offline source reading and analysis separate from DSP rendering, device tra
 control/UI, lighting and recording. Start in one Rust package; extract crates when an
 actual integration boundary benefits from it. There are no empty live-engine crates.
 Extra DSP nodes and venue business services remain optional future work.
+
+## Proposed instrument-station soundcheck
+
+Design direction, not an implemented web/monitor feature: each instrument station
+has a separate local QR address. Setup maps that station to its known primary and
+secondary inputs, performer, stage position and monitor output. Scanning it opens
+the correct instrument and an immediately editable default monitor mix. The
+performer supplies instrument/style/tone intent and plays a soundcheck; the Brain
+measures the known sources and prepares an editable first pass, followed by a band
+context check. The offline [tone pass](TONE_PASS.md) implements the first limited
+intent-to-processing step for guitar body and presence.
+
+Personal monitor sends/tone and shared source/FOH processing need distinct control
+scope. Performer edits must survive subsequent automatic analysis. Multiple phones
+may remain connected and monitor controls remain available during soundcheck;
+acoustic measurement steps must be coordinated. Monitor calibration belongs to the
+mapped speaker and physical location and requires measurement; a stage-position
+label or an initial visual EQ choice is not acoustic calibration. Phone/Brain loss
+must preserve the Stagebox's last valid audio state.

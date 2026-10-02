@@ -13,3 +13,6 @@ pub mod analysis;
 pub mod unity;
 
 pub mod balance;
+
+/// Intent-conditioned offline guitar tone preparation.
+pub mod tone;

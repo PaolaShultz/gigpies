@@ -14,7 +14,7 @@ fn centers() -> [f64; BANDS] {
     std::array::from_fn(|i| 1000. * 2_f64.powf((i as f64 - 15.) / 3.))
 }
 /// In-place radix-2 forward FFT, for analysis only.
-fn fft(x: &mut [[f64; 2]]) {
+pub(super) fn fft(x: &mut [[f64; 2]]) {
     let n = x.len();
     let mut j = 0;
     for i in 1..n {
