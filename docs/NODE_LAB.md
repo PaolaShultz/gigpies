@@ -1,5 +1,19 @@
 # Two-Pi development lab
 
+## USB hardware continuation, 2026-10-03
+
+Private task 0004 follows accepted synthetic task 0003. Pi 5 exclusively owns
+the selected stereo USB device and local PA/recording; Pi 4 runs source-following
+real SHR FX. [The hardware record](AUDIO_HARDWARE.md) binds module revisions,
+actual-device tests, retained failures, sample verification and peer review.
+Fresh mutually acknowledged H1/H2/H3 reservations covered bounded trials and the
+later user-connected physical return. Peer findings use immutable ordinary files
+with separate hash-verified coordinator acceptance. Exact transferred binary/source
+snapshots identify measured code. A separately authorized task 0005 synchronized
+peer module checkouts; this hardware task used isolated artifacts and preserved
+interactive sessions. The final native f64 ten-minute run passed; left physical
+loopback is verified, while the weak right return remains unresolved.
+
 ## Transport checkpoint, 2026-10-03
 
 The [owning plan](AUDIO_TRANSPORT_PLAN.md) and [protocol/results](AUDIO_TRANSPORT.md)

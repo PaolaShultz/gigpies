@@ -80,7 +80,9 @@ EQ plans require training before held out to protect against continuous DSP hist
 
 The unreleased [audio transport prototype](docs/AUDIO_TRANSPORT.md) implements
 bounded UDP audio/control and a PA-owned sample timeline, with two-Pi synthetic
-validation. Physical audio, monitors, lighting and module integration remain planned.
+validation. The [USB hardware bench](docs/AUDIO_HARDWARE.md) now connects selected stereo
+capture/output to real SHR PA, FX and recording, with explicit timing/fault evidence.
+The broader live mixer, monitors, lighting and acoustic acceptance remain planned.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.
 The system is modular: PA processing and measurement are developed in SHR PA,
 with the finished module intended for [integration here](docs/COMPONENTS.md#pa-module-and-planned-integration).

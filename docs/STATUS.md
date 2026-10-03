@@ -1,5 +1,31 @@
 # Status and next steps
 
+## USB host integration — unreleased, actual-device bench, 2026-10-03
+
+**Live latency remains unaccepted.** The user rejected the large-buffer result;
+smaller-buffer pacing and acceptance work continues. The results below retain
+that configuration's correctness evidence.
+
+The [hardware plan](AUDIO_HARDWARE_PLAN.md) and [measured host contract](AUDIO_HARDWARE.md)
+connect actual stereo USB capture/output with independently built SHR PA, FX and
+REC libraries. PA and the integrated stereo delay process f64; Brain follows USB
+source frames, and a bounded local worker writes PCM24 stems to NVMe. Recordings
+are verified sample by sample in the stored PCM domain, including dry replay.
+Brain stalls/restart leave dry processing and recording intact; a deliberate local
+xrun stops capture and marks the retained take incomplete. The original 8 ms
+admission target failed once in a 600 s run; the explicitly revised configuration
+and final acceptance are recorded in the owning hardware document.
+
+The final 600 s bench passed at 48 kHz,384-frame periods,3072-frame device buffers
+and 768-frame wet admission: 28.8 million frames, no xruns/wet losses/queue errors,
+with exact stored-sample and dry/DAC replay. Two physical inputs/outputs were
+exercised, with separate software audit stems. Subsequent user-connected loopback
+verified the left route at 57.0625 ms buffered frame offset; the right return was
+68.77 dB weaker and remains unresolved. No second USB interface is present.
+Isolated converter latency, independent clock drift, acoustics, full mixer controls
+and full-show reliability remain unverified. Console edits from the earlier planning
+session are preserved separately; no public push or release occurred.
+
 ## Audio transport — unreleased, synthetic validation, 2026-10-03
 
 Implemented [GPA1 audio and bounded UDP control](AUDIO_TRANSPORT.md), fixed
@@ -8,8 +34,9 @@ admission, wet fade and fresh-state recovery. Untuned two-Pi link measurements,
 paced bidirectional trials and application faults are recorded in the
 [owning plan](AUDIO_TRANSPORT_PLAN.md). The final measured envelope and failed
 targets are stated in the transport document. SSH/Git remains development
-coordination. This does not implement a live mixer, FX engine or NVMe recorder;
-physical audio and full-show reliability remain unverified.
+coordination. That preceding phase did not implement physical I/O or real modules; the
+hardware continuation above records the later stereo integration. Full-show
+reliability remains unverified.
 
 ## Summing and delivery — unreleased, offline-validated, 2026-10-03
 

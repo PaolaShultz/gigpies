@@ -1,5 +1,22 @@
 # Next session: listening review and planned hardware
 
+## Current hardware handoff
+
+Read [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md) and its
+[owning plan](AUDIO_HARDWARE_PLAN.md) before continuing. The authorized task added
+real selected-device capture/output, PA/FX/REC adapters, sample-verified recording
+and application/device fault checks. Exact configuration, failed 8 ms target,
+revised budget, final soak evidence and limits are recorded there. Do not repeat
+unchanged baseline or music studies. New hardware trials need current ownership,
+fresh epoch/output paths and a reservation; release status is in the private ledger.
+
+The user subsequently connected stereo returns. Left loopback is verified;
+right return is about 69 dB weaker and needs a working route before stereo physical
+acceptance. The USB microphone remains absent if independent-device measurements
+are wanted. These limits did not block software/integration work. Acoustic
+PA acceptance and full mixer/control/UI integration remain distinct tasks. The
+older offline/listening and console notes below keep their original scope.
+
 ## Offline handoff — unreleased summing work, 2026-10-03
 
 The [summing-engine plan](SUMMING_PLAN.md) has been implemented and offline-validated

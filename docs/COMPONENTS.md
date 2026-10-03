@@ -1,5 +1,10 @@
 # Existing components and dependencies
 
+The 2026-10-03 [USB hardware integration](AUDIO_HARDWARE.md) adds versioned
+C interfaces in SHR PA/FX/REC and an explicit GigPies host. The libraries build
+independently; their source and algorithms remain in their owning repositories.
+Stereo actual-device evidence is separate from the broader planned modules below.
+
 Sibling projects were inspected on 2026-10-01. The local inventory and README scope
 were refreshed on 2026-10-02, with a source/test inspection of SHR PA's generator,
 delays and polarity controls. This is not a fresh implementation audit of every
@@ -46,7 +51,7 @@ These local paths are ownership references, not build or CI requirements.
 | [shr-fx](https://github.com/PaolaShultz/shr-fx) | Two wet-only engines, up to eight parallel slots each; reverb, delay, chorus, exciter | Send/return semantics; JACK host; listening and live acceptance remain |
 | [shr-daw](https://github.com/PaolaShultz/shr-daw) | Channel processing, EQ, dynamics, audio graph, controller support and recording | Coupled to workstation models; adapt narrowly and preserve provenance |
 | shr-lux | Offline multitrack replay, source activity/kick analysis, lighting simulation and pad previews | Private reference; actual DMX/live capture remain pending |
-| shr-rec | Recorder/player application shell | Audio recording/playback not wired yet |
+| shr-rec | Bounded raw PCM24 recording/recovery library and application shell | Library integrated in the stereo bench; standalone recording UI and playback remain pending |
 | shr-drums, shr-synth, shr-sampler | Separate instrument engines and offline render/host patterns | Useful references, not automixing prerequisites |
 | shr-tone-over-9000 | NAM live processor, prepared chain changes | Guitar processing; no need to integrate for the first mix experiment |
 | shr-skills | Development workflow material | Not an audio runtime component |
@@ -65,7 +70,7 @@ phase/confidence analysis and a verified delay/polarity proposal stage. L/R sett
 are currently paired; independent-output changes require an explicit contract update.
 
 GigPies will integrate the finished module rather than duplicate those algorithms.
-Packaging and the host/control interface remain undecided. Preserve one audio-device
+The bench uses a versioned C host interface; phase-measurement and live-control integration remain pending. Preserve one audio-device
 owner, explicit timing/protection/state contracts and standalone PA operation.
 Module implementation, GigPies integration and acoustic hardware acceptance are
 separate milestones; none is completed by recording this task.
@@ -93,6 +98,8 @@ and assume they form one low-latency mixer. Pure DSP and host transport are sepa
 The [transport prototype](AUDIO_TRANSPORT.md) adds rtrb 0.4.0 for independent
 bounded worker queues and socket2 0.6.5 for per-socket receive capacity.
 GigPies owns packet/control contracts and adapters. SHR PA, SHR FX and SHR REC
-must integrate the real audio host, source-frame FX and local NVMe recorder
-in their owning repositories. No sibling algorithms were copied or changed.
+now expose the PA, source-frame FX and local NVMe recorder adapters used by
+the stereo bench. Owner source changed within the authorized task; no sibling
+algorithms were duplicated here. Optional alsa 0.11.0/libloading 0.7.4 dependencies
+serve the explicit hardware-host feature.
 ASRC and a network-clock implementation remain unselected integration work.

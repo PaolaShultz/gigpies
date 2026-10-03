@@ -1,5 +1,9 @@
 # Synthetic audio transport
 
+The completed synthetic phase continues in [USB hardware integration](AUDIO_HARDWARE.md)
+and its [owning plan](AUDIO_HARDWARE_PLAN.md). Results below retain their original
+synthetic scope; actual-device measurements are recorded separately.
+
 Status: implemented contracts and completed two-Pi synthetic validation. The
 [owning plan](AUDIO_TRANSPORT_PLAN.md) tracks execution and acceptance.
 This is a GigPies integration prototype; PA, FX and recorder algorithms remain

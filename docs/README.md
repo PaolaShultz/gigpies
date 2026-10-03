@@ -13,6 +13,8 @@ selection and evidence.
 | Document | Owns |
 |---|---|
 | [Architecture](ARCHITECTURE.md) | Intended node responsibilities and processing boundaries |
+| [USB hardware integration](AUDIO_HARDWARE.md) | Actual-device host, PA/FX/REC adapters, measured budgets, recovery and remaining physical limits |
+| [Audio hardware plan](AUDIO_HARDWARE_PLAN.md) | Continuation targets, device ownership, failed targets and acceptance gates |
 | [Audio transport](AUDIO_TRANSPORT.md) | GPA1 packet/control formats, PA clock, measured limits, recovery and physical acceptance gates |
 | [Audio transport plan](AUDIO_TRANSPORT_PLAN.md) | Owning execution plan, targets, repairs, verification and task completion |
 | [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |

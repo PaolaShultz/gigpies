@@ -1,5 +1,9 @@
 # Audio transport execution plan
 
+Completed preceding phase. The authorized [hardware continuation plan](AUDIO_HARDWARE_PLAN.md)
+and [actual-device results](AUDIO_HARDWARE.md) now own PA/FX/REC integration;
+this plan retains its synthetic measurements and original limits.
+
 Owning plan for the 2026-10-03 authorized two-Pi synthetic transport task.
 [AUDIO_TRANSPORT.md](AUDIO_TRANSPORT.md) will own the resulting protocol and evidence.
 Base: `fbcc9cb551508ef8d3e6533127928226e59e019a`. Existing console documentation

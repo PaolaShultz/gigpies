@@ -1,5 +1,23 @@
 # Development
 
+## Explicit hardware host
+
+The optional `hardware-host` feature builds `gigpies-hardware`, a bounded stereo
+ALSA/module bench; see [its contract and acceptance](AUDIO_HARDWARE.md). Build
+owner libraries independently and pass explicit paths in private configuration.
+Normal tests open no devices; actual measurements require session authorization
+and resource reservation. `cargo run` still defaults to the offline GigPies CLI.
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --all-targets --features hardware-host
+CARGO_INCREMENTAL=0 cargo clippy --locked --all-targets --features hardware-host -- -D warnings
+CARGO_INCREMENTAL=0 cargo build --locked --release --features hardware-host --bin gigpies-hardware
+```
+
+`tests/host.rs` protects channel-wide fades, deadline selection, source precision,
+frame ownership and bounded metric reporting. Historical studies and the opt-in
+socket test retain their existing classification.
+
 ## Synthetic transport validation
 
 `src/transport/` owns packet/control contracts and bounded worker handoffs; see

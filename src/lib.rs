@@ -8,3 +8,6 @@ pub mod automix;
 
 /// Synthetic network audio and control contracts; no hardware is opened.
 pub mod transport;
+
+/// Bounded source-frame host contracts; opening hardware is explicitly opt-in.
+pub mod host;

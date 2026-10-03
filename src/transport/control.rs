@@ -420,6 +420,10 @@ impl ControlWriter {
         }
         Ok(WriterEvent::Ignored)
     }
+    /// True only after a matching fresh snapshot, cleared on resynchronization.
+    pub fn synchronized(&self) -> bool {
+        self.synchronized
+    }
     pub fn revision(&self) -> u64 {
         self.revision
     }

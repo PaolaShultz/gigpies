@@ -1,5 +1,18 @@
 # Intended architecture
 
+## Implemented USB bench boundary
+
+The [hardware host](AUDIO_HARDWARE.md) now opens one explicitly selected stereo
+USB interface, runs independently built SHR PA/FX/REC libraries through versioned
+C interfaces and records real samples on the PA node. Brain follows the PA's USB
+source-frame timeline without an audio device. The render section uses bounded
+module calls/queues; driver I/O and disk/network work stay outside it. This is a
+measured stereo bench, while the broader live mixer/console below remains planned.
+The host preserves dry processing and recording through Brain failure, fades both
+wet channels and requires fresh control state. Device faults close the old take
+as incomplete and require a fresh epoch. Prototype control does not yet change
+real mixer parameters. Physical latency/acoustic acceptance remain separate.
+
 Status: live node boundaries remain design direction. Offline soundcheck/rendering
 is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
 The [component map](COMPONENTS.md) records module ownership across the `../shr-*`
