@@ -129,7 +129,6 @@ No physical return/second interface exists, so those affected measurements remai
 unavailable. Candidate v5 normal validation and affected hardware checks precede
 final acceptance; no full-show or acoustic claim follows from this bench.
 
-
 A later period 192/buffer 768 attempt at 16 ms admission stopped after 10.28 s on a
 playback underrun. No wet loss occurred; all 493440 retained frames verified, while
 only 493248 frames were fully submitted to playback. The incomplete take and
@@ -143,7 +142,6 @@ zero-xrun/zero-wet-loss checks. The new 600 s run completed 28.8 million frames 
 or missing/expired wet returns; independent file verification follows. No OS scheduling or device-control
 settings were changed. The original smaller-buffer target is not accepted.
 
-
 The initial owner adapter reused f32 FX arithmetic behind an f64 interface. To
 complete the requested DSP precision target, the owner is specializing its shared
 existing delay implementation for native f64 state/arithmetic while retaining the
@@ -151,7 +149,6 @@ rack's f32 specialization. No duplicate delay algorithm or wire-format change is
 needed. The initial f32 library is archived under its original hash. New normal
 FX checks, sample replay and affected hardware trials must identify the new
 library separately; old hardware evidence cannot be relabelled native f64.
-
 
 The native f64 smoke and packet-stall test passed, but the 32 ms-buffer Brain
 restart trial stopped at 5 s on another playback xrun. All 240384 stored frames
@@ -162,7 +159,6 @@ The revised bench uses 8 periods/3072 frames/64 ms, retaining 8 ms processing pe
 and 16 ms wet admission. Additional device latency is an explicit tradeoff.
 H2 requests the same resources through 19:00 UTC, <=660 s each, with fresh peer
 acknowledgment and full normal host checks before new hardware tests.
-
 
 The complete v7 host suite passed 181 normal Rust tests; four unrelated opt-ins
 remain skipped. A final report-only fix makes both ADC full-scale endpoints
@@ -259,17 +255,17 @@ failed activation or restoration is a run fault, not a silent fallback. H4
 already permits this scoped comparison after an observed ordinary-scheduler
 failure. Keep the three-period ring and zero prefill for the first comparison.
 
-FIFO20 at48/144/zero prefill passed30 s without xruns, but1 ms wet admission
-missed2 returns. The2 ms comparison missed4; its physical lag stepped from
-257 to364–365 frames around18–19 s, with the playback-delay snapshot rising
-from166 to287 frames. This is a physical timing failure despite clean ALSA
+FIFO20 at 48/144/zero prefill passed 30 s without xruns, but 1 ms wet admission
+missed two returns. The 2 ms comparison missed four; its physical lag stepped from
+257 to 364–365 frames around 18–19 s, with the playback-delay snapshot rising
+from 166 to 287 frames. This is a physical timing failure despite clean ALSA
 xrun counters and exact software stems. The burst probe was silent during part
 of that interval, so it cannot prove continuity through the transition. The
-4 ms comparison then hit a playback xrun after317904 fully written frames.
-One-period prefill passed8 s but overran after1351152 frames in its30 s follow-up.
+4 ms comparison then hit a playback xrun after 317904 fully written frames.
+One-period prefill passed 8 s but overran after 1351152 frames in its 30 s follow-up.
 No low-latency reliability gate has passed yet.
 
-H5 proposes the same minimum-buffer trials through21:00 UTC, with a continuous
+H5 proposes the same minimum-buffer trials through 21:00 UTC, with a continuous
 quiet channel-1 reference after startup and bounded preallocated event timing.
 Record read/render/write wall and thread-CPU time, both PCM queue observations
 and failed transfer stages. This distinguishes expensive DSP from time spent
@@ -286,9 +282,9 @@ H5 was mutually accepted through 21:00 UTC. Candidate v12 passed source review,
 capture with a 3.558 ms read wait. Two-period CPU3 failed through blocked playback
 writes and growing capture backlog. Four-period capacity, still 48-frame blocks
 and zero prefill, passed packet/Brain-stall, Brain restart, deliberate device-fault
-finalization and fresh 30 s recovery. Physical offset stayed at249 frames/5.1875 ms.
-Its following600 s attempt failed at36.914 s: render wall3.597 ms versus thread
-CPU0.191 ms, followed by playback xrun. All1771920 recorded frames verified;
+finalization and fresh 30 s recovery. Physical offset stayed at 249 frames/5.1875 ms.
+Its following 600 s attempt failed at 36.914 s: render wall 3.597 ms versus thread
+CPU 0.191 ms, followed by playback xrun. All 1771920 recorded frames verified;
 1771872 were completely written. H5 establishes short low latency, not reliability.
 
 H6 replaces the released H5 audio reservation, mutually acknowledged through
@@ -296,7 +292,52 @@ H6 replaces the released H5 audio reservation, mutually acknowledged through
 level guard, minimum-buffer comparisons and fault bounds. Add render-only
 RUSAGE_THREAD fault/context-switch deltas and an optional owned-process memory
 lock with verified initial/final state. Do not assume the cause of off-CPU time.
-Optional process-filtered perf diagnostics are bounded to60 s and labelled for
+Optional process-filtered perf diagnostics are bounded to 60 s and labelled for
 their overhead. No global tracing, permissions, IRQ, governor, scheduler, memory,
 TV/Bluetooth or service changes. Review implementation and run full normal tests
-before fresh short trials; any600 s retry must fit its full bound before expiry.
+before fresh short trials; any 600 s retry must fit its full bound before expiry.
+
+H6 traced a 6.219611 ms wait for page migration inside a PA linkage-entry data
+access despite process memory locking. This is a kernel blocking observation,
+not measured DSP computation or evidence of disk swap-in. H7 separately reserved
+one temporary kernel comparison through 22:00 UTC: with other locked-memory
+owners absent, change only `compact_unevictable_allowed` from 1 to 0 while the
+owned process locks its memory, then restore 1 after each bounded trial. This
+explicit exception supersedes H6's no-global-setting rule only for that key.
+The peer rejected the first helper's signal handling before use, then accepted
+the corrected helper and lifecycle checks; the coordinator separately accepted.
+All other settings and the v13 runtime are unchanged. Acceptance requires actual
+memory locking, final locked memory zero, helper exit zero and confirmed key 1.
+
+The first 48/192/zero-prefill 30 s trial passed with all physical windows at
+249 frames (5.1875 ms). The 48/144 comparison also passed software checks, but
+three startup windows weakened while the physical offset settled at 257 frames.
+The 192-frame ring is selected for recovery and soak because its observed delay
+is lower and stable, while processing stays at 48 frames with zero silent prefill.
+The prior 96-frame failure was blocked playback and capture backlog; H7's memory
+comparison does not repair that synchronous transfer limitation. No extra
+application playout queue is introduced.
+
+H7 completed the ten-minute local-device gate: 28.8 million exact dry/recorded
+frames, zero xruns/queue drops, and all 11977 physical windows at 249 frames.
+No observed render fault/context switch recurred. Its integrated 4 ms wet gate
+failed with two missing/expired returns, RTT maximum 4.156 ms, and 189 recorded
+DAC sample differences from uninterrupted FX replay. Keep this failure explicit.
+H8 received a mutually accepted reservation through 22:30 UTC with only wet
+admission revised
+to 288 frames / 6 ms. The dry period, capacity, zero prefill, native f64 libraries
+and v13 runtime stay fixed. Original settings were restored after H7. New private
+supervisors preserve the prior scripts and change only labels/name paths/expiry;
+the same five fake-key restoration lifecycle tests passed again.
+
+H8 finished: short comparison, packet/stall, Brain restart, intentional device
+xrun/incomplete finalization and fresh recovery all passed their scoped checks.
+The 600 s take retained 28.8 million exact frames with zero xruns, late/missing
+wet returns, network errors or queue drops. Physical delay was 249–251 frames
+(5.1875–5.2292 ms), with two weak 100 ms windows around one-frame changes.
+Both neighborhoods were examined at 10 ms resolution; exact physical continuity
+and the cause remain unresolved, and the original review flag is preserved.
+This passes the bounded USB/software/wet gate with a qualified physical latency
+measurement, not a perfectly fixed-offset or full-show gate. Original settings
+were restored and both-node resources released before 22:30 UTC. Final peer
+review and local documentation commits close the handoff without further audio.

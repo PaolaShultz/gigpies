@@ -3,19 +3,29 @@
 ## Current hardware handoff
 
 Read [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md) and its
-[owning plan](AUDIO_HARDWARE_PLAN.md) before continuing. The authorized task added
-real selected-device capture/output, PA/FX/REC adapters, sample-verified recording
-and application/device fault checks. Exact configuration, failed 8 ms target,
-revised budget, final soak evidence and limits are recorded there. Do not repeat
-unchanged baseline or music studies. New hardware trials need current ownership,
-fresh epoch/output paths and a reservation; release status is in the private ledger.
+[owning plan](AUDIO_HARDWARE_PLAN.md) before continuing. The selected USB host now
+uses 48-frame / 1 ms processing, independent device capacity and zero silent
+prefill, with real PA/FX/REC modules and sample-verified fault recovery. Do not
+use the historical 56 ms prefill as live acceptance or infer card latency from
+its 57 ms loopback. The final ten-minute working-channel run measured
+5.19–5.23 ms, with exact software output and zero xruns/late wet returns. Two one-frame physical offset
+changes remain unresolved; preserve that qualification. The next useful physical
+check is a narrowly scoped USB transfer/feedback trace around those changes under
+a fresh reservation. Existing one-second driver snapshots are too coarse to
+identify their cause. Keep the direct audio buffers fixed while investigating.
 
-The user subsequently connected stereo returns. Left loopback is verified;
-right return is about 69 dB weaker and needs a working route before stereo physical
-acceptance. The USB microphone remains absent if independent-device measurements
-are wanted. These limits did not block software/integration work. Acoustic
-PA acceptance and full mixer/control/UI integration remain distinct tasks. The
-older offline/listening and console notes below keep their original scope.
+Read the final H7/H8 gates and exact host/kernel conditions before extending the
+tested scope. Earlier low-latency xruns, the traced locked-page migration stall and all
+failed takes are retained. New measurements need current ownership, fresh
+epoch/output paths and a mutually acknowledged reservation. Temporary settings
+must be restored; no persistent low-latency system profile was installed.
+
+The user connected stereo returns and authorized use of the working channel.
+The right return is about 69 dB weaker and needs a working route before stereo
+physical acceptance. The USB microphone remains absent. Acoustic PA acceptance,
+clock measurements, mixer controls and UI integration remain distinct tasks.
+Do not repeat unchanged baseline or music studies. The older offline/listening
+and console notes below keep their original scope.
 
 ## Offline handoff — unreleased summing work, 2026-10-03
 

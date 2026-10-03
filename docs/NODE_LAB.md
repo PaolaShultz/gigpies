@@ -2,17 +2,24 @@
 
 ## USB hardware continuation, 2026-10-03
 
-Private task 0004 follows accepted synthetic task 0003. Pi 5 exclusively owns
-the selected stereo USB device and local PA/recording; Pi 4 runs source-following
-real SHR FX. [The hardware record](AUDIO_HARDWARE.md) binds module revisions,
-actual-device tests, retained failures, sample verification and peer review.
-Fresh mutually acknowledged H1/H2/H3 reservations covered bounded trials and the
-later user-connected physical return. Peer findings use immutable ordinary files
-with separate hash-verified coordinator acceptance. Exact transferred binary/source
-snapshots identify measured code. A separately authorized task 0005 synchronized
-peer module checkouts; this hardware task used isolated artifacts and preserved
-interactive sessions. The final native f64 ten-minute run passed; left physical
-loopback is verified, while the weak right return remains unresolved.
+Private task 0004 follows accepted synthetic task 0003. Pi 5 owns the selected
+stereo USB device and local PA/recording; Pi 4 runs source-following SHR FX.
+[The hardware record](AUDIO_HARDWARE.md) binds revisions, actual-device trials,
+retained failures, sample verification and peer review. Immutable peer findings
+have separate hash-verified coordinator acceptance. Exact source/binary snapshots
+identify the measured code. Task 0005 separately synchronized peer checkouts;
+this hardware task used isolated artifacts and preserved interactive sessions.
+
+H1–H3 covered the initial integration and physical return. H4–H6 lowered buffers,
+repaired transfer pacing and traced a kernel migration stall. H7 separately
+acknowledged a bounded one-key kernel comparison, with restoration after each
+trial. Current processing is 48 frames with zero silent prefill; channel-1 short
+trials measured 249 frames / 5.1875 ms. H8 passed the ten-minute USB/software/wet
+gate at 6 ms wet admission. Its
+physical delay was 249–251 frames, with two small unresolved changes. All
+resources/settings were restored and released; the hardware record and private
+ledger retain the qualification and final peer review. Earlier large-buffer
+success does not pass the user's live-latency requirement. The weak right return remains unresolved.
 
 ## Transport checkpoint, 2026-10-03
 

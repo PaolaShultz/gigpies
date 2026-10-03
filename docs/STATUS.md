@@ -2,29 +2,32 @@
 
 ## USB host integration — unreleased, actual-device bench, 2026-10-03
 
-**Live latency remains unaccepted.** The user rejected the large-buffer result;
-smaller-buffer pacing and acceptance work continues. The results below retain
-that configuration's correctness evidence.
-
 The [hardware plan](AUDIO_HARDWARE_PLAN.md) and [measured host contract](AUDIO_HARDWARE.md)
-connect actual stereo USB capture/output with independently built SHR PA, FX and
-REC libraries. PA and the integrated stereo delay process f64; Brain follows USB
-source frames, and a bounded local worker writes PCM24 stems to NVMe. Recordings
-are verified sample by sample in the stored PCM domain, including dry replay.
-Brain stalls/restart leave dry processing and recording intact; a deliberate local
-xrun stops capture and marks the retained take incomplete. The original 8 ms
-admission target failed once in a 600 s run; the explicitly revised configuration
-and final acceptance are recorded in the owning hardware document.
+connect selected stereo USB capture/output with independently built SHR PA, FX
+and REC libraries. PA and the integrated delay use f64 DSP; Brain follows USB
+source frames. A bounded independent worker writes sample-verified PCM24 stems.
 
-The final 600 s bench passed at 48 kHz,384-frame periods,3072-frame device buffers
-and 768-frame wet admission: 28.8 million frames, no xruns/wet losses/queue errors,
-with exact stored-sample and dry/DAC replay. Two physical inputs/outputs were
-exercised, with separate software audit stems. Subsequent user-connected loopback
-verified the left route at 57.0625 ms buffered frame offset; the right return was
-68.77 dB weaker and remains unresolved. No second USB interface is present.
-Isolated converter latency, independent clock drift, acoustics, full mixer controls
-and full-show reliability remain unverified. Console edits from the earlier planning
-session are preserved separately; no public push or release occurred.
+The low-latency host processes 48-frame / 1 ms blocks at 48 kHz, with independent
+192-frame ALSA capacity, zero silent prefill and no extra application playback
+queue. The working channel measured 249 frames / **5.1875 ms** in short tests.
+A 144-frame-capacity comparison settled at 257 frames, so less capacity did not
+reduce measured latency. The old 57.0625 ms result included 56 ms of silent
+prefill; its ten-minute soak remains historical correctness evidence.
+
+Earlier low-latency attempts failed. A focused trace caught a 6.219611 ms wait for
+kernel page migration despite memory locking. H7 compared the same host with
+locked-page compaction temporarily disabled and process memory locked, restoring
+both after each trial. Packet/Brain stalls, Brain restart, explicit incomplete
+finalization after a device xrun and fresh recovery passed with exact stored
+samples. The ten-minute H7 run passed USB/recording/physical checks but missed two
+4 ms wet deadlines. H8 then passed ten minutes at 6 ms wet admission with zero
+xruns/losses/gaps and exact combined-output replay. Physical delay was 5.19–5.23 ms, with two
+one-frame changes still unresolved; fixed physical timing is not certified.
+
+The right return is about 69 dB weaker; physical measurements cover channel 1.
+No second USB interface is present. Converter-only latency, clock lock, acoustics,
+full mixer controls and full-show reliability remain unverified. Earlier console
+edits are preserved separately; no public push or release occurred.
 
 ## Audio transport — unreleased, synthetic validation, 2026-10-03
 

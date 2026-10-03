@@ -1,12 +1,12 @@
 # USB host integration and measurements
 
-**Small-buffer validation is in progress.** The user rejected the earlier 64 ms
-capacity / 56 ms prefill configuration for live use. Its soak below is historical
-correctness evidence. The repaired host now supports 48-frame / 1 ms periods,
-independent ring capacity and zero silent prefill. H5 measured 5.1875 ms channel-1
-loopback through short fault/recovery trials, but the longer attempt stopped
-after36.914 s; reliability remains unaccepted. H6 adds fault/switch diagnostics
-and optional process-local memory locking at the same small audio settings.
+**The 1 ms host completed a ten-minute stereo bench with zero reported xruns,
+late FX returns or recording gaps, and exact stored dry/combined output.**
+Channel-1 electrical delay measured **5.19–5.23 ms**. Two one-frame physical
+reference shifts remain a qualification; fixed converter timing is not certified.
+The tested profile uses 48-frame processing, 192-frame ring capacity, zero silent
+prefill and 6 ms wet admission, with the temporary memory settings below.
+The earlier 56 ms prefill result is historical and rejected for live latency.
 
 Unreleased, bounded bench integration of the independently built SHR modules.
 The [execution plan](AUDIO_HARDWARE_PLAN.md) continues the preceding
@@ -467,7 +467,176 @@ latency before the fault.
 H6 adds calling-thread fault and context-switch counters around render, and a
 reviewed optional process-local memory-lock comparison. These distinguish paging,
 blocking and preemption more directly; locking is not assumed to fix scheduling
-delays. No global CPU, IRQ, governor, memory or service setting is changed.
+delays. H6 changed no global CPU, IRQ, governor, memory or service setting.
+
+## H6: a traced memory-migration stall
+
+The instrumented 48/192/zero-prefill baseline passed 30 s at 5.1875 ms, with 22
+minor faults and two voluntary switches inside observed render intervals.
+Optional `audio_memory_lock: true` uses `mlockall` only in the fresh owned CLI
+process, after buffers/workers exist and before FIFO/PCM. It refuses preexisting
+current or future locking, changes no memory limit, and verifies restoration
+after PCM stops. Normal tests use mock locking backends. Missing/false leaves
+memory policy unchanged. The loaded modules must share exclusive ownership of
+memory-lock APIs with this host. Recorded counter totals cover valid render
+sample pairs; nonzero `usage_errors` means incomplete observation.
+
+Locking 145008 KiB removed most startup faults but did not fix reliability. The
+first locked trial stopped after 220272 fully written frames. A following
+30 s diagnostic, with perf attached only to the owned audio TID, failed after
+867744 fully written / 867792 recorded frames. The failing render took 6.468 ms
+wall time and 0.276 ms thread CPU, with one minor fault and one voluntary switch.
+The kernel trace showed **6.219611 ms in `migration_entry_wait_on_locked`** during
+a data access through SHR PA's `memset` linkage entry. Its instruction is a GOT
+load; this is not a measurement of slow `memset` computation. The fault path's
+`do_swap_page` name also covers migration entries and does not establish disk
+swap-in. The trace includes diagnostic overhead and is retained separately.
+Both failed takes verified exactly, and memory locking returned to zero.
+
+The running kernel allows compaction of locked pages
+(`compact_unevictable_allowed=1`). Linux documents that such migration can block
+tasks on minor faults even when their memory is locked. Ordinary locking and
+pre-touching do not prevent it. This identifies a specific next comparison;
+the traced migration alone does not identify its initiator. See the
+[kernel setting](https://docs.kernel.org/admin-guide/sysctl/vm.html#compact-unevictable-allowed)
+and [locked-page migration](https://docs.kernel.org/mm/unevictable-lru.html#migrating-mlocked-pages).
+
+H7 received a fresh, mutually accepted reservation for changing only that key
+from 1 to 0
+during each trial, with process memory locking enabled and identical audio
+settings. It first checks that other processes have no locked memory. A separate
+privileged helper owns the key; audio still runs as the ordinary user. Pipe close,
+parent exit, SIGINT/SIGTERM/SIGHUP or the bounded deadline triggers restoration.
+The handlers do not raise; a private signal pipe wakes the wait, and handled
+signals are blocked during restoration. Fake-key lifecycle tests covered pipe
+closure, timeout, SIGTERM, SIGHUP and repeated signals during restoration.
+SIGKILL, helper OOM death and host failure require coordinator recovery.
+Different observed external values are preserved. No persistent configuration,
+IRQ, governor, service, NIC, clock, Bluetooth or TV-audio change is part of this
+comparison. The setting does not prevent every possible migration source.
+
+## H7: low-latency comparison and recovery
+
+The first 30 s trial with locked-page compaction disabled passed 1.44 million
+frames, zero xruns, zero missing wet returns and exact stored samples. Every one
+of 577 analyzed channel-1 windows measured **249 frames / 5.1875 ms**. Render
+p99/max was 0.138/0.203 ms and full post-read service p99/max 0.171/0.254 ms.
+Observed render intervals had no minor/major faults or context switches.
+
+A separate 144-frame-capacity comparison also passed 30 s of software checks.
+Its physical offset changed from 249 to 257 frames during startup, with three
+weak windows; all 497 windows after 5 s measured 257 frames / 5.3542 ms. The
+192-frame ring is selected because it measured lower, stable delay while keeping
+the same 48-frame processing block and zero silence prefill. Capacity is not
+queued occupancy. No additional application playback queue is present.
+
+| Selected H7 setting | Value |
+| --- | --- |
+| Physical I/O | AudioBox USB 96, 48 kHz, stereo S32_LE with upper-24-bit capture |
+| Processing period | 48 frames / 1 ms |
+| ALSA ring capacity | 192 frames / 4 ms, independently configured |
+| Silent prefill | 0 frames; start playback after the first processed block |
+| Dry application playout queue | None |
+| Wet return admission | 192 frames / 4 ms; does not delay the dry path |
+| Test effect | Stereo f64 delay, intentional first echo at 960 frames / 20 ms |
+| Audio-thread scheduling | FIFO20, CPU3; saved state restored after PCM stops |
+| Process memory | Locked during streaming; 145008 KiB observed, then restored to zero |
+| Temporary kernel comparison | `compact_unevictable_allowed=0` during each trial, original 1 restored afterward |
+| Physical reference | Channel 1 only, −54 dBFS generated signal; right digital output zero |
+
+The 16 s packet/stall and 16 s Brain restart trials each retained 768000 frames
+with exact ADC/stem hashes, dry replay and journals, and no USB xrun or recording
+queue drop. Packet faults caused 296 missing and 260 expired wet packets; restart
+caused 1141 missing, one expired, seven socket errors and two fresh snapshots.
+The deliberate 20 ms loss faded wet output to zero over 240 frames, with maximum
+error 0.621 PCM24 LSB against the quantized previous sample. Wet output recovered
+in the final 9600 frames of both takes. All 297 physical windows in each trial
+remained at 249 frames.
+
+A deliberate 100 ms audio-thread stall stopped after 96000 frames with one xrun
+and an explicitly incomplete take. Its retained ADC/stem/dry/journal checks were
+exact. A new process, epoch and take then passed 30 s with zero losses/xruns and
+all 577 physical windows at 249 frames. Each completed trial confirmed applied
+memory locking, final locked memory zero, helper exit zero and kernel key 1.
+The 600 s run completed **28.8 million frames with zero USB xruns or queue drops**.
+All stored PCM/ADC hashes, dry replay and journal entries were exact. All 11977
+physical windows measured 249 frames / 5.1875 ms, with no weak windows or detected
+persistent offset steps. The first quiet second and last 100 ms remain outside
+the correlation coverage. Render p99/max was 0.134/0.299 ms; full post-read service
+p99/max 0.168/0.393 ms. All observed render fault and context-switch totals were
+zero, with zero observation errors. The earlier multi-millisecond render stalls
+did not recur under this condition.
+
+However, **the 4 ms wet-return gate failed**: two returns arrived after admission,
+although all 600000 were received. RTT p99/max was 0.428/4.156 ms; Brain FX compute
+max was 0.077 ms. There were 189 intended-DAC sample differences from uninterrupted
+FX replay, consistent with the retained deadline-loss evidence. This is not a
+zero-loss integrated pass, nor a trace identifying which network worker stalled.
+The kernel key and memory lock were restored. H8 uses a separately acknowledged
+reservation for the same direct audio configuration with only wet admission increased to 288 frames / 6 ms, about
+1.84 ms above this observed RTT maximum. It adds no dry-path queue or silence.
+Fresh reservation and short recovery checks precede another bounded soak.
+
+## H8: revised wet deadline at the same device latency
+
+H8 received a fresh peer/coordinator reservation through 22:30 UTC. Only remote
+wet admission changes from 192 to 288 frames (4 to 6 ms); the v13 executable,
+owner libraries, direct device path, 48/192 frames and zero prefill are unchanged.
+All temporary memory/scheduling conditions and restoration gates remain those
+in the table above. The separate network and recorder queues never hold up dry
+processing. ALSA and USB still have their required transfer buffers; this work
+does not claim to remove buffering inside the driver or interface.
+
+The 30 s comparison and fresh 30 s recovery each passed 1.44 million frames,
+zero xruns/missing returns and exact ADC/stem/dry/DAC/journal checks. Every one
+of 577 physical windows in each trial measured 249 frames / 5.1875 ms.
+
+The repeated 16 s packet/stall and Brain-restart trials each passed 768000 frames
+with no USB xrun, exact stored/dry samples and all 297 physical windows at 249.
+Injected faults caused 290 missing/254 expired returns; restart caused 1151
+missing, zero expired, seven socket errors and two snapshots. The 240-frame wet
+fade again reached zero with maximum quantized-reference error 0.621 LSB, and
+wet output recovered through the final 9600 frames of both recordings.
+
+The intentional device stall again produced one xrun, exactly 96000 retained
+frames and an incomplete take. Its stored samples and 17 pre-fault physical
+windows verified. The analysis summary correctly requests review whenever a
+host fault exists; a private orchestration assertion initially treated that
+expected flag as a failed physical check. Inspection confirmed the expected
+fault and exact evidence before fresh recovery. The original log is retained;
+no measured code or recording was changed to make the check pass.
+
+The H8 **600 s soak completed 28.8 million frames with zero xruns, missing or
+expired wet returns, network errors or queue drops**. All 600000 returns arrived.
+The eight PCM hashes, direct upper-24-bit ADC hashes, independent dry and combined
+output replay, and every journal frame matched exactly. The take finalized
+complete. Render p99/max was 0.135/0.290 ms; full post-read service 0.168/0.385 ms.
+RTT p99/max was 0.426/3.732 ms, and Brain FX compute 0.018/0.085 ms. Render usage
+observations counted no minor/major faults or context switches, with zero errors.
+
+Physical timing has a retained qualification. Of 11977 correlation windows,
+11975 were trusted at 249–251 frames (**5.1875–5.2292 ms**); two 100 ms windows
+were weak. A separate 10 ms analysis of both neighborhoods found one-frame
+changes around 513.71 s and 520.30 s. The first transition still had one weak
+10 ms window; the second was trusted. No persistent change of 24 frames or more
+was detected. The analyzer's `requires_review` flag remains true, and its original
+thresholds/results are unchanged. This establishes the reported latency range,
+not perfectly fixed physical offset, converter clock lock or absence of sample
+slips. The cause of those two small changes remains unresolved. H7's preceding
+ten-minute physical result stayed at 249 frames but failed its 4 ms wet deadline;
+these are separate observations, not interchangeable passes.
+
+All H8 trials confirmed applied memory locking, final locked memory zero, saved
+thread settings restored, helper exit zero and original kernel key 1. Final
+read-only checks on both Pis found task audio/perf/guard processes stopped,
+reserved ports and the selected PCM free, Bluetooth disconnected and both nodes
+reachable. H8 resources were released before expiry. No persistent system
+profile was installed. The demonstrated scope is this bounded stereo bench;
+the qualified physical result and heavier-load limits remain explicit. Final
+peer review independently matched 65 canonical metadata hashes, confirmed the
+bounded USB/software/wet result and retained the unresolved physical-confidence
+gate. Original PCM replay was performed by the coordinator; the peer reviewed
+its hash-bound results without transferring recordings.
 
 ## Build, test and evidence
 
@@ -513,7 +682,8 @@ No recordings or machine configuration enter source Git. No public push/release.
 
 ## Remaining acceptance
 
-The left electrical return is verified at the stated buffered condition; the
+The left electrical return is measured at 5.19–5.23 ms under the H8 profile,
+with the two small physical offset changes above still unresolved. The
 right return remains about 69 dB weaker and needs a working physical route before
 stereo channel/latency acceptance. Isolated converter latency and clock lock remain
 unmeasured. The absent second interface prevents independent-device clock measurements. Calibrated microphone/speaker measurement and acoustic PA

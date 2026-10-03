@@ -11,7 +11,11 @@ measured stereo bench, while the broader live mixer/console below remains planne
 The host preserves dry processing and recording through Brain failure, fades both
 wet channels and requires fresh control state. Device faults close the old take
 as incomplete and require a fresh epoch. Prototype control does not yet change
-real mixer parameters. Physical latency/acoustic acceptance remain separate.
+real mixer parameters. The host processes 48-frame / 1 ms blocks with independent
+ALSA ring capacity and zero silent prefill; the dry path has no additional
+application playout queue. Network and recording queues serve independent workers.
+Channel-1 electrical delay and reliability are measured separately in the hardware
+record; acoustic acceptance remains open.
 
 Status: live node boundaries remain design direction. Offline soundcheck/rendering
 is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
