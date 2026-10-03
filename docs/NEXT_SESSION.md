@@ -1,26 +1,36 @@
-# Next session: mixing-engine work and planned hardware
+# Next session: listening review and planned hardware
 
-## Offline handoff — 0.2.2, 2026-10-03
+## Offline handoff — unreleased summing work, 2026-10-03
 
-Execute [the summing-engine plan](SUMMING_PLAN.md) using the complete
-[execution prompt](SUMMING_EXECUTION_PROMPT.md). Version 0.2.2 includes paired EQ
-comparison, readable diagnostics, FX target reports, full master/coverage checks,
-frozen input/readiness verification and chronological admission for new FX/EQ plans.
-Existing EQ fitting, recipes, thresholds and saved-state reset remain intact.
+The [summing-engine plan](SUMMING_PLAN.md) has been implemented and offline-validated
+on top of 0.2.2. The new [delivery contract](SUMMING_DELIVERY.md) separates comparison
+gain and final limiting, observes production stages and verifies final true peaks.
+The existing f64 summer, channel choices and requested GigPies effects are retained.
+No supported new musical candidate was selected.
 
-The user explicitly retired all generated audio: SOURCE sums, six FINALs, earlier
-renders, diagnostics and excerpts. Do not offer the old listening queue. Preserve
-original recordings/notices/archives and all saved settings, reports and identities.
-The ignored retirement manifest and deletion totals are in
-`artifacts/automix/render-retirement-2026-10-03/`. The preceding implementation
-report remains in `artifacts/automix/fx-calibration-review-2026-10-03/REPORT.md`.
+Use `artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`: six new complete
+mixes at a −1 dBTP ceiling, seven exact established excerpts and historical
+SOURCE/FINAL references reconstructed with exact PCM/float hashes. Independent
+measurements range from −1.400441 to −1.395178 dBTP. The largest production versus
+independent difference is 0.004922 dB. New deliveries use static gain on the same
+selected buses, with 0.4001 dB reserved margin and no loudness target.
 
-Begin from these retained inputs and evidence. Create new complete listening mixes
-only after engineering and technical verification. Required legacy comparisons can
-then be reconstructed from frozen settings and checked against saved hashes. Do not
-rerun old interleaved planners to recover already saved settings. Any new real-audio
-study needs fresh chronological passages, a fixed small budget and stopping rules.
-No numerical result supplies missing musical preference. Playback needs a fresh go.
+**Next action:** obtain a fresh playback go, then record preference by passage and
+concern. Listening is not reviewed and hardware is unverified. Do not rerender merely
+to open the queue. Do not rerun historical interleaved planners. Any new musical
+study needs a declared hypothesis, fresh chronological passages and stopping rules.
+
+Formatting, locked check/release build, Clippy, 154 normal Rust tests and 37 Python
+tests pass. Three unrelated historical tests remain opt-in; the applicable 300-case
+meter study passes. `REPORT.md` and `complete.json` beside the index bind the result.
+Unused companion WAVs were removed and observation CSVs compressed losslessly;
+`cleanup.json` records the exact scope. All 2,473 retained evidence files and metadata
+for 428 original/library/test files are unchanged. Preserve these originals and
+selected outputs. Earlier retired queues remain historical.
+
+The work is unreleased. No playback, hardware, service or sibling
+changes occurred. Publication would need its own authorized scope and the checks in
+[publication policy](PUBLICATION.md).
 
 The unresolved Pi crash still needs separate diagnosis; zero current filesystem
 counters and boot recovery do not establish a complete offline scan. Keep siblings

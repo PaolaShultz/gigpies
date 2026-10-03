@@ -38,6 +38,7 @@
     "scripts/snare_bleed_evidence.py",
     "scripts/snare_context.py",
     "scripts/snare_temporal_evidence.py",
+    "scripts/test_delivery_checkpoint.py",
     "scripts/test_ensemble_review.py",
     "scripts/test_listening_checkpoint.py",
     "scripts/test_play_pair.py",
@@ -45,6 +46,7 @@
     "scripts/test_publication.py",
     "scripts/test_snare_context.py",
     "scripts/test_snare_temporal_evidence.py",
+    "scripts/verify_delivery.py",
     "src/automix/matching/review.html"
   ],
   "binary_artwork": [

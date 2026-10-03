@@ -1,18 +1,34 @@
 # Status and next steps
 
-## Next: execute the summing-engine plan
+## Summing and delivery — unreleased, offline-validated, 2026-10-03
 
-The next work is [the summing-engine plan](SUMMING_PLAN.md), using the
-[execution prompt](SUMMING_EXECUTION_PROMPT.md). It covers independent neutral
-routing/summing verification, stage/peak observations, explicit delivery controls
-and validated true-peak export. Implementation and new musical acceptance are pending.
+The [summing plan](SUMMING_PLAN.md) has passed its engineering phases. Independent routing and
+arithmetic checks retain the existing `f64` summer. The new [delivery sidecar](SUMMING_DELIVERY.md)
+separates final limiting, static gain, peak basis and optional comparison copies.
+It adds a validated streaming true-peak estimator, final PCM checks, production
+stage/peak observations and explicit legacy replay. Frozen session identities remain.
 
-On 2026-10-03 the user requested removal of all old generated audio, including
-SOURCE sums, six FINALs, diagnostic PCM/float mixes and listening clips. Original
-recordings, source notices/archives, settings, hashes and scalar reports are retained.
-Earlier listening indexes are historical. New complete renders will be made after
-the engine work and technical checks; baseline reconstruction uses frozen settings.
-The private removal manifest is `artifacts/automix/render-retirement-2026-10-03/`.
+All six complete scalar replays match the retained processing reports, including
+zero reduction from both master limiters. 154 normal Rust tests and 37 Python tests
+pass, alongside formatting, Clippy and the locked release build. The independent
+meter study passes 300 synthetic cases; worst reference difference is 0.106964 dB.
+No new musical correction is supported by this study. Existing channel settings,
+source timing, stereo and requested GigPies effects are retained. PA alignment
+remains in SHR PA; listening and hardware acceptance remain separate.
+
+All six historical SOURCE/FINAL comparisons reproduce the retired PCM and float
+hashes. Six new complete −1 dBTP deliveries pass production and independent meters,
+using static finalization with 0.4001 dB reserved margin and no loudness target.
+The current local listening index is
+`artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`; it provides full mixes,
+seven exact excerpts and the reconstructed historical references. Playback requires
+a fresh go. Listener preference is not reviewed; hardware remains unverified.
+
+The earlier user-requested render retirement remains recorded under
+`artifacts/automix/render-retirement-2026-10-03/`. All 2,473 retained evidence files
+and metadata for 428 original/library/test files remain unchanged. Previous listening
+indexes are historical. Cleanup and reproducible evidence are recorded beside the
+new index in `REPORT.md`, `cleanup.json` and `complete.json`.
 
 ## 0.2.2 — FX calibration and review correctness, offline-validated
 

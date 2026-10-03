@@ -8,7 +8,7 @@ fn run() -> gigpies::inventory::Result<()> {
             env!("CARGO_PKG_VERSION")
         ),
         [arg] if arg == "--help" || arg == "-h" => println!(
-            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies eq-maps\n  gigpies eq-map-check <map-id-or-path>\n  gigpies eq-map-import <baseline.json> <source-dir> <new-map.json> <import-spec.json>\n  gigpies eq-match-compare <reference.json> <changed.json> <source-dir> <new-output-dir> <comparison-request.json>\n  gigpies eq-match-compare-review <comparison.json> <new-summary.md>\n  gigpies eq-match-plan <baseline.json> <source-dir> <new-output-dir> <request.json>\n  gigpies eq-match-amount <state.json> <source-dir> <new-output-dir> <map-id> <0-100>\n  gigpies eq-match-apply <state.json> <source-dir> <new-output-dir> <selection.json>\n  gigpies eq-match-reset <state.json> <new-output-dir>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies ambience-plan <prepared.json> <source-dir> <new-output-dir> <fx-policy.json>\n  gigpies ambience-check <plan-dir> <source-dir>\n  gigpies ambience-audit <plan-dir> <new-audit-dir>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies preserve-source <initial-source-settings.json> <new-output-dir>\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-source-analyze <initial-source-settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies tone-pass <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies tone-analyze <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies source-pass <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies source-analyze <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies reference-review <ours.wav> <reference.wav> <new-output-dir> [excerpt-start-seconds]\n  gigpies snare-reference-fit <source-dir> <pilot-dir> <new-model.json> <start-seconds> <end-seconds>\n  gigpies snare-reference-evaluate <source-dir> <review-dir> <model.json> <new-audit.json>\n  gigpies snare-predict <source-dir> <pilot-dir> <new-predictions.json> <start-seconds> <end-seconds>\n  gigpies snare-bleed-verify <source-dir> <pilot-dir> <new-output-dir> <start-seconds> <end-seconds>\n  gigpies snare-bleed <baseline.json> <source-dir> <new-output-dir> <bleed-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-events <measurement.json> <new-diagnosis.json>\n  gigpies drum-verify <baseline.json> <candidate.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-correct <prepared.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-analyze <prepared.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies bass-analyze <prepared.json> <source-dir> <new-output-dir> <bass-policy.json> <start-seconds> <end-seconds>\n  gigpies bass-correct <prepared.json> <source-dir> <new-output-dir> <bass-policy.json> <start-seconds> <end-seconds>\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
+            "GigPies — experimental offline automixer\n\nUsage:\n  gigpies inspect <WAV-or-directory>\n  gigpies eq-maps\n  gigpies eq-map-check <map-id-or-path>\n  gigpies eq-map-import <baseline.json> <source-dir> <new-map.json> <import-spec.json>\n  gigpies eq-match-compare <reference.json> <changed.json> <source-dir> <new-output-dir> <comparison-request.json>\n  gigpies eq-match-compare-review <comparison.json> <new-summary.md>\n  gigpies eq-match-plan <baseline.json> <source-dir> <new-output-dir> <request.json>\n  gigpies eq-match-amount <state.json> <source-dir> <new-output-dir> <map-id> <0-100>\n  gigpies eq-match-apply <state.json> <source-dir> <new-output-dir> <selection.json>\n  gigpies eq-match-reset <state.json> <new-output-dir>\n  gigpies preset <new-settings.json>\n  gigpies soundcheck <settings.json> <source-dir> <new-output-dir> <finish-seconds>\n  gigpies render <prepared.json> <source-dir> <new-output-dir>\n  gigpies delivery-policy <new-policy.json>\n  gigpies render-policy <prepared.json> <source-dir> <new-output-dir> <policy.json>\n  gigpies delivery-finalize <render-dir> <source-dir> <new-output-dir> <policy.json>\n  gigpies delivery-check <delivery-dir> <source-dir>\n  gigpies peak-measure <stereo.wav> <new-report.json>\n  gigpies observe-stages <prepared.json> <source-dir> <new-output-dir> <end-seconds>\n  gigpies fx-preset <prepared.json> <new-fx-settings.json>\n  gigpies ambience-plan <prepared.json> <source-dir> <new-output-dir> <fx-policy.json>\n  gigpies ambience-check <plan-dir> <source-dir>\n  gigpies ambience-audit <plan-dir> <new-audit-dir>\n  gigpies finish <prepared-fx.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies preserve-source <initial-source-settings.json> <new-output-dir>\n  gigpies unity-pass <settings.json> <source-dir> <new-output-dir>\n  gigpies balance-source-analyze <initial-source-settings.json> <source-dir> <new-output-dir>\n  gigpies balance-analyze <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies balance-pass <settings.json> <source-dir> <new-output-dir> [policy.json]\n  gigpies tone-pass <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies tone-analyze <settings.json> <source-dir> <new-output-dir> <tone-policy.json>\n  gigpies source-pass <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies source-analyze <settings.json> <source-dir> <new-output-dir> <source-policy.json>\n  gigpies reference-review <ours.wav> <reference.wav> <new-output-dir> [excerpt-start-seconds]\n  gigpies snare-reference-fit <source-dir> <pilot-dir> <new-model.json> <start-seconds> <end-seconds>\n  gigpies snare-reference-evaluate <source-dir> <review-dir> <model.json> <new-audit.json>\n  gigpies snare-predict <source-dir> <pilot-dir> <new-predictions.json> <start-seconds> <end-seconds>\n  gigpies snare-bleed-verify <source-dir> <pilot-dir> <new-output-dir> <start-seconds> <end-seconds>\n  gigpies snare-bleed <baseline.json> <source-dir> <new-output-dir> <bleed-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-events <measurement.json> <new-diagnosis.json>\n  gigpies drum-verify <baseline.json> <candidate.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-correct <prepared.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies drum-analyze <prepared.json> <source-dir> <new-output-dir> <drum-policy.json> <start-seconds> <end-seconds>\n  gigpies bass-analyze <prepared.json> <source-dir> <new-output-dir> <bass-policy.json> <start-seconds> <end-seconds>\n  gigpies bass-correct <prepared.json> <source-dir> <new-output-dir> <bass-policy.json> <start-seconds> <end-seconds>\n  gigpies compare <old.wav> <new.wav> <new-output-dir>\n  gigpies --version\n\ninspect prints JSON WAV header metadata; directories are nonrecursive.\nsoundcheck and render write local audio without playback or hardware access."
         ),
         [arg] if arg == "--version" || arg == "-V" => {
             println!("gigpies {}", env!("CARGO_PKG_VERSION"))
@@ -344,6 +344,45 @@ fn run() -> gigpies::inventory::Result<()> {
         }
         [command, old, new, out] if command == "compare" => {
             gigpies::automix::compare(Path::new(old), Path::new(new), Path::new(out))?;
+        }
+        [command, out] if command == "delivery-policy" => {
+            gigpies::automix::write_json(
+                Path::new(out),
+                &gigpies::automix::delivery::Policy::default(),
+            )?;
+        }
+        [command, input, out] if command == "peak-measure" => {
+            gigpies::automix::write_json(
+                Path::new(out),
+                &gigpies::automix::true_peak::measure(Path::new(input))?,
+            )?;
+        }
+        [command, config, root, out, end] if command == "observe-stages" => {
+            gigpies::automix::observe(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                end.to_str().ok_or("invalid observation end")?.parse()?,
+            )?;
+        }
+        [command, config, root, out, policy] if command == "render-policy" => {
+            gigpies::automix::run_policy(
+                serde_json::from_reader(std::fs::File::open(config)?)?,
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+            )?;
+        }
+        [command, render, root, out, policy] if command == "delivery-finalize" => {
+            gigpies::automix::delivery::finalize(
+                Path::new(render),
+                Path::new(root),
+                Path::new(out),
+                serde_json::from_reader(std::fs::File::open(policy)?)?,
+            )?;
+        }
+        [command, out, root] if command == "delivery-check" => {
+            gigpies::automix::delivery::check(Path::new(out), Path::new(root))?;
         }
         [command, config, root, out] if command == "render" => {
             let session = serde_json::from_reader(std::fs::File::open(config)?)?;

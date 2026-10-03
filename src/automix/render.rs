@@ -147,7 +147,7 @@ fn spec(rate: u32, bits: u16) -> hound::WavSpec {
         },
     }
 }
-fn export(input: &Path, output: &Path, scale: f64) -> Result<()> {
+pub(super) fn export(input: &Path, output: &Path, scale: f64) -> Result<()> {
     let mut reader = hound::WavReader::open(input)?;
     let mut writer = hound::WavWriter::create(output, spec(reader.spec().sample_rate, 24))?;
     for s in reader.samples::<f32>() {
@@ -162,11 +162,33 @@ fn export(input: &Path, output: &Path, scale: f64) -> Result<()> {
 }
 /// `finish_seconds`: Some = rehearsal from neutral, then freeze; None = prepared show.
 /// Output must be a new directory. Source files are only opened read-only.
-pub fn run(
+pub fn run(session: Session, root: &Path, out: &Path, finish_seconds: Option<f64>) -> Result<()> {
+    run_inner(session, root, out, finish_seconds, None, None)
+}
+/// Explicit policy-aware render; preserves the frozen session schema and identities.
+pub fn run_policy(
+    session: Session,
+    root: &Path,
+    out: &Path,
+    policy: super::delivery::Policy,
+) -> Result<()> {
+    policy.validate()?;
+    run_inner(session, root, out, None, Some(&policy), None)
+}
+/// Production DSP observation without writing listening audio. State starts at zero.
+pub fn observe(session: Session, root: &Path, out: &Path, until_seconds: f64) -> Result<()> {
+    if !until_seconds.is_finite() || until_seconds <= 0. {
+        return Err("invalid observation end".into());
+    }
+    run_inner(session, root, out, None, None, Some(until_seconds))
+}
+fn run_inner(
     mut session: Session,
     root: &Path,
     out: &Path,
     finish_seconds: Option<f64>,
+    policy: Option<&super::delivery::Policy>,
+    observe_until: Option<f64>,
 ) -> Result<()> {
     session.validate()?;
     if let Some(t) = finish_seconds {
@@ -203,6 +225,9 @@ pub fn run(
     if source_frames == 0 || total > u64::from(session.sample_rate) * 86400 {
         return Err("empty or >24 hour timeline".into());
     }
+    let total = observe_until.map_or(total, |v| {
+        total.min((v * session.sample_rate as f64).round() as u64)
+    });
     let freeze = finish_seconds
         .map(|s| (s * session.sample_rate as f64).round() as u64)
         .unwrap_or(0);
@@ -211,6 +236,11 @@ pub fn run(
             "soundcheck finish must be at least one frame and within the source timeline".into(),
         );
     }
+    let identities = if policy.is_some() || observe_until.is_some() {
+        Some(super::identity::source_identities(&session, root)?)
+    } else {
+        None
+    };
     // Validation and source opening precede output creation; never overwrite a prior experiment.
     std::fs::create_dir(out)?;
     write_json(&out.join("initial-settings.json"), &session)?;
@@ -261,11 +291,31 @@ pub fn run(
         .iter()
         .map(|ch| Strip::new(ch, session.sample_rate))
         .collect();
-    let mut limiter = Limiter::new(
-        session.ceiling_db,
-        session.limiter_release_ms,
-        session.sample_rate,
-    );
+    let effective_limiter = policy
+        .map(|p| p.final_sample_limiter.clone())
+        .unwrap_or_else(|| {
+            if session.output_mode == OutputMode::Matched {
+                super::delivery::FinalLimiter::Enabled {
+                    threshold_dbfs: session.ceiling_db,
+                    release_ms: session.limiter_release_ms,
+                }
+            } else {
+                super::delivery::FinalLimiter::Disabled
+            }
+        });
+    let (threshold, release) = match effective_limiter {
+        super::delivery::FinalLimiter::Enabled {
+            threshold_dbfs,
+            release_ms,
+        } => (threshold_dbfs, release_ms),
+        super::delivery::FinalLimiter::Disabled => (session.ceiling_db, session.limiter_release_ms),
+    };
+    let mut limiter = Limiter::new(threshold, release, session.sample_rate);
+    let mut observer = if policy.is_some() || observe_until.is_some() {
+        Some(super::observation::Observer::new(&session, out)?)
+    } else {
+        None
+    };
     let mut master_hp = (session.master_hpf_hz > 0.).then(|| {
         [Biquad::highpass(
             session.master_hpf_hz,
@@ -277,14 +327,22 @@ pub fn run(
         .effects
         .as_ref()
         .map(|fx| super::effects::Rack::new(fx, sources.len(), session.sample_rate));
-    let mut dry = hound::WavWriter::create(
-        out.join("bypass-bus.tmp.wav"),
-        spec(session.sample_rate, 32),
-    )?;
-    let mut wet = hound::WavWriter::create(
-        out.join("processed-bus.tmp.wav"),
-        spec(session.sample_rate, 32),
-    )?;
+    let mut dry = if observe_until.is_none() {
+        Some(hound::WavWriter::create(
+            out.join("bypass-bus.tmp.wav"),
+            spec(session.sample_rate, 32),
+        )?)
+    } else {
+        None
+    };
+    let mut wet = if observe_until.is_none() {
+        Some(hound::WavWriter::create(
+            out.join("processed-bus.tmp.wav"),
+            spec(session.sample_rate, 32),
+        )?)
+    } else {
+        None
+    };
     let mut dry_meter = Meter::default();
     let mut wet_meter = Meter::default();
     let mut loud_dry = Loudness::new(session.sample_rate);
@@ -326,7 +384,7 @@ pub fn run(
                 for v in x.iter().take(sources[i].channels) {
                     input[i].add(*v);
                 }
-                let y = strips[i].tick(x.map(|v| v * gains[groups[i]]));
+                let (eq, y) = strips[i].tick_with_eq_tap(x.map(|v| v * gains[groups[i]]));
                 let y = if let Some(fx) = &mut rack {
                     fx.excite(i, y)
                 } else {
@@ -339,6 +397,19 @@ pub fn run(
                 let ch = &session.channels[i];
                 let raw = route(x, sources[i].channels, ch.pan, faders[i] * neutral);
                 let cooked = route(y, sources[i].channels, ch.pan, faders[i]);
+                if let Some(o) = &mut observer {
+                    o.channel(
+                        i,
+                        [
+                            x,
+                            eq,
+                            eq.map(|v| v * gain(-strips[i].reduction_db())),
+                            cooked.map(|v| v * master),
+                        ],
+                        sources[i].channels,
+                        strips[i].reduction_db(),
+                    );
+                }
                 if let Some(fx) = &mut rack {
                     fx.send(i, cooked);
                 }
@@ -347,29 +418,52 @@ pub fn run(
                     b[j] += cooked[j] * master;
                 }
             }
+            let direct = b;
             if let Some(fx) = &mut rack {
                 let wet = fx.returns();
                 for j in 0..2 {
                     b[j] += wet[j] * master;
                 }
             }
+            let combined = b;
             if let Some(filters) = &mut master_hp {
                 for j in 0..2 {
                     b[j] = filters[j].tick(b[j]);
                 }
             }
+            let filtered = b;
             if let Some(fx) = &mut rack {
                 b = fx.master(b);
             }
-            if session.output_mode == OutputMode::Matched {
+            if matches!(
+                effective_limiter,
+                super::delivery::FinalLimiter::Enabled { .. }
+            ) {
                 b = limiter.tick(b);
             }
             if a.iter().chain(b.iter()).any(|v| !v.is_finite()) {
                 return Err("nonfinite DSP output".into());
             }
+            if let Some(o) = &mut observer {
+                o.neutral(a)?;
+                o.frame(
+                    t,
+                    rack.as_ref()
+                        .map(|fx| fx.return_outputs.as_slice())
+                        .unwrap_or(&[]),
+                    master,
+                    [direct, combined, filtered, b],
+                    rack.as_ref().map_or(0., |fx| fx.reduction_db()),
+                    limiter.reduction_db(),
+                )?;
+            }
             for j in 0..2 {
-                dry.write_sample(a[j] as f32)?;
-                wet.write_sample(b[j] as f32)?;
+                if let Some(w) = &mut dry {
+                    w.write_sample(a[j] as f32)?;
+                }
+                if let Some(w) = &mut wet {
+                    w.write_sample(b[j] as f32)?;
+                }
                 dry_meter.add(a[j]);
                 wet_meter.add(b[j]);
                 block_wet.add(b[j]);
@@ -432,8 +526,15 @@ pub fn run(
     history.flush()?;
     channel_history.flush()?;
     master_history.flush()?;
-    dry.finalize()?;
-    wet.finalize()?;
+    if let Some(w) = dry {
+        w.finalize()?;
+    }
+    if let Some(w) = wet {
+        w.finalize()?;
+    }
+    if let Some(o) = observer {
+        o.finish(out, &session)?;
+    }
     // Final trim equals the last applied value, not the un-applied last block decision.
     for (g, trim) in session.groups.iter_mut().zip(&current) {
         g.trim_db = *trim;
@@ -474,24 +575,33 @@ pub fn run(
     };
     let dry_match = target.zip(ld).map(|(t, l)| t - l).unwrap_or(export_db);
     let wet_match = target.zip(lw).map(|(t, l)| t - l).unwrap_or(export_db);
-    for (stem, matched_db, output_db) in [
-        ("bypass", dry_match, dry_export),
-        ("processed", wet_match, wet_export),
-    ] {
-        let input = out.join(format!("{stem}-bus.tmp.wav"));
-        export(&input, &out.join(format!("{stem}.wav")), gain(output_db))?;
-        if session.output_mode == OutputMode::Matched {
-            export(
-                &input,
-                &out.join(format!("{stem}-matched.wav")),
-                gain(matched_db),
+    if observe_until.is_none() && policy.is_none() {
+        for (stem, matched_db, output_db) in [
+            ("bypass", dry_match, dry_export),
+            ("processed", wet_match, wet_export),
+        ] {
+            let input = out.join(format!("{stem}-bus.tmp.wav"));
+            export(&input, &out.join(format!("{stem}.wav")), gain(output_db))?;
+            if session.output_mode == OutputMode::Matched {
+                export(
+                    &input,
+                    &out.join(format!("{stem}-matched.wav")),
+                    gain(matched_db),
+                )?;
+                std::fs::remove_file(input)?;
+            } else {
+                std::fs::rename(input, out.join(format!("{stem}-unity-float.wav")))?;
+            }
+        }
+    } else if policy.is_some() {
+        for stem in ["bypass", "processed"] {
+            std::fs::rename(
+                out.join(format!("{stem}-bus.tmp.wav")),
+                out.join(format!("{stem}-unity-float.wav")),
             )?;
-            std::fs::remove_file(input)?;
-        } else {
-            std::fs::rename(input, out.join(format!("{stem}-unity-float.wav")))?;
         }
     }
-    let channels:Vec<_>=sources.iter().enumerate().map(|(i,s)|serde_json::json!({"file":session.channels[i].file,"role":session.channels[i].role,"bwf_time_reference":s.reference,"offset_frames":s.offset,"source_frames":s.frames,"tail_padding_frames":total-s.offset-s.frames,"input":s.meter.report(),"post_strip":after[i].report(),"max_compressor_reduction_db":strips[i].max_reduction})).collect();
+    let channels:Vec<_>=sources.iter().enumerate().map(|(i,s)|serde_json::json!({"file":session.channels[i].file,"role":session.channels[i].role,"bwf_time_reference":s.reference,"offset_frames":s.offset,"source_frames":s.frames,"tail_padding_frames":(source_frames+tail_frames)-s.offset-s.frames,"input":s.meter.report(),"post_strip":after[i].report(),"max_compressor_reduction_db":strips[i].max_reduction})).collect();
     let fx_report = rack.as_ref().map(|fx| serde_json::json!({
         "send_reference_meters": fx.reference_meters.iter().map(|m|m.report()).collect::<Vec<_>>(),
         "return_meters_before_master": fx.return_meters.iter().map(|m|m.report()).collect::<Vec<_>>(),
@@ -499,13 +609,55 @@ pub fn run(
         "maximizer_max_reduction_db": fx.max_reduction(), "maximizer_affected_frames": fx.affected_frames(),
         "source_frames":source_frames,"tail_frames":tail_frames
     }));
-    let report = serde_json::json!({"output_mode":session.output_mode,"master_hpf_hz":session.master_hpf_hz,"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
+    let mut report = serde_json::json!({"output_mode":session.output_mode,"master_hpf_hz":session.master_hpf_hz,"mode":if finish_seconds.is_some(){"causal_soundcheck_then_freeze"}else{"frozen_show"},"sample_rate":session.sample_rate,"frames":total,"duration_seconds":total as f64/session.sample_rate as f64,"freeze_frame":finish_seconds.map(|_|freeze),"timeline_origin":origin,"channels":channels,
         "bypass_bus":dry_meter.report(),"processed_bus":wet_meter.report(),"bypass_lufs":ld,"processed_lufs":lw,"loudness_meter_stage":"before_export_gain","common_export_gain_db":(session.output_mode == OutputMode::Matched).then_some(export_db),"bypass_export_gain_db":dry_export,"processed_export_gain_db":wet_export,
         "bypass_export_peak_dbfs":db(dry_meter.peak)+dry_export,"processed_export_peak_dbfs":db(wet_meter.peak)+wet_export,
         "matched_target_lufs":target,"bypass_matching_gain_db":(session.output_mode == OutputMode::Matched).then_some(dry_match),"processed_matching_gain_db":(session.output_mode == OutputMode::Matched).then_some(wet_match),
         "master_max_reduction_db":limiter.max_reduction,"master_affected_frames":limiter.affected_frames,"true_peak":false,"effects":fx_report,
         "calibration_active_seconds":calibrators.iter().map(|c|c.active_seconds).collect::<Vec<_>>()});
+    if policy.is_some() || observe_until.is_some() {
+        report["effective_final_sample_limiter"] = serde_json::to_value(&effective_limiter)?;
+        report["render_contract"] = serde_json::json!(if policy.is_some() {
+            "delivery-policy-v1"
+        } else {
+            "observation-only-v1"
+        });
+        for key in [
+            "common_export_gain_db",
+            "bypass_export_gain_db",
+            "processed_export_gain_db",
+            "bypass_export_peak_dbfs",
+            "processed_export_peak_dbfs",
+            "matched_target_lufs",
+            "bypass_matching_gain_db",
+            "processed_matching_gain_db",
+        ] {
+            report[key] = serde_json::Value::Null;
+        }
+    }
     write_json(&out.join("measurements.json"), &report)?;
+    if let Some(identities) = &identities {
+        if super::identity::source_identities(&session, root)? != *identities {
+            return Err("sources changed during render/observation".into());
+        }
+        if observe_until.is_some() {
+            write_json(&out.join("sources.json"), identities)?;
+        }
+    }
+    if observe_until.is_some() {
+        std::fs::write(
+            out.join("report.txt"),
+            "Production DSP observation only; no audio export. See stages.json, stage-windows.csv and measurements.json.\n",
+        )?;
+        return Ok(());
+    }
+    if let Some(p) = policy {
+        std::fs::write(
+            out.join("report.txt"),
+            "Policy-aware production DSP; see effective limiter in measurements.json and delivery.json for final PCM. Completion requires delivery-ready.json.\n",
+        )?;
+        return super::delivery::finish(&session, root, out, p, identities.as_ref().unwrap());
+    }
     let comparison_note = if session.output_mode == OutputMode::Unmatched {
         "No loudness matching. Unity float buses are preserved, including any values above full scale. Each PCM output is finalized independently to its own configured sample peak; neither output determines the other's gain."
     } else {

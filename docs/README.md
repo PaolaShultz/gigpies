@@ -1,9 +1,10 @@
 # Documentation
 
 [Artistic FX pass](ARTISTIC_FX.md): six-example historical evidence, expert-selected
-effects, preserved direct tone, calibration and verification. Old generated audio
-has been retired at the user's request; the next work is the
-[summing-engine plan](SUMMING_PLAN.md) and its [execution prompt](SUMMING_EXECUTION_PROMPT.md).
+effects, preserved direct tone, calibration and verification. The executed
+[summing-engine plan](SUMMING_PLAN.md) adds verified [delivery controls](SUMMING_DELIVERY.md).
+Six new complete mixes retain those effects; the current local listening index is
+`artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`.
 The [source-preservation reassessment](SOURCE_PRESERVATION.md) supplies its channel
 baseline and evidence for withholding unsupported correction.
 The [Complainiacs review](COMPLAINIACS_WORKFLOW_REVIEW.md) retains its preceding
@@ -15,7 +16,8 @@ selection and evidence.
 | [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |
 | [Status](STATUS.md) | Implemented behavior and next increments |
 | [Components](COMPONENTS.md) | SHR module ownership, PA integration intent, existing work and dependency choices |
-| [Summing mixer plan](SUMMING_PLAN.md) | Planned experiments, true-peak delivery, export controls, source interactions and implementation gates |
+| [Summing mixer plan](SUMMING_PLAN.md) | Execution results, experiment gates, true-peak delivery, source interactions and completion record |
+| [Summing and delivery](SUMMING_DELIVERY.md) | Versioned delivery sidecar, true-peak measurement, production observations, legacy replay and verified checkpoints |
 | [Multitracks](MULTITRACKS.md) | Local source inventory and experiment starting point |
 | [Development](DEVELOPMENT.md) | Directory layout, validation and contribution workflow |
 | [Publication](PUBLICATION.md) | Private directories, reviewed scripts, commit/push hooks and release boundaries |
@@ -62,3 +64,4 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 
 - [Frozen EQ matching](EQ_MATCHING.md): reference catalogue, provisional maps, amount/reset, CLI/local review and validation.
 - [Next hardware session](NEXT_SESSION.md): MiniLab console idea, second Pi, LAN measurements and Codex handoffs.
+- [Two-Pi development lab](NODE_LAB.md): fixed Ethernet addresses, SSH/Git handoffs and the first protocol experiments.

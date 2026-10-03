@@ -1,6 +1,72 @@
 # Summing mixer investigation and implementation plan
 
-Prepared 2026-10-03. **Status: planned, awaiting later execution.**
+Prepared 2026-10-03. **Status: implemented, offline-validated and complete listening
+exports prepared, 2026-10-03. Listener preference pending; hardware unverified.**
+
+## Execution record
+
+The authorized run is `artifacts/automix/summing-study/2026-10-03-engine/`.
+It begins at clean revision `157eea8` (0.2.2). Original recordings and retained
+evidence remain protected. `baseline.json` pins the six frozen selections and
+sources; `frozen-study.json` declares chronological passages, numerical acceptance
+limits and a maximum of three musical candidates per pilot, with no held-out retry.
+
+Work follows this dependency order:
+
+1. Independent neutral routing, arithmetic and conversion regressions.
+2. Production stage/peak observations and supported/no-change findings.
+3. Versioned delivery policy, independent controls and validated true-peak export.
+4. Bounded musical investigations; preserve baseline when intervention lacks evidence.
+5. Full normal checks, six complete mixes, historical hashes, exact clips and cleanup.
+
+Initial disk check: 43 GiB free, 3.3 GiB normal build directory. Current ext4 error
+and warning counters and SMART media errors are zero. Kernel warnings and SMART
+invalid-command entries do not resolve the earlier crash; no offline scan is claimed.
+No playback, hardware operation, sibling edits or publication is part of this run.
+
+Engineering checks and complete render verification passed.
+Independent neutral routing passes 1–64 channels at
+8/44.1/48/96/192 kHz, including reordered/block-size/zero-channel checks and exact
+PCM rounding. Synthetic peak-cost and linear-master cancellation probes pass; active
+master dynamics break that invariance as expected. The independent meter study
+passes 280 waveform/rate cases plus 20 burst cases. Its maximum difference is
+0.106964 dB, inside the predeclared 0.2 dB bound. Reference refinement changes
+the burst measurements by at most 0.000274 dB.
+Explicit policy controls, production taps and checkpoint verification are implemented
+in [offline delivery](SUMMING_DELIVERY.md). All twelve complete SOURCE/FINAL scalar
+replays reproduce the frozen processing reports exactly,
+including zero master reduction. 154 normal Rust tests, 37 Python tests, formatting,
+Clippy and the locked release build pass. Three unrelated historical tests remain
+opt-in. All six reconstructed SOURCE and selected FINAL PCM/float identities match
+their retained historical hashes. All six new complete mixes pass static conversion,
+source/timeline/tail verification and independent final-PCM measurement. Independent
+true peaks range from −1.400441 to −1.395178 dBTP; maximum disagreement with the
+production meter is 0.004922 dB. Phoenix's historical FINAL measures +0.326011 dBTP.
+
+No new musical candidate is selected. The microphone observations show band- and
+passage-dependent phase/coherence, so delay/polarity correction is withheld. Existing
+filters, compression, makeup, faders and GigPies FX stay frozen. Current stage levels
+provide no new preference or justified target for changing them. SHR PA measurement
+and alignment remain deferred to their owning module. The delivery change applies
+static gain to the unchanged processed bus; listening acceptance remains pending.
+
+The current local listening index is
+`artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`. It contains the six
+complete new mixes, seven exact established excerpts and reconstructed historical
+references. No real equal-LUFS copies were made; a common-gain candidate comparison
+would duplicate the unchanged processed bus. The private `REPORT.md` records the
+stage findings, numerical limits, performance, retained evidence and reproduction
+commands. This work remains unreleased; the user subsequently authorized a local
+commit. Push and publication remain outside this execution.
+
+Cleanup recovered **2.404 GiB** by removing 24 unselected companion WAVs created
+by this run and losslessly compressing 84 observation CSVs. Selected audio and
+evidence retain **2.477 GiB** of unique allocated storage; shared FINAL float buses
+use hardlinks. Open-file and lock checks preceded cleanup, and decompression hashes
+passed. All 2,473 prior retained evidence hashes and metadata for 428 original/
+library/test files remain unchanged. `cleanup.json` records every affected path;
+`complete.json` binds the final handoff. The normal 3.4 GiB target directory is
+retained for reuse. No stalled output directories remain.
 
 This plan investigates whether GigPies loses body, punch or clarity while combining
 sources, then implements the changes supported by the experiments. The current
@@ -8,8 +74,8 @@ sources, then implements the changes supported by the experiments. The current
 independent check of neutral summing, true-peak delivery headroom, explicit export
 controls and measurements that explain how processing changes the ensemble.
 
-The planning task changes documentation only. When the user later requests execution,
-follow the phases below through implementation, offline validation and preparation
+The original planning task changed documentation only. This execution follows
+the phases below through implementation, offline validation and preparation
 of review material. Record musical acceptance separately; measurements cannot supply
 a listener preference. Preserve original recordings and the frozen settings/evidence
 that identify earlier selected mixes. Generated audio was retired as described below.
@@ -35,8 +101,8 @@ reconstructed historical baselines. Do not rerun old interleaved planners to rec
 settings that are already frozen. A failed historical hash comparison is an explicit
 compatibility failure, never silently a new accepted baseline.
 
-The [execution prompt](SUMMING_EXECUTION_PROMPT.md) carries this scope into the next
-session. Do not create equal-LUFS listening copies under the present instruction;
+The [execution prompt](SUMMING_EXECUTION_PROMPT.md) records the authorization and
+scope of this execution. Do not create equal-LUFS listening copies under it;
 comparison-copy controls can be implemented and tested synthetically. The proposed
 new independent delivery is minus 1 dBTP after estimator validation; legacy replay
 keeps its recorded minus 0.01 dBFS contract. Neither ceiling establishes better sound.
@@ -500,16 +566,16 @@ unusually large output retained. Do not rebuild solely to verify cleanup.
 
 ### Completion checklist
 
-- [ ] Baseline identities and applicable current contracts re-established.
-- [ ] Neutral sum and routing verified independently; confirmed defects resolved.
-- [ ] Stage and peak observations explain each pursued concern or record uncertainty.
-- [ ] True-peak estimator and new delivery policy validated on final PCM.
-- [ ] Comparison controls independent of DSP; legacy output remains reproducible.
-- [ ] Every musical hypothesis accepted for review, rejected or withheld with evidence.
-- [ ] Required normal tests and relevant opt-in experiments passed; skipped classes listed.
-- [ ] All six examples checked, historical selections reproducible and new review material verified.
-- [ ] Listening preference recorded or explicitly pending; hardware acceptance separate.
-- [ ] Owner documentation and concise handoff complete; disposable output cleaned.
+- [x] Baseline identities and applicable current contracts re-established.
+- [x] Neutral sum and routing verified independently; confirmed defects resolved.
+- [x] Stage and peak observations explain each pursued concern or record uncertainty.
+- [x] True-peak estimator and new delivery policy validated on final PCM.
+- [x] Comparison controls independent of DSP; legacy output remains reproducible.
+- [x] Every musical hypothesis accepted for review, rejected or withheld with evidence.
+- [x] Required normal tests and relevant opt-in experiments passed; skipped classes listed.
+- [x] All six examples checked, historical selections reproducible and new review material verified.
+- [x] Listening preference recorded or explicitly pending; hardware acceptance separate.
+- [x] Owner documentation and concise handoff complete; disposable output cleaned.
 
 The engineering work can be complete while musical acceptance remains pending.
 An unavailable sibling capability or unresolved technical failure must be named as

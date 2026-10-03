@@ -43,6 +43,14 @@ GigPies implementations; no sibling checkout is changed or linked.
 The gain estimator, routing, file workflow and preset choices are GigPies work.
 Manufacturer guidance and the loudness standard are linked in [AUTOMIX](docs/AUTOMIX.md).
 
+## Offline true-peak measurement
+
+The windowed-sinc estimator in `src/automix/true_peak.rs` is original GigPies code,
+following the oversampling guidance of ITU-R BS.1770-5 Annex 2. It does not copy
+the standard's example FIR table or add a library dependency. The independently
+invoked FFmpeg/libsoxr and SciPy verification tools retain their upstream licences
+and are not vendored or downloaded by CI. See [method and references](docs/SUMMING_DELIVERY.md).
+
 The shelf coefficient equations follow Robert Bristow-Johnson's mathematical
 [Audio EQ Cookbook, published by W3C](https://www.w3.org/TR/audio-eq-cookbook/).
 Our implementation fixes shelf slope to S=1. No manufacturer DSP code, firmware,

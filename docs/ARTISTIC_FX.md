@@ -1,9 +1,11 @@
 # Expert selection of artistic effects
 
-**Audio availability, 2026-10-03:** the user retired all generated renders and
-listening excerpts. Original recordings, frozen settings and reports remain.
-The results below are historical evidence; new listening exports follow the
-[summing-engine work](SUMMING_PLAN.md).
+**Audio availability, 2026-10-03:** the [summing-engine work](SUMMING_PLAN.md)
+produced six new complete mixes with the frozen selected GigPies effects and
+independently verified true-peak headroom. Use
+`artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`.
+Earlier generated audio was retired; the results below retain its historical
+selection evidence. Original recordings, frozen settings and reports remain unchanged.
 
 The listener clarified that the requested deliverables are finished musical mixes,
 including GigPies-generated effects selected by the expert system. The previous

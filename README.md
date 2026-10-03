@@ -62,6 +62,12 @@ Plan reviews expose individual target residuals and bounds; saved plans can be
 audited without audio, and new plans bind their completion record to source hashes.
 It builds independently and opens no audio hardware. Mix quality awaits listening.
 
+The current unreleased checkout adds [summing observations and delivery controls](docs/SUMMING_DELIVERY.md):
+independent neutral-routing checks, production stage and peak attribution, an explicit
+delivery sidecar and validated true-peak finalization. Comparison gain and final
+limiting are separate controls. The legacy renderer preserves frozen session and
+audio identities; new deliveries retain the selected GigPies effects.
+
 [**Source rules →**](docs/SOURCE_RULES.md) · [**Automatic guitar tone →**](docs/TONE_PASS.md) · [**Manufacturer-reference experiment →**](docs/PRESET_EXPERIMENT.md) · [**Musical balance experiment →**](docs/BALANCE_PASS.md) · [**Unity-source comparison →**](docs/UNITY_PASS.md) · [**Run the offline automixer →**](docs/AUTOMIX.md) · [**Effects and automatic review →**](docs/FX_PASS.md)
 
 The [frozen EQ matcher](docs/EQ_MATCHING.md) adds versioned reference maps, broad

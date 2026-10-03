@@ -195,3 +195,12 @@ New matching plans require chronological splits; historical state validation and
 exact reset retain the existing contract. Newly written HTML reviews disclose
 interleaved historical evidence. The shared ordering predicate lives in
 `automix/mod.rs`; diagnostics can describe legacy passages without refitting them.
+
+`automix::delivery` owns the versioned export sidecar and completed-delivery checks;
+`true_peak` owns the streaming interpolation meter. `render` keeps the legacy path
+and supplies the policy-aware render and scalar-only observation entry points.
+`observation` taps actual production states and reconciles peak contributions.
+The normal `tests/summing.rs` and `tests/delivery.rs` protect independent arithmetic,
+conversion, mode independence, static output identity and failure recovery.
+The policy checkpoint and external-meter script have synthetic Python regressions;
+normal tests do not require FFmpeg. See [commands and contracts](SUMMING_DELIVERY.md).

@@ -1,9 +1,12 @@
 //! Offline, causal soundcheck and frozen-settings stereo rendering.
 pub mod config;
+pub mod delivery;
 pub mod dsp;
 mod identity;
+mod observation;
 mod render;
-pub use render::{compare, run, write_json};
+pub mod true_peak;
+pub use render::{compare, observe, run, run_policy, write_json};
 
 pub mod ambience;
 pub mod effects;

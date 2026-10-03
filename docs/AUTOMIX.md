@@ -1,5 +1,9 @@
 # First offline automixer
 
+For explicit delivery controls, true-peak export and production stage observations,
+see [summing and delivery](SUMMING_DELIVERY.md). The legacy `render` behavior below
+remains available for exact replay of frozen sessions.
+
 For current offline source decisions, see [source preservation](SOURCE_PRESERVATION.md).
 The preset, calibration and matching workflow below is the historical first experiment;
 new sources do not require those processors.

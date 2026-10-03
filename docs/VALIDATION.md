@@ -1,5 +1,34 @@
 # Foundation validation — 2026-10-01
 
+## Summing and delivery execution — 2026-10-03, unreleased
+
+The [owning plan](SUMMING_PLAN.md) and [delivery contract](SUMMING_DELIVERY.md)
+record the engineering result. Rust 1.97.1, the committed lockfile and
+`CARGO_INCREMENTAL=0` were used throughout.
+
+- Formatting, locked check, all-target Clippy with warnings denied and release
+  build pass. The complete normal suite passes **154 Rust tests** and **37 Python
+  tests**. Three unrelated historical media tests remain intentionally ignored.
+- The applicable opt-in true-peak study passes 280 waveform/rate cases plus 20
+  burst cases. Maximum reference difference is 0.106964 dB against the declared
+  0.2 dB limit. Reference refinement changes burst results by at most 0.000274 dB.
+- Independent neutral routing passes synthetic 1–64-channel checks and all twelve
+  complete SOURCE/FINAL scalar replays. All six reconstructed SOURCE/FINAL PCM
+  and float buses match the retained historical hashes exactly.
+- Six new complete mixes retain frozen processing and GigPies effects. Production
+  and independent final-PCM meters pass the −1 dBTP ceiling. Independent readings
+  range from −1.400441 to −1.395178 dBTP; maximum disagreement is 0.004922 dB.
+  Static conversion, source identities, full timelines, tails and seven exact
+  excerpts pass. Both master limiters retain zero reduction on these selections.
+- The local handoff is `artifacts/automix/summing-study/2026-10-03-engine/REPORT.md`;
+  its listening index, cleanup manifest and completion record identify retained
+  files. Original recordings and prior retained evidence are unchanged.
+- The complete proposed source tree passes the publication guard in a disposable
+  index. The real Git index is unchanged; versioned hooks remain enabled.
+
+Listener preference remains not reviewed and hardware remains unverified.
+No playback, host/service changes, sibling writes, push or publication occurred.
+
 ## 0.2.2 publication checks — 2026-10-03
 
 Rust 1.97.1, committed lockfile and `CARGO_INCREMENTAL=0`:

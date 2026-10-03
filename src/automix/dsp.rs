@@ -275,6 +275,8 @@ pub struct Loudness {
     power: f64,
     quarters: std::collections::VecDeque<f64>,
     blocks: Vec<f64>,
+    short_quarters: std::collections::VecDeque<f64>,
+    short_max: Option<f64>,
 }
 impl Loudness {
     pub fn new(rate: u32) -> Self {
@@ -304,6 +306,8 @@ impl Loudness {
             power: 0.,
             quarters: Default::default(),
             blocks: Vec::new(),
+            short_quarters: Default::default(),
+            short_max: None,
         }
     }
     pub fn add(&mut self, x: [f64; 2]) {
@@ -313,6 +317,15 @@ impl Loudness {
         }
         self.count += 1;
         if self.count == self.hop {
+            self.short_quarters.push_back(self.power / self.hop as f64);
+            if self.short_quarters.len() == 30 {
+                let power = self.short_quarters.iter().sum::<f64>() / 30.;
+                if power > 0. {
+                    let level = -0.691 + 10. * power.log10();
+                    self.short_max = Some(self.short_max.map_or(level, |v| v.max(level)));
+                }
+                self.short_quarters.pop_front();
+            }
             self.quarters.push_back(self.power / self.hop as f64);
             self.power = 0.;
             self.count = 0;
@@ -335,5 +348,9 @@ impl Loudness {
         let gate = abs.iter().sum::<f64>() / abs.len() as f64 / 10.;
         let rel: Vec<_> = abs.into_iter().filter(|p| *p > gate).collect();
         Some(-0.691 + 10. * (rel.iter().sum::<f64>() / rel.len() as f64).log10())
+    }
+    /// Maximum ungated three-second K-weighted loudness; no complete window => None.
+    pub fn short_term_max(&self) -> Option<f64> {
+        self.short_max
     }
 }

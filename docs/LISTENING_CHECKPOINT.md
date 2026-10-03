@@ -1,11 +1,13 @@
 # Complete local listening checkpoint
 
-**Audio availability, 2026-10-03:** the user retired all generated renders and
-listening excerpts. Original recordings, frozen settings and reports remain.
-The results below are historical evidence; new listening exports follow the
-[summing-engine work](SUMMING_PLAN.md).
+**Current listening set, 2026-10-03:**
+`artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md` contains six new complete
+mixes with the selected GigPies effects, independent true-peak verification and
+seven exact excerpts. See [summing and delivery](SUMMING_DELIVERY.md).
+Original recordings and prior retained evidence remain unchanged. Earlier generated
+audio was retired; the following indexes and results are historical.
 
-**Latest finished set:** `artifacts/automix/expert-fx-v1/LISTEN.md` adds expert-selected
+**Earlier FX set:** `artifacts/automix/expert-fx-v1/LISTEN.md` added expert-selected
 GigPies effects to all six accepted direct mixes. See [artistic FX](ARTISTIC_FX.md).
 Full exports, source identity, generated tails and exact clips are verified;
 listener acceptance remains pending.
@@ -15,8 +17,8 @@ unchanged SOURCE for Dark Ride and retains the other five FINALs. See the
 [source-preservation review](SOURCE_PRESERVATION.md). The checkpoint below is
 historical; its source provenance and verification methods remain in use.
 
-**Current replacement:** [independent workflow reassessment](COMPLAINIACS_WORKFLOW_REVIEW.md).
-The verified private index is now
+**Earlier reassessment:** [independent workflow reassessment](COMPLAINIACS_WORKFLOW_REVIEW.md).
+Its historical private index is
 `artifacts/automix/complainiacs-reassessment-v2/LISTEN.md`. It contains all six
 SOURCE → selected FINAL pairs, with no intermediates. The original checkpoint and
 subsequent history below are retained for provenance; earlier rhythmic preferences
