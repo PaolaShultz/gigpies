@@ -1,5 +1,30 @@
 # Development
 
+## Synthetic transport validation
+
+`src/transport/` owns packet/control contracts and bounded worker handoffs; see
+[the protocol and evidence](AUDIO_TRANSPORT.md). Normal `tests/transport.rs`
+covers parsing, exact samples, channel/session admission, ordering, loss, frame
+and sequence limits, drift diagnostics, wet envelopes and control recovery.
+It opens no sockets or audio devices.
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --test transport
+CARGO_INCREMENTAL=0 cargo test --locked --all-targets
+```
+
+The local socket-capacity regression is opt-in because it binds a loopback UDP
+socket. It generates no external traffic or audio:
+
+```sh
+CARGO_INCREMENTAL=0 cargo test --locked --test transport_network -- --ignored
+```
+
+Paced two-Pi runners and their evidence remain private under
+`artifacts/audio-transport/2026-10-03/`. They require a new mutually acknowledged
+resource reservation before rerunning, with exact ports, candidate hashes and
+hard deadlines. Neither CI nor the offline CLI starts a transport service.
+
 ## Layout
 
 ```text

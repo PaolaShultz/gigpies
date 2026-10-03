@@ -6,6 +6,8 @@ upstream dependency licences continue to apply.
 
 - hound: Apache-2.0 WAV library.
 - serde and serde_json: MIT OR Apache-2.0 serialization libraries.
+- rtrb 0.4.0: MIT OR Apache-2.0 bounded single-producer/single-consumer queues.
+- socket2 0.6.5: MIT OR Apache-2.0 socket configuration.
 - Transitive dependencies: see each package's licence metadata in the locked graph.
 
 `docs/assets/gigpies-concept.png` is AI-generated concept artwork supplied by the

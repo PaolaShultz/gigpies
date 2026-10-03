@@ -30,9 +30,14 @@ semantics must be implemented and tested when we build that boundary.
 
 A dedicated Ethernet link carries source audio for analysis/recording and control
 messages. Separate Wi-Fi serves performer access and optional venue services.
-Wire format, synchronization, buffering and reconnection protocols are undecided.
-RTP/UDP and PTP in the original concept are candidates, not existing dependencies.
-The USB audio device supplies the local audio clock; network timing does not replace it.
+The [audio transport contract](AUDIO_TRANSPORT.md) selects GPA1 UDP unicast,
+packed PCM24 analysis, float32 FX sends/wet returns and separate acknowledged
+UDP control. PA owns the 48 kHz source-frame timeline; Brain follows it.
+Packets carry epochs, channel groups and explicit wet output deadlines.
+Bounded queues, loss fades and fresh-state control recovery are implemented
+and synthetically tested; physical mixer/FX/recorder integration is pending.
+The USB audio device supplies the local audio clock. No network clock or
+resampler is installed; independent device clocks need measured ASRC acceptance.
 
 ## Audio and soundcheck
 

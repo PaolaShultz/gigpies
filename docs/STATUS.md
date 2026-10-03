@@ -1,5 +1,16 @@
 # Status and next steps
 
+## Audio transport — unreleased, synthetic validation, 2026-10-03
+
+Implemented [GPA1 audio and bounded UDP control](AUDIO_TRANSPORT.md), fixed
+48 kHz source-frame identity, PCM24/float32 codecs, bounded queues, deadline
+admission, wet fade and fresh-state recovery. Untuned two-Pi link measurements,
+paced bidirectional trials and application faults are recorded in the
+[owning plan](AUDIO_TRANSPORT_PLAN.md). The final measured envelope and failed
+targets are stated in the transport document. SSH/Git remains development
+coordination. This does not implement a live mixer, FX engine or NVMe recorder;
+physical audio and full-show reliability remain unverified.
+
 ## Summing and delivery — unreleased, offline-validated, 2026-10-03
 
 The [summing plan](SUMMING_PLAN.md) has passed its engineering phases. Independent routing and
@@ -124,10 +135,12 @@ Musical and hardware acceptance remain separate.
 
 ## Next hardware session
 
-The user plans a second Pi connected by cable, initial LAN/protocol measurements,
-and a compact screen/MiniLab control surface. The proposed mapping and two-Codex
-handoff workflow are recorded in [next-session notes](NEXT_SESSION.md). These are
-planned; no MIDI, network service or hardware operation was added.
+Two-Pi baseline and synthetic transport work are documented in
+[AUDIO_TRANSPORT.md](AUDIO_TRANSPORT.md). Next integrate the owning PA/FX/REC
+modules, then obtain session authorization for muted 48 kHz/24-bit capture,
+clock/channel verification, same-clock loopback latency and real NVMe
+continuity through a Brain process restart. MIDI/HDMI acceptance remains
+separate; see [next-session notes](NEXT_SESSION.md).
 
 ## PA module ownership and planned integration
 

@@ -13,6 +13,8 @@ selection and evidence.
 | Document | Owns |
 |---|---|
 | [Architecture](ARCHITECTURE.md) | Intended node responsibilities and processing boundaries |
+| [Audio transport](AUDIO_TRANSPORT.md) | GPA1 packet/control formats, PA clock, measured limits, recovery and physical acceptance gates |
+| [Audio transport plan](AUDIO_TRANSPORT_PLAN.md) | Owning execution plan, targets, repairs, verification and task completion |
 | [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |
 | [Status](STATUS.md) | Implemented behavior and next increments |
 | [Components](COMPONENTS.md) | SHR module ownership, PA integration intent, existing work and dependency choices |
@@ -63,5 +65,5 @@ a feature described in a blueprint is not evidence that it is implemented or ver
   production-engine decay and return calibration, ensemble guards and finished mixes.
 
 - [Frozen EQ matching](EQ_MATCHING.md): reference catalogue, provisional maps, amount/reset, CLI/local review and validation.
-- [Next hardware session](NEXT_SESSION.md): MiniLab console idea, second Pi, LAN measurements and Codex handoffs.
+- [Next hardware session](NEXT_SESSION.md): module integration, physical audio acceptance and separate console work.
 - [Two-Pi development lab](NODE_LAB.md): fixed Ethernet addresses, SSH/Git handoffs and the first protocol experiments.

@@ -67,22 +67,22 @@ input-group assignment. A controller action's scope (shared mix, monitor or offl
 preview) needs to be visible. The offline EQ amount/reset contract is a useful first
 control to exercise without controlling live audio.
 
-## Second Pi and the cable connection
+## Two-Pi transport: next integration gate
 
-The user will wire the second Raspberry Pi and connect the two with a cable.
-After the physical setup is ready, inventory both devices and their interfaces,
-record clock/software versions, and agree node ownership before implementing a
-minimal protocol. Follow the Stagebox/Brain boundaries in [architecture](ARCHITECTURE.md)
-and the [component ownership map](COMPONENTS.md); sibling module code stays with its
-owner. Each Pi should run its own assigned component independently.
+The [transport execution plan](AUDIO_TRANSPORT_PLAN.md) now records completed
+research, implementation and two-node synthetic work. The
+[protocol and evidence](AUDIO_TRANSPORT.md) select GPA1 UDP audio, separate
+acknowledged UDP control and a PA-owned 48 kHz source-frame timeline.
+SSH/Git remains the development channel. Read the accepted private ledger
+records and obtain a new resource reservation before repeating load tests.
 
-First measurements should record the physical/link setup, address configuration,
-round-trip time distribution, jitter, loss, throughput, reconnect behaviour and CPU
-load under declared test conditions. Distinguish round-trip measurements from one-way
-latency, which needs a validated clock relationship. Then test versioned messages,
-sequence/revision identity, stale-message refusal, disconnect/reconnect, idempotent
-retry and recovery from one node restarting. Define control traffic and any future
-audio transport separately; no transport or clock scheme is selected by this note.
+Next integrate SHR PA/FX/REC in their owning projects. Then, with explicit
+hardware-session authorization, use muted outputs to verify 24-bit capture,
+physical ADC/DAC/ADAT clocks and channel mapping, same-clock loopback latency
+and gap-free NVMe recording while an owned Brain process is restarted.
+Synthetic block counters do not establish physical dry-audio continuity.
+Independent device clocks may require a reviewed asynchronous resampler.
+No fixed runtime Pi assignment follows from identity-return benchmarks.
 
 ## Coordinating the two Codex sessions
 
@@ -94,8 +94,7 @@ local work; do not let both sessions independently rewrite the same files or run
 hardware actions concurrently. A task ledger can distinguish queued, running,
 ready-for-review and accepted work, with explicit evidence attached to each handoff.
 
-The connection mechanism between the Codex sessions is still to be chosen and tested.
-This note does not assume that separate sessions automatically share context, tools,
-credentials or approval. Establish the operator's command channel and hardware owner
-before automating session-to-session communication. Network access, deployment and
-hardware control belong to that future session's concrete scope.
+The installed `gigpies-peer` now launches bounded workers over pinned SSH.
+Follow `/home/shome/p/AGENTS.md` and [the node lab](NODE_LAB.md); workers own
+explicit scopes, while immutable ledger records retain separate review and
+acceptance. Existing interactive sessions keep their work and ownership.

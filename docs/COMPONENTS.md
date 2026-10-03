@@ -90,4 +90,9 @@ queues, `ratatui`/`crossterm` for terminal UI and `signal-hook` for shutdown han
 These already appear in the related projects but are not dependencies of this skeleton.
 Select one audio-device owner; do not independently attach PA and FX device transports
 and assume they form one low-latency mixer. Pure DSP and host transport are separate.
-FFT, resampling, networking and web libraries will be chosen when requirements exist.
+The [transport prototype](AUDIO_TRANSPORT.md) adds rtrb 0.4.0 for independent
+bounded worker queues and socket2 0.6.5 for per-socket receive capacity.
+GigPies owns packet/control contracts and adapters. SHR PA, SHR FX and SHR REC
+must integrate the real audio host, source-frame FX and local NVMe recorder
+in their owning repositories. No sibling algorithms were copied or changed.
+ASRC and a network-clock implementation remain unselected integration work.

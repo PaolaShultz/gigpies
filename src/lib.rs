@@ -5,3 +5,6 @@ pub mod inventory;
 pub const LIVE_SAMPLE_RATE_HZ: u32 = 48_000;
 
 pub mod automix;
+
+/// Synthetic network audio and control contracts; no hardware is opened.
+pub mod transport;

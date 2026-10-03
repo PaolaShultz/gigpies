@@ -1,5 +1,20 @@
 # Two-Pi development lab
 
+## Transport checkpoint, 2026-10-03
+
+The [owning plan](AUDIO_TRANSPORT_PLAN.md) and [protocol/results](AUDIO_TRANSPORT.md)
+record the executed baseline, synthetic audio and recovery work. Baseline
+0002 is accepted. Refresh the private ledger for task 0003 acceptance and
+resource releases before further tests. Earlier setup checkpoints below
+describe their original state, not current reservations.
+
+The installed `gigpies-peer` launched bounded review/reservation workers.
+Their sandbox allowed ordinary evidence files but blocked Git metadata and
+host networking inspection. Permissions stayed unchanged: Pi 5 performed
+explicitly assigned host orchestration; Pi 4 wrote immutable local reviews.
+Pi 5 retained their exact hashes and posted separate acceptance records.
+Existing interactive sessions and project checkouts were preserved.
+
 ## Scope and ownership
 
 The first lab step is development coordination over a dedicated Ethernet cable.
@@ -76,7 +91,7 @@ work and while waiting for a peer. There is no session wake-up integration in th
 setup. A session that is idle needs the operator to resume it. Timeouts retain work
 and post a named blocker; a restart resumes from the last acknowledged task state.
 
-## First experiments
+## Experiment procedure and remaining gates
 
 Run one declared link experiment at a time and record both hosts' software,
 interface, MTU, CPU load and clock status. Keep machine inventory in the private
@@ -95,7 +110,12 @@ coordination repository.
    malformed/oversized messages, disconnects and manual ownership before audio.
 6. Select audio transport, buffering and clock handling from measured needs.
    Source-frame counters and audio-clock drift need explicit treatment even if
-   network time is synchronized. RTP/UDP and PTP remain candidates.
+   network time is synchronized. GPA1 and the PA sample timeline now have
+   synthetic evidence; PTP and independent-device ASRC remain separate.
+
+Steps 1–3 ran without changing link settings. Steps 4–6 have application
+restart, bounded test-control and synthetic audio evidence; physical cable
+interruptions, manual parameter ownership and hardware audio remain pending.
 
 Normal software tests stay hardware-free. Link benchmarks and interruption trials
 are explicit lab operations. Full-song studies, audio playback, MIDI and DMX are
