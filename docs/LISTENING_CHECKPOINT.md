@@ -1,5 +1,10 @@
 # Complete local listening checkpoint
 
+**Audio availability, 2026-10-03:** the user retired all generated renders and
+listening excerpts. Original recordings, frozen settings and reports remain.
+The results below are historical evidence; new listening exports follow the
+[summing-engine work](SUMMING_PLAN.md).
+
 **Latest finished set:** `artifacts/automix/expert-fx-v1/LISTEN.md` adds expert-selected
 GigPies effects to all six accepted direct mixes. See [artistic FX](ARTISTIC_FX.md).
 Full exports, source identity, generated tails and exact clips are verified;

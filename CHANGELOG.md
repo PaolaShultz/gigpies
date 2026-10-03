@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.2 — 2026-10-03
+
+- Paired EQ diagnostics and readable saved-report summaries separate spectral
+  changes from phrase variation, compression and FX consequences.
+- FX reviews expose individual decay/wet-level residuals, control limits and missing
+  observations independently of ensemble eligibility and listener acceptance.
+- FX measurement includes the master stage, rejects master reduction and checks
+  complete passage coverage.
+- Frozen source/report identities, completion records, interruption recovery and
+  read-only plan verification/audits protect offline preparation.
+- New FX/EQ plans require training before held out; saved EQ states retain exact reset.
+- Summing-engine investigation, true-peak delivery and export-policy work are planned,
+  with an execution prompt. These features are not implemented by this release.
+
+At the user's request, old local renders were retired while original recordings,
+settings and evidence were preserved. New listening mixes will follow the engine
+work. Musical acceptance and hardware validation remain pending.
+
 ## 0.2.1 — 2026-10-03
 
 - Deterministic offline EQ matching against versioned measured maps or provisional

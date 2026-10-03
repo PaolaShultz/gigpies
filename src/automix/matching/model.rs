@@ -1,7 +1,6 @@
 use super::*;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::{collections::BTreeSet, io::Read, path::PathBuf};
+use std::{collections::BTreeSet, path::PathBuf};
 
 pub const BANDS: usize = 28;
 pub const FFT_SIZE: usize = 8192;
@@ -10,41 +9,7 @@ pub fn frequencies() -> Vec<f64> {
         .map(|i| 31.25 * 2_f64.powf(i as f64 / 3.))
         .collect()
 }
-pub fn identity(value: &impl Serialize) -> Result<String> {
-    // serde_json Value orders keys and its round-trip representation is canonical here.
-    let bytes = serde_json::to_vec(&serde_json::to_value(value)?)?;
-    Ok(format!("{:x}", Sha256::digest(bytes)))
-}
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct SourceIdentity {
-    pub file: PathBuf,
-    pub bytes: u64,
-    pub sha256: String,
-}
-pub fn source_identities(s: &Session, root: &Path) -> Result<Vec<SourceIdentity>> {
-    s.channels
-        .iter()
-        .map(|c| {
-            let mut file = std::fs::File::open(root.join(&c.file))?;
-            let bytes = file.metadata()?.len();
-            let mut hash = Sha256::new();
-            let mut buf = [0u8; 65536];
-            loop {
-                let n = file.read(&mut buf)?;
-                if n == 0 {
-                    break;
-                }
-                hash.update(&buf[..n]);
-            }
-            Ok(SourceIdentity {
-                file: c.file.clone(),
-                bytes,
-                sha256: format!("{:x}", hash.finalize()),
-            })
-        })
-        .collect()
-}
+pub use super::super::identity::{SourceIdentity, identity, source_identities};
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum Instrument {
@@ -290,6 +255,12 @@ pub struct Request {
     pub excluded_fx_returns: Vec<PathBuf>,
 }
 impl Request {
+    /// New fitting plans require this order. Historical frozen states remain
+    /// structurally readable, so exact reset and review do not lose their inputs.
+    pub fn training_precedes_held_out(&self) -> bool {
+        super::super::training_precedes_held_out(&self.training, &self.held_out)
+    }
+
     pub fn validate(&self, s: &Session) -> Result<()> {
         super::validate_baseline(s)?;
         self.group.validate(s)?;

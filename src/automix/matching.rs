@@ -9,11 +9,15 @@ use crate::inventory::Result;
 use serde::{Deserialize, Serialize};
 use std::{fs::File, path::Path};
 mod check;
+mod compare;
+mod comparison_review;
 mod fit;
 mod measure;
 mod model;
 mod review;
 pub use check::*;
+pub use compare::*;
+pub use comparison_review::review_comparison;
 pub use fit::*;
 pub use measure::*;
 use model::valid;
@@ -179,6 +183,9 @@ fn save(out: &Path, state: &State) -> Result<()> {
 }
 pub fn plan(s: Session, root: &Path, out: &Path, r: Request) -> Result<State> {
     r.validate(&s)?;
+    if !r.training_precedes_held_out() {
+        return Err("all EQ training must precede held-out passages: continuous channel/FX history would otherwise let held-out audio affect later training evidence; saved states remain available for reset and review".into());
+    }
     if out.exists() {
         return Err("matching output must be a new directory".into());
     }

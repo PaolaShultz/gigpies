@@ -23,14 +23,17 @@ Former loose WAV paths in the project root have moved. New reference-review comm
 should use the shared path, for example:
 
 ```sh
-target/release/gigpies reference-review artifacts/automix/guitar-decay-v1/final/processed.wav \
+target/release/gigpies reference-review NEW_VERIFIED_RENDER/processed.wav \
   '../waves/The Complainiacs - Etc. [IW0QixgOylk].wav' new-review 24
 ```
 
 Historical reports retain their original recorded paths. The shared relocation
 manifest maps those names to their new locations; active local reference provenance
 also records the current path. Generated mixes, excerpts and experiment evidence
-remain under this project's ignored `artifacts/` directory.
+remain under this project's ignored `artifacts/` directory. On 2026-10-03 the user
+retired all existing generated renders; the originals and recorded evidence remain.
+Create new listening exports after the [mixing-engine work](SUMMING_PLAN.md), and
+use a verified new render path in the example above.
 
 ## Relocation validation, 2026-10-02
 

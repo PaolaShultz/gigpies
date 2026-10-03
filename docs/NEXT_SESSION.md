@@ -1,4 +1,32 @@
-# Next session: compact console and two Raspberry Pis
+# Next session: mixing-engine work and planned hardware
+
+## Offline handoff — 0.2.2, 2026-10-03
+
+Execute [the summing-engine plan](SUMMING_PLAN.md) using the complete
+[execution prompt](SUMMING_EXECUTION_PROMPT.md). Version 0.2.2 includes paired EQ
+comparison, readable diagnostics, FX target reports, full master/coverage checks,
+frozen input/readiness verification and chronological admission for new FX/EQ plans.
+Existing EQ fitting, recipes, thresholds and saved-state reset remain intact.
+
+The user explicitly retired all generated audio: SOURCE sums, six FINALs, earlier
+renders, diagnostics and excerpts. Do not offer the old listening queue. Preserve
+original recordings/notices/archives and all saved settings, reports and identities.
+The ignored retirement manifest and deletion totals are in
+`artifacts/automix/render-retirement-2026-10-03/`. The preceding implementation
+report remains in `artifacts/automix/fx-calibration-review-2026-10-03/REPORT.md`.
+
+Begin from these retained inputs and evidence. Create new complete listening mixes
+only after engineering and technical verification. Required legacy comparisons can
+then be reconstructed from frozen settings and checked against saved hashes. Do not
+rerun old interleaved planners to recover already saved settings. Any new real-audio
+study needs fresh chronological passages, a fixed small budget and stopping rules.
+No numerical result supplies missing musical preference. Playback needs a fresh go.
+
+The unresolved Pi crash still needs separate diagnosis; zero current filesystem
+counters and boot recovery do not establish a complete offline scan. Keep siblings
+read-only and PA measurement/alignment algorithms in `../shr-pa`.
+
+## Planned hardware session
 
 Recorded from the user's ideas on 2026-10-03, for tomorrow's hardware session.
 **Planned only.** No MIDI mapping, network service, host-audio change or hardware

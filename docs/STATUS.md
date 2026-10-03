@@ -1,5 +1,84 @@
 # Status and next steps
 
+## Next: execute the summing-engine plan
+
+The next work is [the summing-engine plan](SUMMING_PLAN.md), using the
+[execution prompt](SUMMING_EXECUTION_PROMPT.md). It covers independent neutral
+routing/summing verification, stage/peak observations, explicit delivery controls
+and validated true-peak export. Implementation and new musical acceptance are pending.
+
+On 2026-10-03 the user requested removal of all old generated audio, including
+SOURCE sums, six FINALs, diagnostic PCM/float mixes and listening clips. Original
+recordings, source notices/archives, settings, hashes and scalar reports are retained.
+Earlier listening indexes are historical. New complete renders will be made after
+the engine work and technical checks; baseline reconstruction uses frozen settings.
+The private removal manifest is `artifacts/automix/render-retirement-2026-10-03/`.
+
+## 0.2.2 — FX calibration and review correctness, offline-validated
+
+Artistic FX plans now separate ensemble eligibility from individual decay and
+return targets. Human and JSON reports expose signed residuals, engine/gain bounds,
+amount-adjusted targets and actual per-passage bus outcomes. Missing evidence stays
+unmeasured. The observer includes the real master stage and requires zero master
+reduction. Complete measured-window coverage is checked explicitly.
+
+New plans pin settings, policy and source hashes, publish `ready.json` last, and
+retain evidence on failure or interruption. `ambience-check` verifies saved artifacts
+and current source bytes. `ambience-audit` reads saved scalar evidence without audio.
+It reproduces the known limits in the six current plans, including Dark Ride's two
+minimum-decay limits and +4.023632 dB vocal-echo residual. See
+[individual reports, recovery and historical audits](ARTISTIC_FX.md#individual-target-reports-022).
+
+Continuous DSP can carry earlier held-out audio into later training. Fixed synthetic
+probes demonstrated this in both the FX calibration and existing channel EQ paths.
+New FX and EQ plans therefore require chronological splits. Saved EQ states retain
+their frozen identity and exact reset; review pages disclose historical interleaving.
+The fitter, recipes, gain bounds and EQ tolerances are unchanged. The EQ comparison
+also gains `COMPARISON.md` and a saved-report summary command, separating shape,
+levels, compression/FX consequences and missing evidence.
+
+These are offline implementation and verification results. Original recordings and
+frozen SOURCE/FINAL settings remain preserved. The user subsequently retired all
+generated audio; see the next step above. Individual
+artistic targets, independent-reference comparability, listener preference and
+hardware acceptance remain separate open questions. No new real-audio candidate,
+render or playback was made. The session plan, synthetic probes and readable saved
+audits are retained in `artifacts/automix/fx-calibration-review-2026-10-03/`.
+
+145 normal Rust tests and 34 Python tests pass; three historical private-media tests
+remain opt-in. Formatting, Clippy and the locked release build pass. Release CLI
+plan/check/audit passed on generated sources. Before retirement, hash checks matched 94 comparator/diagnostic artifacts,
+39 routed Dark Ride originals and 62 saved reports. Their recorded identities remain.
+
+Filesystem checks still report zero current ext4 error/warning counters and no
+SMART media errors. The crash cause remains unresolved; boot recovery is not a
+forced offline scan. These changes are included in 0.2.2.
+
+## 0.2.2 — reference comparability evidence
+
+The new `eq-match-compare` command separates known EQ changes on identical recordings
+from phrase dispersion and reports compressor/FX/ensemble consequences. It supplies
+no target or fitting tolerance. A predeclared fresh-phrase Dark Ride study produces
+a bounded partial correction of deliberately injected coloration; its clean control
+adds no EQ. All existing guards pass, with no fitter change or held-out retry.
+See [method, results and limits](EQ_MATCHING.md#fresh-reference-study-after-021--2026-10-03).
+
+At that checkpoint, 130 normal Rust tests and 34 Python tests passed; three historical media tests remain
+opt-in. At that time SOURCEs, six complete FINALs and the seven-pair listening queue
+were preserved. On the user's subsequent render request, two complete Dark Ride diagnostic
+mixes were exported from the frozen coloured/corrected settings, with unchanged FX.
+Both passed full export verification at −0.01 dBFS sample peak; their export gains are
+−3.720112 and −3.341220 dB. The historical index remains in
+`artifacts/automix/eq-audition-2026-10-03/LISTEN.md`; audio files were later retired.
+The clean production and diagnostic settings remain separate. Musical acceptance is
+pending. Playback needs a fresh user “go.” The Pi crash interrupted only a later
+diagnostic observation; boot recovery and retained hashes were checked
+before continuing with frozen inputs. Its cause remains unresolved.
+
+The [FX parameter audit](ARTISTIC_FX.md#parameter-audit--2026-10-03) records how the
+saved recipes and bounded calibration chose the effects, including unreachable
+individual decay/wet-level targets. No FX setting was changed for this audit.
+
 ## 0.2.1 — frozen EQ matching, offline-validated
 
 Versioned measured maps and provisional artistic directions now feed a deterministic

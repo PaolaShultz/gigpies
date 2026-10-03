@@ -24,8 +24,11 @@ pub fn write(path: &Path, state: &State) -> Result<()> {
         let c=&state.baseline.channels[i.channel];
         serde_json::json!({"file":c.file,"db":hz.iter().map(|&hz|response(&c.eq,state.baseline.sample_rate,hz,100.)+10.*Biquad::highpass(c.hpf_hz,std::f64::consts::FRAC_1_SQRT_2,state.baseline.sample_rate).power_response(hz,state.baseline.sample_rate).max(1e-24).log10()).collect::<Vec<_>>()})
     }).collect::<Vec<_>>();
+    let split_history = (!state.request.training_precedes_held_out()).then_some(
+        "This saved review uses interleaved training and held-out passages. Earlier held-out audio can affect later training through continuous DSP state. Frozen settings and reset remain available; the original evidence has this limitation."
+    );
     let data = serde_json::to_string(
-        &serde_json::json!({"state":state,"hz":hz,"curves":curves,"baseline":baseline}),
+        &serde_json::json!({"state":state,"hz":hz,"curves":curves,"baseline":baseline,"split_history":split_history}),
     )?
     .replace('&', "\\u0026")
     .replace('<', "\\u003c")

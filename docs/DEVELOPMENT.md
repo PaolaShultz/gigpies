@@ -56,7 +56,7 @@ Preserve source licences when adapting code. The skeleton starts no hardware.
 Hardware sessions and audible playback require a specific authorized task.
 
 Before publication inspect staged files, confirm music/private data are absent,
-run `git diff --cached --check`, and run the normal checks above. Version 0.2.1 is
+run `git diff --cached --check`, and run the normal checks above. Version 0.2.2 is
 the current offline release. Release notes must distinguish
 implemented, offline-validated and physically verified behavior.
 Run `python3 scripts/check_publication.py` after staging. The guard checks the
@@ -164,9 +164,34 @@ zero amount, source identity, invalid input/FX-return refusal, held-out isolatio
 and overload rejection. The checkpoint contract accepts an explicitly declared
 production FX tail while retaining pinned SOURCE files; Python regressions reject
 unexplained duration changes, altered offsets and inconsistent tail metadata.
+`ambience::calibration` reports individual decay/return limits and amount-aware
+bus observations; `ambience::review` writes the separate eligibility, target and
+pending-acceptance results. Normal synthetic coverage includes unreachable decay,
+return-floor limitation, actual measured ratios and missing held-out evidence.
+`ambience::persistence` pins inputs/reports and writes the completion record last;
+`ambience-check` verifies it without rendering. Normal tests cover changed inputs,
+partial/failed plans, no overwrite and master-limiter observer/render agreement.
+Chronological splits prevent continuous FX history from carrying held-out audio
+into later training. The generic content hashes live in `automix::identity`;
+EQ matching retains its existing identity API through re-exports.
+`ambience::validation` owns complete-window coverage and named ensemble failures.
+`ambience::audit` reads saved evidence without audio access or a new eligibility
+decision. Its normal tests cover legacy missing observations, bounded returns,
+zero amount, rejected plans, inconsistent saved evidence and output preservation.
 
 `automix::matching` owns [frozen EQ matching](EQ_MATCHING.md), map imports and the
 local review page. `tests/matching.rs` covers production-DSP preservation, recovery,
 noise/cancellation abstention, persistence and nonlinear interactions. SHA-256 pins
 inputs/settings; serde_json float round trips preserve those identities. The page
 exports a selection request for offline validation and has no live control path.
+`matching::compare_eq` adds a read-only comparison of identical recordings with
+group EQ as the only permitted settings difference. Paired spectral dispersion is
+diagnostic evidence, never a target or fit tolerance. Normal matching regressions
+cover exact identity, nonlinear interactions, settings refusal, missing evidence
+and held-out isolation; private phrase-comparability studies remain opt-in.
+`matching::comparison_review` formats new or saved diagnostics with identity and
+scope checks, explicit missing evidence and named compressor/FX consequences.
+New matching plans require chronological splits; historical state validation and
+exact reset retain the existing contract. Newly written HTML reviews disclose
+interleaved historical evidence. The shared ordering predicate lives in
+`automix/mod.rs`; diagnostics can describe legacy passages without refitting them.

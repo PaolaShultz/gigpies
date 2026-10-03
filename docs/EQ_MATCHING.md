@@ -326,12 +326,192 @@ candidate. The final focused tests and build were rerun. Historical/exhaustive a
 renderers and unrelated auditions were intentionally skipped. No audio dataset,
 recording, third-party preset or private map was added to Git.
 
+## Comparing EQ on identical recordings
+
+Implemented in 0.2.2: `eq-match-compare` observes a known EQ change on identical
+recordings. It separates variation across phrases from variation in a paired
+processing difference. It does not select filters, make a map or change the
+existing fitter's uncertainty, thresholds or saved-state schema.
+
+```sh
+target/release/gigpies eq-match-compare reference.json changed.json SOURCES NEW_REPORT comparison-request.json
+```
+
+The comparison request has the same `group`, `training`, `held_out`, `routing_basis`
+and `excluded_fx_returns` fields as a matching request, with no `maps` field.
+Only EQ on the named group may differ between settings. All other settings must
+match, including files, rate, faders, pan, trims, compression, master and FX. Both
+measurements use one source directory, continuous DSP from zero and identical
+window boundaries. SHA-256 checks bracket measurement; unequal sample anchors or
+changed recordings fail. Existing output directories are refused.
+
+For every aligned, active window, the observer subtracts reference from changed
+pre-compressor EQ spectra. It removes the median common difference in analysis
+only. It reports median spectral-shape change and scaled median absolute deviation
+of these paired differences, alongside each signal's phrase dispersion on the
+same windows. This paired spread is descriptive; it is neither a confidence
+interval nor a replacement for independent-reference uncertainty.
+
+Activity is frozen from reference training. The reference's existing noise/tonal
+gates apply. Windows need eight jointly supported points in 125–6300 Hz, with
+less than 9 dB cancellation in both observations. A reported band needs eight
+windows and support in 70% of paired windows. The representative-phrase flag also
+requires three active seconds, eight supported bands and the existing 0.35 dB
+reference phrase-variation minimum. Sparse/unsupported bands report null, and
+silence cannot masquerade as an exact match. Joint support is descriptive and
+cannot choose an EQ fit. Held-out observations never affect training statistics.
+
+`comparison.json` retains both settings, hashes, group/split identity, the training
+summary and per-passage spectra and production-DSP interactions. The two original
+measurement files permit reconstruction. Level, crest, compression, coherent
+ensemble low-band power, stereo, generated returns and existing raw-event
+attack/body/sustain proxies are reported separately from spectral dispersion.
+No settings, acceptance decision or audio is written. Full-song export gain is
+unmeasured by this command; it needs complete independently finalized exports.
+
+New comparisons also write `COMPARISON.md`. It names each FX return and separates
+paired spectral spread, signed level changes, added compression/master action,
+crest/stereo changes and raw-event stage proxies. Missing observations display
+as unmeasured. The recorded instrument/capture context and input assignments stay
+visible; no filename supplies a new capture identity or musical verdict.
+
+An existing comparison can be summarized without opening recordings:
+
+```sh
+target/release/gigpies eq-match-compare-review SAVED_COMPARISON.json NEW_SUMMARY.md
+```
+
+This command checks saved settings identities, the EQ-only scope, passage labels,
+spectral support and observation structure before creating the new file. The
+summary pins the exact report bytes by SHA-256. It does not authenticate the
+original measurement history or verify current source files. Existing files are
+never overwritten. The original injection and candidate comparisons were both
+summarized this way, with their source JSON unchanged; summaries are in
+`artifacts/automix/fx-calibration-review-2026-10-03/comparison-reviews/`.
+
+This diagnostic requires the same recorded performance. It can attribute a known
+processing change without making the broader claim that independent players,
+notes or captures have become comparable. Unknown Dark Ride capture identities
+remain unknown. A future method for independent reference comparability needs its
+own frozen study and production-DSP/listening validation.
+
+### Continuous history and new planning admission
+
+New `eq-match-plan` requests require every training passage to end at or before
+the first held-out passage starts. Nonoverlap alone is insufficient when channel
+filters, compressors and effects run continuously from sample zero. The fitter,
+maps, search budget, uncertainty and numerical protection limits are unchanged.
+The admission rule is shared with the artistic FX workflow.
+
+A fixed synthetic probe changed only samples at 8.096–8.192 s, inside an earlier
+held-out passage. With existing 125 Hz / +12 dB / Q 10 channel EQ, later training
+had identical raw anchors but one processed spectral window changed by 0.006126 dB.
+The pooled training shape changed by only 1.26×10⁻⁹ dB. This demonstrates a causal
+dependency; it establishes no meaningful correction or preferred sound. There was
+no corrective fit, parameter retry or real-audio evaluation. Evidence and the
+declared two-case budget are in the local `eq-history-probe/` session evidence.
+
+Saved states retain their existing schema, frozen identities and exact reset.
+They remain readable and usable with their original evidence; newly written HTML
+reviews disclose an interleaved historical split. Reset of the pre-change synthetic
+state was verified without recordings, preserving its baseline and frozen identity.
+Diagnostic comparisons can still describe interleaved recordings and label that
+history; they make no new fitting or independent-validation decision. The saved
+Dark Ride fresh-reference study already uses chronological passages and is unchanged.
+
+### Fresh reference study after 0.2.1 — 2026-10-03
+
+One fixed reference phrase now yields a bounded partial correction of the known
+Dark Ride injection. The unmodified production receives no EQ. This establishes
+technical recovery in this controlled case; the source production is not diagnosed
+as defective, and musical acceptance remains pending.
+
+Before measurement, `artifacts/automix/eq-comparability-v1/plan.json` fixed one
+reference at **132–144 s**, training at **132–144 and 156–168 s**, and held out
+at **228–240 and 264–276 s**. None overlaps the initial EQ pilot's intervals.
+The song was previously studied in full, so these are fresh within-song checks,
+not independent blind material. Chronological selection preceded measurement;
+no pitch/technique equivalence was inferred. The reference uses one declared phrase
+instead of pooling three passages. Its measured uncertainty remains intact.
+
+Budget: one settings-copy injection of **+4 dB / Q 0.7 / 2 kHz**, one recovery
+fit, one clean control, zero held-out retries, zero fader/FX recalibration and zero
+new auditions. The fitter, uncertainty rules and every numerical guard are unchanged
+from `6682409`. The paired diagnostic supplies no parameters to this fit.
+
+The proposed correction is **−1.5 dB at 2 kHz and +0.25 dB at 500 Hz**, both Q 0.7,
+appended to the injected settings copy. All four passage checks pass. Training
+residual RMS outside uncertainty falls from **0.599 to 0.024 dB** in prediction.
+The unchanged production's training residual is **0 dB**, with no proposed filters.
+In the diagnostic recovery review, 0% and reset restore the injected settings copy.
+The separate clean-control review and retained FINAL preserve the original production.
+
+| Actual candidate versus injected copy | Held out 228–240 s | Held out 264–276 s |
+|---|---:|---:|
+| Residual RMS outside uncertainty, before → after | 0.411 → 0.000 dB | 0.360 → 0.091 dB |
+| Guitar-group RMS change before export | −0.497 dB | −0.433 dB |
+| Body/presence change | +1.170 dB | +1.231 dB |
+| Generated guitar-reverb return change | −0.582 dB | −0.527 dB |
+| Ensemble RMS change | −0.075 dB | −0.094 dB |
+| Largest window crest loss | 0.694 dB | 0.638 dB |
+| Added compressor / master reduction | 0 / 0 dB | 0 / 0 dB |
+
+The residual metric excludes the reference interval; zero does not mean the entire
++4 dB coloration was inverted. Guitar compression remains bypassed. The return
+change is altered excitation at fixed sends/returns. Held-out attack/body/sustain
+proxies change by **−0.104/−0.289/−0.179 dB** over six events and
+**−0.015/−0.176/−0.430 dB** over one event respectively. These few raw-energy
+anchors do not establish general articulation preservation. The second training
+passage has no eligible event anchors. Stereo and low-band checks remain in the
+private report; no numerical result supplies listener approval.
+
+The diagnostic isolates the injected change on identical recorded windows: the
+training median shape rise at 2 kHz is **+2.631 dB**, with **0.105 dB** paired
+dispersion versus **2.028 dB** original phrase dispersion on those windows.
+The common spectral offset, removed only in analysis, is **+1.206 dB**. Held-out
+shape rises are **+2.592 and +2.656 dB**, each with about **0.13 dB** paired
+dispersion. These scaled median absolute deviations describe variability, not
+confidence intervals. They are not substituted for the map's uncertainty.
+
+After correction, the paired 2 kHz shape excess over the original tone remains
+**+1.529/+1.544 dB** in held out. Guitar RMS remains **+0.891/+0.772 dB** and
+its generated reverb **+1.138/+1.014 dB** above the original production before
+export. The candidate retains coloration and stronger FX excitation; the low
+uncertainty-residual score must not be read as complete restoration or preferred sound.
+
+The initial study wrote no audio. A subsequent user request authorized two complete
+diagnostic exports from these frozen settings, with zero new fits or FX calibration.
+Each includes all eight existing FX buses and six seconds of tail, independently
+finalized to −0.01 dBFS sample peak. Coloured/corrected export gains are
+**−3.720112/−3.341220 dB**; finished loudness measures **−14.8/−14.7 LUFS** with
+no loudness targeting. The correction lowers full-song guitar-reverb RMS by
+**0.680 dB before export**; its **0.379 dB** extra export gain leaves a **0.301 dB**
+decrease in that return in the finished file. All channel/master compressor reductions
+remain zero. Other FX return meters are identical before export.
+
+The index `artifacts/automix/eq-audition-2026-10-03/LISTEN.md` links both full mixes
+and exact 228–240 s parent-sample excerpts, plus the existing clean production for
+context. All 39 original-source hashes and 83 comparator pins match. The six existing
+FINALs and SOURCE exports retain their exact hashes and export gains (**0 dB change**);
+the original seven-pair queue remains available. These diagnostic mixes do not
+replace the healthy production, and neither has been accepted by listening.
+
+Normal validation passes **130 Rust tests and 34 Python tests**, including 13
+matching regressions. Three historical media tests and unrelated exhaustive renderers
+remain opt-in. Formatting, Clippy with warnings denied and the locked release build
+pass. The Pi reboot interrupted a subsequent paired observation, after both planning
+commands had completed. Boot-time filesystem recovery and saved-file hashes were
+checked before resuming the identical observation; neither fit was rerun or retuned.
+Local details are in `artifacts/automix/eq-comparability-v1/REPORT.md` and its
+`filesystem-check/REPORT.md`.
+
 ### Remaining questions
 
-The real pilot does **not** establish useful matching on a difficult production.
-The broad reference variability hid a known change. A future separately budgeted
-study should test whether better capture/phrase comparability gives a defensible
-reference interval; it must not simply lower tolerance until this example passes.
+The initial pilot's broad reference variability hid a known change; that conservative
+miss remains evidence. The fresh fixed-phrase result supports partial recovery of
+one controlled coloration without demonstrating general repair of poor recordings.
+Further separately budgeted studies need independently comparable captures and
+phrases; dispersion from identical recordings must not replace their reference uncertainty.
 Different tunings, registers, techniques, noisy distortion and independent performers
 need broader evidence before these profiles become a general-purpose tone library.
 

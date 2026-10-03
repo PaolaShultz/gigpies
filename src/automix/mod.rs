@@ -1,6 +1,7 @@
 //! Offline, causal soundcheck and frozen-settings stereo rendering.
 pub mod config;
 pub mod dsp;
+mod identity;
 mod render;
 pub use render::{compare, run, write_json};
 
@@ -40,3 +41,20 @@ pub mod bleed;
 
 /// Frozen multi-reference identifiability diagnostics; never changes audio.
 pub mod bleed_reference;
+
+/// Continuous DSP history must not carry a held-out passage into later training.
+/// Call alongside the owning policy's span validation; this checks ordering only.
+fn training_precedes_held_out(training: &[[f64; 2]], held_out: &[[f64; 2]]) -> bool {
+    !training.is_empty()
+        && !held_out.is_empty()
+        && training
+            .iter()
+            .chain(held_out)
+            .flatten()
+            .all(|v| v.is_finite())
+        && training
+            .iter()
+            .map(|s| s[1])
+            .fold(f64::NEG_INFINITY, f64::max)
+            <= held_out.iter().map(|s| s[0]).fold(f64::INFINITY, f64::min)
+}

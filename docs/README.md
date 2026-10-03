@@ -1,7 +1,9 @@
 # Documentation
 
-[Current artistic FX pass](ARTISTIC_FX.md): finished six-example mixes with our
-expert-selected effects, preserved direct tone, calibration and verification.
+[Artistic FX pass](ARTISTIC_FX.md): six-example historical evidence, expert-selected
+effects, preserved direct tone, calibration and verification. Old generated audio
+has been retired at the user's request; the next work is the
+[summing-engine plan](SUMMING_PLAN.md) and its [execution prompt](SUMMING_EXECUTION_PROMPT.md).
 The [source-preservation reassessment](SOURCE_PRESERVATION.md) supplies its channel
 baseline and evidence for withholding unsupported correction.
 The [Complainiacs review](COMPLAINIACS_WORKFLOW_REVIEW.md) retains its preceding
@@ -13,6 +15,7 @@ selection and evidence.
 | [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |
 | [Status](STATUS.md) | Implemented behavior and next increments |
 | [Components](COMPONENTS.md) | SHR module ownership, PA integration intent, existing work and dependency choices |
+| [Summing mixer plan](SUMMING_PLAN.md) | Planned experiments, true-peak delivery, export controls, source interactions and implementation gates |
 | [Multitracks](MULTITRACKS.md) | Local source inventory and experiment starting point |
 | [Development](DEVELOPMENT.md) | Directory layout, validation and contribution workflow |
 | [Publication](PUBLICATION.md) | Private directories, reviewed scripts, commit/push hooks and release boundaries |

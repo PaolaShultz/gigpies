@@ -211,6 +211,281 @@ fn reference(f: &Fixture) -> ToneMap {
     )
     .unwrap()
 }
+fn comparison_request(f: &Fixture) -> ComparisonRequest {
+    ComparisonRequest {
+        group: f.r.group.clone(),
+        training: f.r.training.clone(),
+        held_out: f.r.held_out.clone(),
+        routing_basis: f.r.routing_basis.clone(),
+        excluded_fx_returns: f.r.excluded_fx_returns.clone(),
+    }
+}
+#[test]
+fn paired_comparison_separates_known_eq_from_phrase_variation_and_fx() {
+    let mut f = fixture(false);
+    fx(&mut f.s);
+    let mut changed = f.s.clone();
+    for i in &f.r.group.inputs {
+        changed.channels[i.channel].eq.push(band(2000., 4.));
+    }
+    let out = f.root.join("paired");
+    let report = compare_eq(
+        f.s.clone(),
+        changed.clone(),
+        &f.root,
+        &out,
+        comparison_request(&f),
+    )
+    .unwrap();
+    let peak = report
+        .training
+        .bands
+        .iter()
+        .find(|b| b.hz == 2000.)
+        .unwrap();
+    assert!(report.training.representative_phrase);
+    assert!(peak.shape_change_db.unwrap() > 1., "{peak:?}");
+    assert!(
+        peak.paired_spread_db.unwrap() < peak.reference_phrase_spread_db.unwrap(),
+        "{peak:?}"
+    );
+    assert!(
+        report
+            .passages
+            .iter()
+            .all(|p| p.body_presence_change_db.unwrap() < -1.)
+    );
+    assert!(
+        report
+            .passages
+            .iter()
+            .any(|p| p.max_added_compression_db.unwrap() > 0.01)
+    );
+    assert!(
+        report
+            .passages
+            .iter()
+            .any(|p| p.return_change_db[0].unwrap() > 0.01)
+    );
+    assert_eq!(
+        report.source_files,
+        source_identities(&f.s, &f.root).unwrap()
+    );
+    assert_eq!(value(&report.reference), value(&f.s));
+    assert_eq!(value(&report.changed), value(&changed));
+    assert!(!out.join("settings.json").exists());
+    let summary = std::fs::read_to_string(out.join("COMPARISON.md")).unwrap();
+    assert!(summary.contains("Generated FX return changes"));
+    assert!(summary.contains("guitar\\_space"));
+    assert!(summary.contains("Added compression dB"));
+    assert!(summary.contains("not a confidence interval or a fitting tolerance"));
+    let saved = std::fs::read(out.join("comparison.json")).unwrap();
+    assert!(compare_eq(f.s.clone(), changed, &f.root, &out, comparison_request(&f)).is_err());
+    assert_eq!(saved, std::fs::read(out.join("comparison.json")).unwrap());
+}
+#[test]
+fn paired_comparison_cli_identity_is_zero_and_never_writes_a_selection() {
+    let f = fixture(false);
+    automix::write_json(&f.root.join("reference.json"), &f.s).unwrap();
+    automix::write_json(
+        &f.root.join("comparison-request.json"),
+        &comparison_request(&f),
+    )
+    .unwrap();
+    let out = f.root.join("same");
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_gigpies"))
+        .arg("eq-match-compare")
+        .arg(f.root.join("reference.json"))
+        .arg(f.root.join("reference.json"))
+        .arg(&f.root)
+        .arg(&out)
+        .arg(f.root.join("comparison-request.json"))
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let report: ComparisonReport = read_json(&out.join("comparison.json")).unwrap();
+    assert!(report.training.representative_phrase);
+    for b in report.training.bands.iter().filter(|b| b.supported) {
+        assert_eq!(b.shape_change_db, Some(0.));
+        assert_eq!(b.paired_spread_db, Some(0.));
+    }
+    assert!(
+        report
+            .passages
+            .iter()
+            .all(|p| p.group_rms_change_db == Some(0.))
+    );
+    assert_eq!(std::fs::read_dir(&out).unwrap().count(), 4);
+    let summary = std::fs::read_to_string(out.join("COMPARISON.md")).unwrap();
+    assert!(summary.contains("changed minus reference"));
+    assert!(summary.contains("No generated FX returns are configured"));
+    assert!(
+        summary.contains("Export gain requires complete, independently peak-finalized renders")
+    );
+    assert!(!out.join("selection.json").exists());
+}
+#[test]
+fn paired_comparison_rejects_unpaired_controls_and_invalid_splits_before_output() {
+    let f = fixture(false);
+    let out = f.root.join("invalid");
+    for change in 0..6 {
+        let mut changed = f.s.clone();
+        match change {
+            0 => changed.channels[0].fader_db += 1.,
+            1 => changed.channels[0].compressor.makeup_db += 1.,
+            2 => changed.channels[0].pan = 0.4,
+            3 => changed.channels[0].file = "other.wav".into(),
+            4 => changed.master_hpf_hz = 40.,
+            _ => changed.sample_rate = 44100,
+        }
+        assert!(compare_eq(f.s.clone(), changed, &f.root, &out, comparison_request(&f)).is_err());
+        assert!(!out.exists());
+    }
+    let mut request = comparison_request(&f);
+    request.group.inputs.truncate(1);
+    let mut changed = f.s.clone();
+    changed.channels[1].eq.push(band(2000., 1.));
+    assert!(compare_eq(f.s.clone(), changed, &f.root, &out, request).is_err());
+    let mut request = comparison_request(&f);
+    request.held_out = request.training.clone();
+    assert!(compare_eq(f.s.clone(), f.s.clone(), &f.root, &out, request).is_err());
+    assert!(!out.exists());
+}
+#[test]
+fn paired_comparison_missing_evidence_is_null_and_holdout_cannot_change_training() {
+    let f = fixture(false);
+    let changed = apply(&f.s, &f.r.group, &[band(2000., 2.)], 100.).unwrap();
+    let before = compare_eq(
+        f.s.clone(),
+        changed.clone(),
+        &f.root,
+        &f.root.join("before"),
+        comparison_request(&f),
+    )
+    .unwrap();
+    for i in 0..2 {
+        let path = f.root.join(format!("{i}.wav"));
+        let mut reader = hound::WavReader::open(&path).unwrap();
+        let spec = reader.spec();
+        let samples = reader
+            .samples::<i32>()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>();
+        drop(reader);
+        let mut writer = hound::WavWriter::create(&path, spec).unwrap();
+        for (n, s) in samples.iter().enumerate() {
+            writer
+                .write_sample(if n >= RATE as usize * 8 * 2 { 0 } else { *s })
+                .unwrap();
+        }
+        writer.finalize().unwrap();
+    }
+    let after = compare_eq(
+        f.s.clone(),
+        changed,
+        &f.root,
+        &f.root.join("after"),
+        comparison_request(&f),
+    )
+    .unwrap();
+    assert_eq!(value(&before.training), value(&after.training));
+    assert_eq!(
+        before.activity_threshold_dbfs,
+        after.activity_threshold_dbfs
+    );
+    let held = &after.passages[1];
+    assert_eq!(held.spectrum.eligible_windows, 0);
+    assert!(!held.spectrum.representative_phrase);
+    assert!(
+        held.spectrum
+            .bands
+            .iter()
+            .all(|b| b.shape_change_db.is_none())
+    );
+    assert_eq!(held.group_rms_change_db, None);
+    assert_eq!(held.spectrum.common_offset_db, None);
+    let summary = std::fs::read_to_string(f.root.join("after/COMPARISON.md")).unwrap();
+    assert!(
+        summary
+            .lines()
+            .any(|line| line.contains("held_out") && line.contains("unmeasured"))
+    );
+
+    let noise = fixture(true);
+    let report = compare_eq(
+        noise.s.clone(),
+        noise.s.clone(),
+        &noise.root,
+        &noise.root.join("noise"),
+        comparison_request(&noise),
+    )
+    .unwrap();
+    assert!(!report.training.representative_phrase);
+}
+
+#[test]
+fn saved_comparison_review_checks_scope_and_preserves_inputs_without_audio() {
+    let mut f = fixture(false);
+    f.r.group.name = "<Guitars> | [link](outside)".into();
+    let out = f.root.join("comparison");
+    let report = compare_eq(
+        f.s.clone(),
+        f.s.clone(),
+        &f.root,
+        &out,
+        comparison_request(&f),
+    )
+    .unwrap();
+    let saved = out.join("comparison.json");
+    let original = std::fs::read(&saved).unwrap();
+    std::fs::remove_file(f.root.join("0.wav")).unwrap();
+    std::fs::remove_file(f.root.join("1.wav")).unwrap();
+    let summary = f.root.join("saved-review.md");
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_gigpies"))
+        .arg("eq-match-compare-review")
+        .arg(&saved)
+        .arg(&summary)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(original, std::fs::read(&saved).unwrap());
+    let text = std::fs::read_to_string(&summary).unwrap();
+    assert!(text.contains("&lt;Guitars&gt; \\| \\[link\\]\\(outside\\)"));
+    assert!(text.contains("Recorded comparison SHA-256"));
+    assert!(text.contains("capture identity not inferred"));
+    assert!(review_comparison(&saved, &summary).is_err());
+    assert_eq!(text, std::fs::read_to_string(&summary).unwrap());
+
+    for case in 0..8 {
+        let mut bad = report.clone();
+        match case {
+            0 => bad.reference_id = "stale".into(),
+            1 => {
+                bad.changed.channels[0].fader_db += 1.;
+                bad.changed_id = identity(&bad.changed).unwrap();
+            }
+            2 => bad.request.held_out[0][1] -= 0.1,
+            3 => bad.training.bands[0].shape_change_db = Some(0.),
+            4 => bad.passages[0].return_change_db.push(Some(0.)),
+            5 => bad.passages[0].group_rms_change_db = None,
+            6 => bad.source_files[0].file = "different.wav".into(),
+            _ => bad.schema_version += 1,
+        }
+        let input = f.root.join(format!("bad-{case}.json"));
+        let output = f.root.join(format!("bad-{case}.md"));
+        automix::write_json(&input, &bad).unwrap();
+        assert!(review_comparison(&input, &output).is_err(), "case {case}");
+        assert!(!output.exists());
+    }
+}
 #[test]
 fn production_zero_reset_and_frozen_amounts_preserve_complete_baseline() {
     let mut f = fixture(false);
@@ -429,6 +704,27 @@ fn invalid_maps_identity_amount_capacity_and_routing_fail_explicitly() {
     let mut map = builtin_maps().remove(1);
     map.values_db.pop();
     assert!(map.validate().is_err());
+}
+
+#[test]
+fn new_plans_refuse_interleaved_history_before_reading_audio() {
+    let f = fixture(false);
+    let mut r = f.r.clone();
+    assert!(r.training_precedes_held_out());
+    r.training = vec![[0., 4.096], [8.192, 12.288]];
+    r.held_out = vec![[4.096, 8.192], [12.288, 16.]];
+    // The structural format remains readable by frozen-state reset/review.
+    r.validate(&f.s).unwrap();
+    assert!(!r.training_precedes_held_out());
+    let out = f.root.join("interleaved");
+    let error = plan(f.s.clone(), &f.root.join("unavailable-sources"), &out, r)
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("all EQ training must precede held-out"),
+        "{error}"
+    );
+    assert!(!out.exists());
 }
 #[test]
 fn pitch_changes_are_smoothed_and_filters_stay_broad_deterministic() {

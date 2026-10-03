@@ -24,7 +24,11 @@ pub struct PassageCheck {
     pub passed: bool,
     pub reasons: Vec<String>,
 }
-fn event_changes(a: &Measurement, b: &Measurement, span: [f64; 2]) -> (usize, [Option<f64>; 3]) {
+pub(super) fn event_changes(
+    a: &Measurement,
+    b: &Measurement,
+    span: [f64; 2],
+) -> (usize, [Option<f64>; 3]) {
     let mut result = [Vec::new(), Vec::new(), Vec::new()];
     let mut last = -1.;
     for i in 1..a.moments.len() {

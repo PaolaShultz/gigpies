@@ -18,6 +18,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
+mod audit;
+mod calibration;
+mod persistence;
+mod review;
+mod validation;
+pub use audit::{SavedAudit, audit_saved};
+pub use calibration::{
+    BusObservation, DecayCalibration, DecayRange, ReturnCalibration, ReturnLimit,
+};
+pub use persistence::{InputIdentity, Ready, verify};
+pub use review::Review;
+pub use validation::{Check, checks};
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Style {
@@ -82,6 +95,15 @@ pub struct Policy {
 }
 impl Policy {
     pub fn validate(&self, s: &Session) -> Result<()> {
+        self.validate_structure(s)?;
+        if !self.chronological() {
+            return Err("all ambience training must precede held-out passages: continuous DSP history would otherwise let held-out audio change calibration".into());
+        }
+        Ok(())
+    }
+
+    // Reading historical evidence must not pretend it used newer admission rules.
+    fn validate_structure(&self, s: &Session) -> Result<()> {
         validate_baseline(s)?;
         if s.effects.is_some()
             || s.master_db != 0.
@@ -147,6 +169,10 @@ impl Policy {
         }
         Ok(())
     }
+
+    fn chronological(&self) -> bool {
+        super::training_precedes_held_out(&self.training, &self.held_out)
+    }
 }
 
 fn empty_fx(rate: u32) -> FxConfig {
@@ -178,6 +204,7 @@ pub struct Frame {
     pub mixed_power: f64,
     pub dry_peak: f64,
     pub mixed_peak: f64,
+    pub master_reduction_db: f64,
 }
 fn inside(f: &Frame, spans: &[[f64; 2]]) -> bool {
     spans
@@ -255,14 +282,21 @@ pub fn measure(
         mixed_power: 0.,
         dry_peak: 0.,
         mixed_peak: 0.,
+        master_reduction_db: 0.,
     };
     let mut f = blank(0., 0.);
     for t in 0..end {
         groups.fill([0.; 2]);
         let mut dry = [0.; 2];
         for (i, src) in sources.iter_mut().enumerate() {
+            let y = strips[i].tick(src.next(t)?);
+            let y = if let Some(r) = &mut rack {
+                r.excite(i, y)
+            } else {
+                y
+            };
             let y = route(
-                strips[i].tick(src.next(t)?),
+                y,
                 src.channels,
                 s.channels[i].pan,
                 gain(s.channels[i].fader_db),
@@ -276,10 +310,17 @@ pub fn measure(
             }
         }
         let wet = rack.as_mut().map_or([0.; 2], Rack::returns);
+        let direct = std::array::from_fn::<_, 2, _>(|c| hp[0][c].tick(dry[c]));
+        let filtered_wet = std::array::from_fn::<_, 2, _>(|c| hp[1][c].tick(wet[c]));
+        let mut mixed = std::array::from_fn(|c| direct[c] + filtered_wet[c]);
+        if let Some(r) = &mut rack {
+            mixed = r.master(mixed);
+            f.master_reduction_db = f.master_reduction_db.max(r.reduction_db());
+        }
         for c in 0..2 {
-            let d = hp[0][c].tick(dry[c]);
-            let w = hp[1][c].tick(wet[c]);
-            let mix = d + w;
+            let d = direct[c];
+            let w = filtered_wet[c];
+            let mix = mixed[c];
             if !mix.is_finite() {
                 return Err("nonfinite FX output".into());
             }
@@ -301,7 +342,7 @@ pub fn measure(
                 }
             }
         }
-        if (t + 1) % size == 0 || t + 1 == end {
+        if (t + 1) % size == 0 {
             f.end = (t + 1) as f64 / s.sample_rate as f64;
             let count = ((f.end - f.start) * s.sample_rate as f64).round() * 2.;
             f.dry_power /= count;
@@ -323,7 +364,7 @@ pub fn measure(
     }
     Ok(frames)
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Activity {
     pub p95_dbfs: f64,
     pub active_fraction: f64,
@@ -371,7 +412,7 @@ fn activity(frames: &[Frame], g: usize) -> Activity {
         active_seconds: active,
     }
 }
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Decision {
     pub group: String,
     pub family: Family,
@@ -382,6 +423,8 @@ pub struct Decision {
     pub bus_names: Vec<String>,
     pub desired_decay_seconds: Option<f64>,
     pub measured_decay_seconds: Option<f64>,
+    #[serde(default)]
+    pub decay_calibration: Option<DecayCalibration>,
 }
 fn reverb_recipe(style: Style, family: Family) -> Option<(ReverbKind, f64, f64, f64, f64)> {
     use Family::*;
@@ -535,13 +578,11 @@ fn fit_decay(
     rate: u32,
     highpass: f64,
     lowpass: f64,
-) -> (f32, f64) {
+) -> DecayCalibration {
     let mut lo = 0.;
     let mut hi = 0.9;
-    let mut best = (
-        0.,
-        measured_decay(kind, 0., predelay, rate, highpass, lowpass),
-    );
+    let minimum = measured_decay(kind, 0., predelay, rate, highpass, lowpass);
+    let mut best = (0., minimum);
     for _ in 0..6 {
         let mid = (lo + hi) * 0.5;
         let actual = measured_decay(kind, mid, predelay, rate, highpass, lowpass);
@@ -554,7 +595,27 @@ fn fit_decay(
             hi = mid;
         }
     }
-    best
+    // Measure the upper endpoint for reporting only. Keep the established six-step
+    // selection, including its original tie handling, unchanged.
+    let maximum = measured_decay(kind, 0.9, predelay, rate, highpass, lowpass);
+    DecayCalibration {
+        desired_seconds: wanted,
+        measured_seconds: best.1,
+        residual_seconds: best.1 - wanted,
+        selected_control: best.0,
+        control_range: [0., 0.9],
+        minimum_control_seconds: minimum,
+        maximum_control_seconds: maximum,
+        target_range: if wanted < minimum {
+            DecayRange::BelowMeasuredMinimum
+        } else if wanted > maximum {
+            DecayRange::AboveMeasuredMaximum
+        } else {
+            DecayRange::WithinMeasuredRange
+        },
+        search_steps: 6,
+        impulse_capture_seconds: 6.,
+    }
 }
 
 pub fn propose(
@@ -568,7 +629,7 @@ pub fn propose(
     let mut decisions = Vec::new();
     for (g, group) in p.groups.iter().enumerate() {
         let a = activity(observations, g);
-        let mut d=Decision{group:group.name.clone(),family:group.family,activity:a.clone(),reason:String::new(),expected_benefit:"Requested spatial finish while retaining the accepted direct sound".into(),musical_risk:"Added tails can mask articulation, change coherent stereo and consume export headroom; listening remains required".into(),bus_names:vec![],desired_decay_seconds:None,measured_decay_seconds:None};
+        let mut d=Decision{group:group.name.clone(),family:group.family,activity:a.clone(),reason:String::new(),expected_benefit:"Requested spatial finish while retaining the accepted direct sound".into(),musical_risk:"Added tails can mask articulation, change coherent stereo and consume export headroom; listening remains required".into(),bus_names:vec![],desired_decay_seconds:None,measured_decay_seconds:None,decay_calibration:None};
         if p.amount == 0.
             || a.active_seconds < 0.5
             || reverb_recipe(p.style, group.family).is_none()
@@ -594,11 +655,13 @@ pub fn propose(
         } else {
             180.
         };
-        let (decay, actual) = fit_decay(kind, duration, predelay as f32, s.sample_rate, hp, lp);
+        let fitted = fit_decay(kind, duration, predelay as f32, s.sample_rate, hp, lp);
+        let decay = fitted.selected_control;
         let name = format!("{}_space", group.name);
         d.bus_names.push(name.clone());
         d.desired_decay_seconds = Some(duration);
-        d.measured_decay_seconds = Some(actual);
+        d.measured_decay_seconds = Some(fitted.measured_seconds);
+        d.decay_calibration = Some(fitted);
         d.reason = format!(
             "Explicit {:?}/{:?} spatial profile; busy training phrase={busy}; reported existing space={}; engine decay calibrated by impulse, no source-quality diagnosis",
             p.style, group.family, group.existing_space_reported
@@ -685,92 +748,44 @@ pub fn propose(
     Ok((fx, owners, decisions))
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct Check {
-    pub span: [f64; 2],
-    pub dry_rms_dbfs: f64,
-    pub wet_to_dry_db: Option<f64>,
-    pub mixed_rms_change_db: f64,
-    pub crest_loss_db: f64,
-    pub peak_change_db: f64,
-    pub passed: bool,
-}
-pub fn checks(frames: &[Frame], spans: &[[f64; 2]]) -> Vec<Check> {
-    spans
-        .iter()
-        .map(|&span| {
-            let chosen = frames
-                .iter()
-                .filter(|f| inside(f, &[span]))
-                .collect::<Vec<_>>();
-            let n = chosen.len().max(1) as f64;
-            let d = chosen.iter().map(|f| f.dry_power).sum::<f64>() / n;
-            let w = chosen.iter().map(|f| f.wet_power).sum::<f64>() / n;
-            let m = chosen.iter().map(|f| f.mixed_power).sum::<f64>() / n;
-            let dp = chosen.iter().map(|f| f.dry_peak).fold(0., f64::max);
-            let mp = chosen.iter().map(|f| f.mixed_peak).fold(0., f64::max);
-            let rms = db(m.sqrt()) - db(d.sqrt());
-            let peak = db(mp) - db(dp);
-            let crest = rms - peak;
-            let ratio = if d > 1e-13 && w > 0. {
-                Some(db((w / d).sqrt()))
-            } else {
-                None
-            };
-            let passed = !chosen.is_empty()
-                && rms <= 2.
-                && crest <= 3.
-                && peak <= 2.
-                && ratio.is_none_or(|v| v <= -12.);
-            Check {
-                span,
-                dry_rms_dbfs: db(d.sqrt()),
-                wet_to_dry_db: ratio,
-                mixed_rms_change_db: rms,
-                crest_loss_db: crest,
-                peak_change_db: peak,
-                passed,
-            }
-        })
-        .collect()
-}
-
-pub fn run(s: Session, root: &Path, out: &Path, p: Policy) -> Result<()> {
+pub fn run(s: Session, root: &Path, out: &Path, p: Policy) -> Result<Review> {
     p.validate(&s)?;
     if out.exists() {
         return Err("output exists".into());
     }
+    let inputs = InputIdentity::capture(&s, &p, root)?;
     std::fs::create_dir(out)?;
+    let result = prepare(&s, root, out, &p, &inputs);
+    if let Err(error) = &result {
+        // Preserve partial evidence and the original error even when an I/O
+        // failure also prevents writing this recovery note.
+        let _ = write_json(
+            &out.join("failure.json"),
+            &serde_json::json!({
+                "ready": false, "reason": error.to_string(), "baseline_retained": true,
+                "recovery": "Keep these inputs and reports. Retry with a new output directory; no partial preparation is ready without ready.json."
+            }),
+        );
+    }
+    result
+}
+
+fn prepare(
+    s: &Session,
+    root: &Path,
+    out: &Path,
+    p: &Policy,
+    inputs: &InputIdentity,
+) -> Result<Review> {
     write_json(&out.join("before-settings.json"), &s)?;
     write_json(&out.join("policy.json"), &p)?;
-    let observed = measure(&s, root, &p, None, &p.training)?;
-    let (mut fx, owners, decisions) = propose(&s, &p, &observed)?;
+    write_json(&out.join("input-identity.json"), inputs)?;
+    let observed = measure(s, root, p, None, &p.training)?;
+    let (mut fx, owners, decisions) = propose(s, p, &observed)?;
     write_json(&out.join("decisions.json"), &decisions)?;
     write_json(&out.join("seed-fx.json"), &fx)?;
-    let seed = measure(&s, root, &p, Some(&fx), &p.training)?;
-    let mut calibration = Vec::new();
-    for (i, b) in fx.buses.iter_mut().enumerate() {
-        let g = owners[i];
-        let gate = (decisions[g].activity.p95_dbfs - 24.).max(-65.);
-        let active = seed
-            .iter()
-            .filter(|f| db(f.group_power[g].sqrt()) >= gate)
-            .collect::<Vec<_>>();
-        let dry = active.iter().map(|f| f.group_power[g]).sum::<f64>();
-        let wet = active.iter().map(|f| f.return_power[i]).sum::<f64>();
-        if dry <= 1e-12 || wet <= 1e-18 {
-            return Err(
-                "selected FX bus has insufficient measured response; preserve baseline".into(),
-            );
-        }
-        let measured = db((wet / dry).sqrt());
-        let ideal = b.target_wet_db - measured;
-        b.return_db = ideal.clamp(-18., 18.) + db(p.amount);
-        if b.return_db < -60. {
-            b.return_db = -60.;
-        }
-        calibration.push(serde_json::json!({"bus":b.name,"measured_seed_wet_source_db":measured,"artistic_profile_target_db":b.target_wet_db,"requested_return_db":ideal,"bounded_return_db":b.return_db,"amount":p.amount,"note":"Calibrates this requested effect; never changes source gain, makeup or artistic fader. Target is a listening hypothesis."}));
-    }
+    let seed = measure(s, root, p, Some(&fx), &p.training)?;
+    let calibration = calibration::calibrate(&mut fx, &owners, &decisions, p, &seed)?;
     // One training-only adjustment of return levels; no held-out feedback.
     let mut candidate = s.clone();
     if !fx.buses.is_empty() {
@@ -779,38 +794,72 @@ pub fn run(s: Session, root: &Path, out: &Path, p: Policy) -> Result<()> {
     candidate.validate()?;
     write_json(&out.join("calibration.json"), &calibration)?;
     write_json(&out.join("candidate-settings.json"), &candidate)?;
-    let training = measure(&s, root, &p, candidate.effects.as_ref(), &p.training)?;
+    let training = measure(s, root, p, candidate.effects.as_ref(), &p.training)?;
     let train_checks = checks(&training, &p.training);
-    write_json(&out.join("training-checks.json"), &train_checks)?;
-    if train_checks.iter().any(|x| !x.passed) {
-        write_json(
-            &out.join("selection.json"),
-            &serde_json::json!({"selected":"baseline","reason":"training protection failure","listener_accepted":null}),
-        )?;
+    let mut review = Review::new(decisions, calibration, train_checks);
+    review.bus_observations.extend(calibration::observe(
+        &training,
+        &owners,
+        &review.calibration,
+        &p.training,
+        "training_pooled",
+    )?);
+    for span in &p.training {
+        review.bus_observations.extend(calibration::observe(
+            &training,
+            &owners,
+            &review.calibration,
+            &[*span],
+            "training",
+        )?);
+    }
+    write_json(&out.join("training-checks.json"), &review.training_checks)?;
+    if review.training_checks.iter().any(|x| !x.passed) {
+        review.reason = "Training protection failure; baseline retained".into();
+        review.write(out)?;
         return Err(
             "FX training protection failed; baseline retained and no ready mix published".into(),
         );
     }
     write_json(
         &out.join("frozen-before-held-out.json"),
-        &serde_json::json!({"settings":"candidate-settings.json","training_passed":true,"held_out_retries":0,"musical_acceptance":null}),
+        &serde_json::json!({"settings":"candidate-settings.json","settings_id":super::identity::identity(&candidate)?,"input_identity_id":super::identity::identity(inputs)?,"training_passed":true,"held_out_retries":0,"musical_acceptance":null}),
     )?;
-    let held = measure(&s, root, &p, candidate.effects.as_ref(), &p.held_out)?;
+    let held = measure(s, root, p, candidate.effects.as_ref(), &p.held_out)?;
     let held_checks = checks(&held, &p.held_out);
     write_json(&out.join("held-out-checks.json"), &held_checks)?;
-    if held_checks.iter().any(|x| !x.passed) {
-        write_json(
-            &out.join("selection.json"),
-            &serde_json::json!({"selected":"baseline","reason":"held-out protection failure; no retry","listener_accepted":null}),
-        )?;
+    review.held_out_checks = held_checks;
+    for span in &p.held_out {
+        review.bus_observations.extend(calibration::observe(
+            &held,
+            &owners,
+            &review.calibration,
+            &[*span],
+            "held_out",
+        )?);
+    }
+    if review.held_out_checks.iter().any(|x| !x.passed) {
+        review.reason = "Held-out protection failure; baseline retained, no retry".into();
+        review.write(out)?;
         return Err(
             "FX held-out protection failed; baseline retained and no ready mix published".into(),
         );
     }
-    write_json(&out.join("settings.json"), &candidate)?;
-    write_json(
-        &out.join("selection.json"),
-        &serde_json::json!({"selected":if candidate.effects.is_some(){"expert_fx_preview"}else{"baseline"},"reason":"Explicit artistic request; bounded rule selection and production-DSP checks passed","listener_accepted":null,"protection_limits":{"wet_ensemble_max_db":-12.,"rms_rise_max_db":2.,"peak_rise_max_db":2.,"crest_loss_max_db":3.},"limits":"No source reverb detector, acoustic safety claim or automatic musical-quality verdict. Full export/tail verification remains required."}),
-    )?;
-    Ok(())
+    inputs.verify_sources(s, root)?;
+    review.technically_eligible = true;
+    review.selected = if candidate.effects.is_some() {
+        "expert_fx_preview"
+    } else {
+        "baseline"
+    }
+    .into();
+    review.reason = if candidate.effects.is_some() {
+        "Ensemble protection checks passed. Individual artistic target results remain separate."
+    } else {
+        "No added FX; the complete baseline is preserved."
+    }
+    .into();
+    review.write(out)?;
+    persistence::finish(out, &candidate, inputs)?;
+    Ok(review)
 }

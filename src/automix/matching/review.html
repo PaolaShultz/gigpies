@@ -2,6 +2,7 @@
 <title>GigPies tone review</title><style>
 body{font:18px system-ui;max-width:960px;margin:2rem auto;padding:0 1rem;color:#172330;background:#f5f7fa}h1{font-size:2rem}label{display:block;margin-top:1rem}select,input,button{font:inherit;min-height:44px;margin:.3rem .5rem .3rem 0}input[type=range]{width:min(100%,500px)}button{padding:.4rem 1rem}svg{width:100%;height:auto;background:white;border:1px solid #61778c}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:.35rem;border-bottom:1px solid #c5ccd4}#status{font-weight:600}pre{white-space:pre-wrap;overflow-wrap:anywhere}details{margin:1rem 0}a{color:#104c8c}:focus-visible{outline:3px solid #955c00;outline-offset:3px}</style>
 <main><h1>Choose your instrument’s tone</h1><p id="scope"></p><p>A direction expresses your taste. Keeping your current sound is a complete choice. Listening acceptance is pending.</p>
+<p id="split-history" hidden></p>
 <label for="profile">Tone map</label><select id="profile"></select>
 <p id="basis"></p><p id="status" role="status" aria-live="polite"></p>
 <label for="amount">Amount <output id="value" for="amount">0%</output></label><input id="amount" type="range" min="0" max="100" step="1" value="0"><label for="number">Amount as a number, percent</label><input id="number" type="number" min="0" max="100" step="1" value="0">
@@ -20,6 +21,7 @@ gigpies render NEW_OUTPUT/settings.json SOURCE_DIRECTORY NEW_RENDER</pre>
 s.choices.forEach((c,i)=>{const o=document.createElement('option');o.value=i;o.textContent=c.map.label+' (v'+c.map.version+')';$('profile').append(o)});
 $('profile').value=Math.max(0,s.choices.findIndex(c=>c.map.id===s.selected_map));$('amount').value=Math.round(s.amount_percent);
 $('scope').textContent=s.request.group.name+' · '+s.request.group.inputs.map(x=>x.file).join(', ');
+if(d.split_history){$('split-history').textContent=d.split_history;$('split-history').hidden=false;}
 function draw(){const i=Number($('profile').value),c=s.choices[i],a=Number($('amount').value);$('number').value=a;$('value').textContent=a+'%';$('basis').textContent=c.map.basis;$('status').textContent=(c.eligible?'Available for review. ':'Withheld: use 0% to keep the baseline. ')+c.proposal.reason;$('download').disabled=!c.eligible&&a>0;$('bands').replaceChildren();c.proposal.bands.forEach(b=>{const tr=document.createElement('tr');[b.hz,b.q,(b.db*a/100).toFixed(2)].forEach(v=>{const td=document.createElement('td');td.textContent=v;tr.append(td)});$('bands').append(tr)});if(!c.proposal.bands.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=3;td.textContent='No added EQ';tr.append(td);$('bands').append(tr)}
 $('evidence').textContent=JSON.stringify({baseline_id:s.baseline_id,map:c.map,checks:c.checks,baseline_curves:d.baseline,last_attempt:s.last_attempt},null,2);$('plot').replaceChildren();
 const node=(tag,attrs,text)=>{const n=document.createElementNS(ns,tag);Object.entries(attrs).forEach(([k,v])=>n.setAttribute(k,v));if(text)n.textContent=text;$('plot').append(n);return n};

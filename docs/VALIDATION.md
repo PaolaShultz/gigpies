@@ -1,5 +1,36 @@
 # Foundation validation — 2026-10-01
 
+## 0.2.2 publication checks — 2026-10-03
+
+Rust 1.97.1, committed lockfile and `CARGO_INCREMENTAL=0`:
+
+- Formatting, locked check, all-target Clippy with warnings denied and optimized
+  build passed. The executable reports `gigpies 0.2.2`; package versions agree.
+- Complete normal Rust suite: **145 passed**, three historical private-media tests
+  intentionally ignored. Complete normal Python suite: **34 passed**.
+- The complete staged tree passes the publication guard with versioned hooks enabled.
+  Reviewed source, tests and documentation are staged explicitly. No private settings,
+  recordings, generated audio or one-off runner is published.
+- Cargo source-package listing contains no private/media paths. Staged bytes match
+  the reviewed working files; local documentation links and whitespace checks pass.
+
+The release includes the existing paired EQ diagnostic and the new FX calibration,
+master/coverage, recovery and saved-report work. It does not implement the separately
+planned summing/true-peak engine changes or claim a listener preference.
+
+The user explicitly retired all old generated renders before the next engine study:
+234 regular render paths and 52 links, recovering about 4.19 GiB. Original media,
+frozen settings, hashes and scalar evidence remain. Checks preserved 428 original/
+library/test-input metadata records and 2,473 nonaudio evidence files. The private
+retirement manifest is under `artifacts/automix/render-retirement-2026-10-03/`.
+
+No new real-audio evaluation, full-song render, playback, exhaustive historical
+study or hardware test was run for this publication. Synthetic tests use temporary
+media and clean it up. Filesystem counters remained zero; the prior crash cause
+is unresolved and a forced offline full scan has not been established.
+Publication logs are under `artifacts/publication-0.2.2/`. Remote CI is separate
+from these local results and must be checked for the pushed revision.
+
 ## 0.2.1 publication checks — 2026-10-03
 
 Rust 1.97.1, committed lockfile and `CARGO_INCREMENTAL=0`:
