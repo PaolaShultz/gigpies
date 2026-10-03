@@ -5,13 +5,32 @@ use crate::transport::{
 pub const PACKET_FRAMES: usize = 48;
 pub const MAX_BLOCK: usize = 384;
 pub const RETURN_DELAY: u32 = 384;
+pub mod transfer;
 
 /// Explicit bounded device buffering, independent of the wet-return deadline.
 pub fn device_buffer_frames(period: usize, periods: u32) -> Result<usize, Error> {
-    if ![48, 96, 192, 384].contains(&period) || ![4, 8].contains(&periods) {
+    if ![48, 96, 192, 384].contains(&period) || ![2, 3, 4, 8].contains(&periods) {
         return Err(Error::Format);
     }
     Ok(period * periods as usize)
+}
+
+/// Playback occupancy is explicit and independent of ring capacity.
+pub fn device_prefill_frames(period: usize, periods: u32, prefill: u32) -> Result<usize, Error> {
+    device_buffer_frames(period, periods)?;
+    if prefill >= periods {
+        return Err(Error::Format);
+    }
+    Ok(period * prefill as usize)
+}
+
+pub fn valid_return_delay(delay: u32) -> bool {
+    (48..=768).contains(&delay) && delay.is_multiple_of(48)
+}
+
+/// Sends from the current capture block cannot return before that block renders.
+pub fn return_delay_fits_period(period: usize, delay: u32) -> bool {
+    valid_return_delay(delay) && delay as usize >= period
 }
 
 pub fn spec(epoch: u64, role: Role) -> StreamSpec {
@@ -63,7 +82,7 @@ impl WetRender {
         Self::with_delay(epoch, RETURN_DELAY)
     }
     pub fn with_delay(epoch: u64, delay: u32) -> Result<Self, Error> {
-        if ![384, 768].contains(&delay) {
+        if !valid_return_delay(delay) {
             return Err(Error::Format);
         }
         Ok(Self {
@@ -145,6 +164,37 @@ pub fn stimulus(frame: u64, channel: usize) -> f64 {
         / 8388608.0
 }
 
+#[derive(Clone, Copy, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Probe {
+    StereoTones,
+    LeftCoded,
+    LeftContinuous,
+}
+
+/// Quiet deterministic probes for correlating physical input with recorded output.
+/// Only channel 1 emits; continuous mode becomes active after one quiet second.
+pub fn probe_sample(probe: Probe, frame: u64, channel: usize) -> f64 {
+    match probe {
+        Probe::StereoTones => stimulus(frame, channel),
+        Probe::LeftCoded | Probe::LeftContinuous => {
+            let quiet = match probe {
+                Probe::LeftCoded => frame % 96_000 < 48_000,
+                _ => frame < 48_000,
+            };
+            if channel != 0 || quiet {
+                return 0.0;
+            }
+            let mut bits = frame.wrapping_add(0x9e3779b97f4a7c15);
+            bits = (bits ^ (bits >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
+            bits = (bits ^ (bits >> 27)).wrapping_mul(0x94d049bb133111eb);
+            bits ^= bits >> 31;
+            let unit = (bits >> 11) as f64 / (1u64 << 53) as f64 * 2.0 - 1.0;
+            (unit * 0.0019952623149688795 * 8388608.0).round() / 8388608.0
+        }
+    }
+}
+
 #[derive(Clone, serde::Serialize)]
 pub struct Histogram {
     bins: Vec<u64>,
@@ -196,7 +246,13 @@ pub mod adapters;
 #[cfg(feature = "hardware-host")]
 pub mod device;
 #[cfg(feature = "hardware-host")]
+mod memory;
+#[cfg(feature = "hardware-host")]
 pub mod network;
+#[cfg(feature = "hardware-host")]
+mod scheduling;
+#[cfg(feature = "hardware-host")]
+mod usage;
 
 /// Restrict this first host to one unambiguous native format in both directions.
 /// Descriptor bits declare nominal payload width, not measured converter resolution.

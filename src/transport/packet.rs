@@ -50,7 +50,7 @@ impl StreamSpec {
             || !matches!(self.frames, 48 | 96)
             || u32::from(self.first_channel) + u32::from(self.channels) > 256
             || (self.role != Role::WetReturn && self.delay_frames != 0)
-            || (self.role == Role::WetReturn && !(192..=1536).contains(&self.delay_frames))
+            || (self.role == Role::WetReturn && !(48..=1536).contains(&self.delay_frames))
         {
             return Err(Error::Format);
         }

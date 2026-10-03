@@ -172,8 +172,8 @@ pub struct BrainConfig<'a> {
     pub library: &'a Path,
 }
 pub fn brain(c: BrainConfig<'_>) -> Result<serde_json::Value> {
-    if ![384, 768].contains(&c.return_delay_frames) {
-        return Err("return delay must be 384 or 768 frames".into());
+    if !super::valid_return_delay(c.return_delay_frames) {
+        return Err("return delay must be 48..768 frames in whole 48-frame packets".into());
     }
     let audio = socket(c.bind, c.peer)?;
     let control = socket(c.control_bind, c.control_peer)?;

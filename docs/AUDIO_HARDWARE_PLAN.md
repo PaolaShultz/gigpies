@@ -198,3 +198,105 @@ offset. The integrated generated-only 12 s take passed all 576000 frames and
 file/replay checks. Right return was 68.77 dB weaker; the user suspects the cable
 and directed use of the working channel. Physical acceptance is limited to
 channel 1, with isolated converter latency and clock lock still unmeasured.
+
+## H4: smallest-buffer acceptance after user correction
+
+The user requires a live engine optimized for the lowest practical buffers and
+explicitly rejects solving underruns by filling a large device buffer. Preserve
+all earlier evidence; its digital correctness does not satisfy live latency.
+H4 reserves the same USB device and peer endpoints through 20:15 UTC, with
+physical verification restricted to working channel 1. Start at 48-frame periods,
+96-frame capacity and 48-frame silence prefill. Increase a budget only after a
+measured failure; test device capacity, prefill and wet admission separately.
+Short trials are at most 30 s, followed by a 600 s accepted-candidate soak.
+Target measured local dry buffered loopback at most 10 ms, seeking 5 ms or less.
+
+The pacing repair waits for a complete capture block before consuming partial
+availability and retains typed ALSA I/O handles after setup. A deterministic
+regression reproduces the previous missed-period mechanism. Playback starts only
+after the first captured/processed block is queued behind the explicit silence;
+initial playback occupancy is prefill plus one period. Ring capacity therefore
+is not the same as queued latency. The direct path has no additional application
+playout queue; recorder/network queues remain independent consumers.
+
+The host now permits whole-packet wet budgets of 1–16 ms, at least one capture
+period. Both endpoints use the new binary: the unreleased GPA1 validator's lower
+bound changes from 192 to 48 frames; older endpoints reject the smaller values.
+The 20 ms first echo in the chosen test effect is intentional and remains separate.
+A quiet deterministic coded probe emits on channel 1 only and refuses capture
+monitoring. Correlate its real stored ADC and DAC/source stems through the actual
+PA/FX/REC host, without treating a standalone probe as the integrated latency.
+
+Run full normal checks and source review before new hardware. Begin with ordinary
+scheduling; only if measured need justifies it may the owned audio thread use
+FIFO priority 20 under H4, with recorded permission/settings and restoration by
+thread exit. No system-wide scheduling or service changes. On the first xrun or
+conflict stop the trial, retain the incomplete take and diagnose before retrying.
+
+The first H4 trial at 48/96 frames with one silent period failed after 528 frames:
+capture EPIPE, render max 0.105 ms, write wait max 1.404 ms. Retained samples and
+journal/replay remain exact but incomplete. Capture-first startup already queues
+a processed block, so the silent block filled the two-period ring. The separately
+acknowledged H4 amendment permits zero silent prefill; the next candidate starts
+with one actual processed block queued, retaining the same two-period capacity.
+V9 also removes per-second JSON allocation from the audio thread and distinguishes
+configured startup queue size from successfully queued frames in failed reports.
+
+At zero silent prefill, the two-period ring still failed after 816 frames. Its
+write wait reached 1.401 ms despite 0.105 ms maximum render time. A three-period
+ring first passed 8 s with exact recorded output and no wet loss. Channel-1
+physical correlation gave 5.19–5.35 ms in two trusted one-second windows; another
+window had weak correlation, so this is not a stable-delay or clock-lock claim.
+The following 30 s attempt stopped after 108672 frames with a capture xrun;
+render reached 2.333 ms versus 0.113 ms p99, while write wait stayed below 0.034 ms.
+All retained ADC/stem/dry hashes and journal frames still match; take incomplete.
+
+V10 therefore adds an explicit optional `audio_fifo_priority: 20`. It applies
+only to the calling audio thread after recorder/network workers exist, before
+PCM starts, and restores the saved policy after PCM stops and before worker
+joins. Other values fail validation; missing/null leaves scheduling alone. A
+failed activation or restoration is a run fault, not a silent fallback. H4
+already permits this scoped comparison after an observed ordinary-scheduler
+failure. Keep the three-period ring and zero prefill for the first comparison.
+
+FIFO20 at48/144/zero prefill passed30 s without xruns, but1 ms wet admission
+missed2 returns. The2 ms comparison missed4; its physical lag stepped from
+257 to364–365 frames around18–19 s, with the playback-delay snapshot rising
+from166 to287 frames. This is a physical timing failure despite clean ALSA
+xrun counters and exact software stems. The burst probe was silent during part
+of that interval, so it cannot prove continuity through the transition. The
+4 ms comparison then hit a playback xrun after317904 fully written frames.
+One-period prefill passed8 s but overran after1351152 frames in its30 s follow-up.
+No low-latency reliability gate has passed yet.
+
+H5 proposes the same minimum-buffer trials through21:00 UTC, with a continuous
+quiet channel-1 reference after startup and bounded preallocated event timing.
+Record read/render/write wall and thread-CPU time, both PCM queue observations
+and failed transfer stages. This distinguishes expensive DSP from time spent
+waiting or descheduled without claiming converter timestamps. Compare explicit
+CPU affinity for the audio thread only (CPU3 from its existing allowed mask),
+saving/restoring the previous mask and scheduling policy. Existing USB IRQ
+counters are concentrated on CPU0; affinity does not isolate a CPU or relocate
+interrupts. No global or persistent tuning is authorized or needed. Fresh peer
+acknowledgment, source review and full normal checks precede new hardware.
+
+H5 was mutually accepted through 21:00 UTC. Candidate v12 passed source review,
+200 normal Rust tests, formatting, Clippy and release build. At 48/144/zero prefill,
+30 s runs with and without CPU3 affinity passed; the CPU3 fault trial then overran
+capture with a 3.558 ms read wait. Two-period CPU3 failed through blocked playback
+writes and growing capture backlog. Four-period capacity, still 48-frame blocks
+and zero prefill, passed packet/Brain-stall, Brain restart, deliberate device-fault
+finalization and fresh 30 s recovery. Physical offset stayed at249 frames/5.1875 ms.
+Its following600 s attempt failed at36.914 s: render wall3.597 ms versus thread
+CPU0.191 ms, followed by playback xrun. All1771920 recorded frames verified;
+1771872 were completely written. H5 establishes short low latency, not reliability.
+
+H6 replaces the released H5 audio reservation, mutually acknowledged through
+22:00 UTC. Retain the same USB identity, ports, channel-1 reference, gain controls,
+level guard, minimum-buffer comparisons and fault bounds. Add render-only
+RUSAGE_THREAD fault/context-switch deltas and an optional owned-process memory
+lock with verified initial/final state. Do not assume the cause of off-CPU time.
+Optional process-filtered perf diagnostics are bounded to60 s and labelled for
+their overhead. No global tracing, permissions, IRQ, governor, scheduler, memory,
+TV/Bluetooth or service changes. Review implementation and run full normal tests
+before fresh short trials; any600 s retry must fit its full bound before expiry.

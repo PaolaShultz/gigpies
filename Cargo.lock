@@ -90,6 +90,7 @@ version = "0.2.2"
 dependencies = [
  "alsa",
  "hound",
+ "libc",
  "libloading",
  "rtrb",
  "serde",

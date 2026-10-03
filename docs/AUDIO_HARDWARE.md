@@ -1,10 +1,12 @@
 # USB host integration and measurements
 
-**Live latency acceptance is unmet.** The user rejected the 64 ms buffer / 56 ms
-prefill configuration as unsuitable for live use. Its clean soak is retained as
-a correctness benchmark. The next work fixes partial-read pacing and tests the
-smallest practical period, capacity and prefill; it must pass the same continuity
-and recovery checks before live-latency acceptance.
+**Small-buffer validation is in progress.** The user rejected the earlier 64 ms
+capacity / 56 ms prefill configuration for live use. Its soak below is historical
+correctness evidence. The repaired host now supports 48-frame / 1 ms periods,
+independent ring capacity and zero silent prefill. H5 measured 5.1875 ms channel-1
+loopback through short fault/recovery trials, but the longer attempt stopped
+after36.914 s; reliability remains unaccepted. H6 adds fault/switch diagnostics
+and optional process-local memory locking at the same small audio settings.
 
 Unreleased, bounded bench integration of the independently built SHR modules.
 The [execution plan](AUDIO_HARDWARE_PLAN.md) continues the preceding
@@ -17,8 +19,8 @@ separate planned integrations.
 Pi 5 owns a PreSonus AudioBox USB 96 (USB 194f:0303, ALSA ID A96); Pi 4 runs
 source-following SHR FX over the reserved Ethernet link. The interface has
 two capture and two playback channels. Kernel descriptors list FL/FR,
-S32_LE with **24 descriptor-declared bits**, and 44.1/48/88.2/96 kHz. The final
-configuration opens both directions at **48 kHz, two channels, 384-frame periods
+S32_LE with **24 descriptor-declared bits**, and 44.1/48/88.2/96 kHz. The earlier v7
+configuration opened both directions at **48 kHz, two channels, 384-frame periods
 (8 ms) and 3072-frame buffers (64 ms)**. Earlier 16/32 ms buffers had retained
 playback underruns. A separate negotiated ALSA query returned **32 significant bits**,
 despite the USB descriptor's 24-bit declaration. A retained native S32 capture
@@ -79,18 +81,18 @@ take. The bounded quiet shutdown transfers are outside that recorded interval.
 
 ## Timeline, startup and recovery
 
-Actual USB capture transfers pace source frames. The host splits each capture
-block into 48-frame GPA1 float32 FX packets: four at period 192, eight at period 384. Brain has no audio
-device and follows these IDs. The original **8 ms transport admission target**
-failed once in the first 600 s run. The revised candidate explicitly assigns wet
-output to source frame +768 (**16 ms**); the intentional 20 ms echo is additional.
-Capture batching, host service and DAC queue delay are measured separately.
-Their sum is not presented as a measured physical round-trip latency.
+Actual USB capture transfers pace source frames. The current low-latency host
+uses 48-frame blocks and one GPA1 float32 FX packet per block. Brain has no audio
+device and follows these IDs. The H5 trials use source frame +192 (**4 ms**) for
+wet return admission. This does not delay the local dry path. The test effect's
+intentional **20 ms** first echo is additional. Historical 8/16 ms admission
+trials below used different host pacing and must retain their own results.
 
 Before starting the PCM streams, the host prepares libraries, files and queues,
 then requires a fresh control snapshot followed by an acknowledged command.
-Playback primes the configured buffer minus one period of silence: three
-periods for the initial buffer, seven for the revised eight-period buffer. The audio-owned jitter buffer admits
+Capture starts first. With `prefill_periods: 0`, playback starts as soon as the
+first processed block is submitted; no silent blocks are queued ahead of it.
+ALSA ring capacity is a separate setting. The audio-owned jitter buffer admits
 queued returns before rendering their output block; earlier frames are refused.
 Arrival never advances its cursor. Each wet channel independently fades the last
 valid sample to zero over 240 frames (5 ms); fresh data ramps back in. Brain
@@ -101,7 +103,9 @@ The network worker and recorder worker have independent bounded queues. A full
 network queue cannot block dry processing or recording. The render section,
 including fault returns, performs bounded arithmetic and queue/module calls
 without allocation, deallocation, locks or I/O. ALSA reads/writes, waits, status
-queries, audit hashing and diagnostic construction are outside that section.
+queries and audit hashing are outside that section. Fixed-capacity timing and
+status records are filled without allocation during streaming and serialized
+after PCM stops.
 This is a direct ALSA driver loop, not a claim about a JACK callback or hard
 real-time scheduling guarantees. Full host service time and capture intervals
 are reported separately from render time.
@@ -291,7 +295,7 @@ began about 14 s after process start. These values describe this stereo delay
 configuration, not a full rack, maximum channel count or full-show guarantee.
 
 
-## Subsequent physical loopback
+## Historical large-buffer physical loopback
 
 After the final soak, the user reported cables from both main outputs to the
 corresponding inputs, input gain at minimum, Mixer fully Playback and Main at
@@ -334,6 +338,137 @@ precede the start calls; neither is a hardware timestamp. The second probe fixes
 the elapsed measurement and labels call-before timestamps explicitly. Timing
 claims above use sample correlation, not those first-run wall-clock fields.
 
+## H4: repaired pacing and minimum-buffer trials
+
+The old alternating short/~16 ms capture service intervals came from eager partial
+reads followed by a full-period `avail_min` wait. The repaired transfer loop waits
+for the complete remaining block before consuming it, preserves offsets on short
+transfers, and stops on a device error or bounded timeout. Typed ALSA handles are
+created once; per-second diagnostic records use preallocated typed storage and are
+serialized after PCM stops. SHR PA's standalone host received the same pacing fix.
+
+Ring capacity and queued audio are explicit separate values. Capture starts first;
+playback starts after the first processed block has been submitted. Zero silent
+prefill adds no silence ahead of that block. There is no additional application
+playout queue between capture, local DSP and the ALSA write; recorder and network
+queues are independent consumers. This does not remove buffering inside ALSA,
+the USB driver or the interface.
+
+The host supports periods 48/96/192/384 and capacities 2/3/4/8 periods. H4 tests
+start at 48 frames, the current one-packet processing floor; the device advertises
+smaller periods, which this host has not validated. Wet admission supports 1–16 ms
+in 1 ms steps and must be at least one capture period. Both transport endpoints
+must use the updated validator. The test effect's intentional 20 ms delay is
+separate from this admission allowance and from local dry latency.
+
+Physical H4 trials emit a deterministic −54 dBFS coded signal on channel 1 only,
+with alternating quiet and active seconds. ADC data never feeds playback. The
+right physical route remains unresolved. Both digital channels still traverse the
+modules and are recorded; a silent right output is not a right-channel hardware
+acceptance result.
+
+Ordinary scheduling with a 48-frame period and 96-frame ring failed both with one
+silent prefill period (528 retained frames) and with zero prefill (816 frames).
+The zero-prefill run had 1.401 ms maximum playback wait despite 0.105 ms maximum
+render time. Increasing capacity to 144 frames while retaining zero prefill first
+passed 8 s: all 384000 frames and actual PA/FX/DAC replay matched, no xruns or wet
+loss. Two trusted physical correlation windows measured 249–257 frames / 5.19–5.35 ms;
+a third one-second window had weak correlation. A following 30 s attempt stopped
+after 108672 frames: capture xrun, 2.333 ms maximum render versus 0.113 ms p99,
+and only 0.034 ms maximum write wait. The incomplete recording remains exact.
+These observations motivate a scheduling comparison, without proving preemption
+as the sole cause.
+
+`audio_fifo_priority: 20` explicitly applies FIFO scheduling only to the audio
+thread, after network/recorder workers exist and before PCM starts. Missing/null
+preserves ordinary scheduling. Other priorities are rejected. The host restores
+the saved policy after stopping PCM and before joining workers; activation and
+restoration failures are reported as faults. No process-wide, service or kernel
+scheduling settings are changed.
+
+FIFO alone did not meet the low-latency reliability gate. At 48/144 frames and
+zero prefill, 30 s runs with 1 ms and 2 ms wet allowance missed two and four wet
+returns respectively. The latter also changed physical offset from 257 to
+364–365 frames around 18–19 s despite zero reported xruns. A subsequent 4 ms
+wet-allowance run failed playback after 317904 fully written frames. Adding one
+silent period passed 8 s but failed capture after 1351152 frames in the longer
+trial. Those failures remain retained; exact software stems alone do not prove
+uninterrupted physical output.
+
+## H5: continuous physical reference and thread diagnostics
+
+Candidate v12 retains the repaired transfer path and uses `left_continuous`: one
+quiet startup second followed by deterministic −54 dBFS channel-1 noise. The ADC
+never feeds playback, and the right digital output is zero. Offline analysis
+compares recorded intended DAC channel 1 with its physical ADC return in 100 ms
+windows every 50 ms throughout the take. Correlation below 0.6 is flagged for
+review. The first quiet second and final 85–135 ms are outside that analysis.
+Correlation measures frame offset, not converter clock lock or calibrated
+capture-to-speaker latency; small shifts can weaken windows and require inspection.
+
+Preallocated diagnostics retain the most recent 4096 blocks and first 64 timing
+outliers, with overflow counts. Read/render/write wall time and thread CPU time
+are separate, including failed reads, inter-block gaps and quiet shutdown.
+PCM availability/delay is a driver observation. A channel-1 input peak over 0.02 FS
+stops the generated probe and preserves its exact S32 alarm block, including an
+alarm during shutdown outside the normal eight recorded stems. No level alarm
+occurred in the reported successful trials.
+
+`audio_cpu` optionally restricts only the audio thread to one CPU already in its
+allowed mask. The H5 comparison chose CPU3; network and recorder workers retained
+their original masks. CPU affinity and FIFO20 are saved and restored before
+worker joins. Activation, rollback and restoration have explicit error reports;
+failure cannot masquerade as a successful restore. IRQ affinity, other processes,
+kernel settings and persistent services are unchanged.
+
+At 48-frame periods, 144-frame capacity, zero silent prefill and 4 ms wet allowance,
+both unrestricted and CPU3 runs passed 30 s with exact stored samples and no xruns
+or missing wet packets. The unrestricted physical offset was 249–257 frames
+(5.1875–5.3542 ms), with four weak windows at small transitions. CPU3 had three
+weak startup windows; all 497 windows after 5 s measured exactly 257 frames.
+These short passes did not establish reliability: a CPU3 packet-fault trial later
+failed capture after 294912 frames. Its failed read took 3.558 ms wall time but
+only 50.778 µs thread CPU; render maximum was 0.164 ms. The incomplete take remains
+sample-exact. This points to delayed capture service rather than expensive DSP,
+without identifying the kernel/USB cause.
+
+The CPU3 two-period retry failed after 720 frames. Playback writes took up to
+1.401 ms wall time but about 6.5 µs thread CPU, while capture backlog grew to the
+96-frame capacity. This configuration fails with the current synchronous transfer
+path. It does not establish the smallest buffer this interface could support
+with a different host or driver design.
+
+Four-period capacity (192 frames) retains the 48-frame processing block and zero
+silent prefill. Its 16 s packet/Brain-stall trial and 16 s Brain restart passed
+without USB xruns or recorder/queue faults. All raw hashes, eight stems, dry replay
+and journals matched. The deliberate 20 ms loss faded wet output to zero over
+240 frames; recorded residual error was at most 0.621 PCM24 LSB. Wet audio recovered
+in both trials, and Brain restart required two acknowledged snapshots. Physical
+offset stayed at 249 frames (5.1875 ms) in every analyzed window of both trials.
+The seven network errors during termination/restart are retained as expected
+fault observations, not erased from the report.
+
+A deliberate 100 ms audio-thread stall stopped with one xrun and an incomplete
+96000-frame take; all retained samples and journal entries verified. A fresh
+epoch and directory then passed 30 s, with no xruns/wet losses and all 577 physical
+windows at 249 frames. The four-period capacity did not add a period to measured
+latency in these comparisons. This is spare ring capacity, not four periods of
+deliberately queued silence.
+
+The subsequent 600 s attempt failed after **36.914 s**, with 1771872 fully written
+and 1771920 captured/recorded frames. Playback exhausted while a render took
+3.597 ms wall time but only 0.191 ms thread CPU. There were no missing wet packets
+or recorder drops. Every retained PCM hash, dry/DAC reference and journal entry
+verified; the take is explicitly incomplete and the last prepared block is not
+claimed delivered. All 715 analyzed physical windows before the excluded tail
+were at 249 frames. This is a failed reliability gate despite the stable measured
+latency before the fault.
+
+H6 adds calling-thread fault and context-switch counters around render, and a
+reviewed optional process-local memory-lock comparison. These distinguish paging,
+blocking and preemption more directly; locking is not assumed to fix scheduling
+delays. No global CPU, IRQ, governor, memory or service setting is changed.
+
 ## Build, test and evidence
 
 Build each owner independently with Rust 1.97.1 and its committed lockfile, then:
@@ -353,7 +488,7 @@ is an explicit bench fault injection; leave it null for ordinary measurements.
 The private supervisor records exact commands/configurations and bounds each
 process; it is not installed as a service or included in source publication.
 
-The final normal suites passed: GigPies 181 Rust/37 Python, SHR PA 65 Rust/4
+The final normal suites passed: GigPies 209 Rust/37 Python, SHR PA 67 Rust/4
 Python, SHR FX 101 Rust, and SHR REC 23 Rust tests. Four GigPies historical/media
 or socket-capacity opt-ins were intentionally skipped because their protected
 paths were unchanged; the directly affected FX cost matrix ran separately.
@@ -361,8 +496,9 @@ Formatting, warning-denied Clippy, locked release builds and publication checks
 passed. The final ADC endpoint counter also ignores unused low container bits
 for both signs, with focused endpoint tests. Earlier quiet captures were far from
 full scale. A focused regression also rejects a fresh, non-late packet carrying the wrong
-return budget. Candidate v7 adds bounded device-buffer validation and final
-endpoint reporting; each measured binary has its own retained source manifest.
+return budget. The low-latency changes add transfer-progress, independent prefill,
+continuous probe, bounded diagnostics, and thread scheduling/restoration tests.
+Each measured binary has its own retained source manifest.
 
 Normal tests cover wet routing/loss, PCM precision descriptors, bounded metrics
 and all preceding transport contracts without devices. Owner suites cover ABI

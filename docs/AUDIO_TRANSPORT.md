@@ -63,7 +63,7 @@ by frame-major, channel-interleaved samples. No normal IP fragmentation.
 | 24–31 | Absolute first source frame, aligned to packet duration |
 | 32–35 | Sequence, wrapping unsigned 32-bit, one increment per group packet |
 | 36–39 | Sample rate, exactly 48000 |
-| 40–43 | Output delay in frames, only wet return; 192–1536 |
+| 40–43 | Output delay in frames, only wet return; 48–1536 |
 | 44–47 | Reserved zero |
 
 The maximum UDP payload is 1232 bytes, also safe within IPv6's minimum 1280-byte
@@ -367,3 +367,13 @@ Cargo locks. It recovered 733847552 allocated bytes (about 700 MiB). Current
 executables/debug information and all unique evidence remain; target is 4.5 GiB,
 free space 39 GiB, and private task evidence about 9 MiB. This is a scoped local
 source commit; no GitHub push or release was performed.
+
+### Small-buffer host compatibility
+
+The hardware latency follow-up extends the unreleased wet-delay validator's
+minimum from 192 to 48 frames. Both endpoints must use this revision for budgets
+below 4 ms; earlier binaries refuse those packets. The hardware host requires
+whole 48-frame packets and a wet budget at least as long as its capture period.
+This is a configurable admission allowance, separate from device buffering and
+any intentional delay in the effect. Previous measured budgets retain their
+original conditions and results.
