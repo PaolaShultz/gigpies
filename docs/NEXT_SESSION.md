@@ -6,6 +6,12 @@ is preserved. The [continuation prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md)
 records this completed software/publication scope; recover the current source
 and acceptance before using any historical launch card.
 
+The requested next software action is the [October 4 review and repair pass](DAILY_REVIEW_EXECUTION_PROMPT.md)
+using the stronger model selected for a new session on Pi5. Its exact daily commit
+inventory includes all twelve owners; it authorizes in-place fixes, validation,
+publication and final source synchronization. This prompt has been prepared;
+the stronger-model review itself has not yet run.
+
 Read the [local integration instructions](HEADLESS_INTEGRATION.md),
 [implementation map](MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
 [architecture](ARCHITECTURE.md) and [ownership map](COMPONENTS.md). The intended

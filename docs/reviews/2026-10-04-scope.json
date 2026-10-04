@@ -1,0 +1,245 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-10-04",
+  "timezone": "Europe/Zagreb",
+  "window_start": "2026-10-04T00:00:00+02:00",
+  "window_end_exclusive": "2026-10-05T00:00:00+02:00",
+  "selection": "committer timestamp, reachable from each published main; root commits included",
+  "captured_utc": "2026-10-04T19:04:29.664231+00:00",
+  "followup_rule": "At review start, inspect later reachable commits dated 2026-10-04, including the commit containing this manifest and prompt; freeze that expanded inventory before fixes. Never substitute the execution date for the review date.",
+  "repositories": [
+    {
+      "name": "gigpies",
+      "repository": "https://github.com/PaolaShultz/gigpies",
+      "base_exclusive": "1539915c845160d4a38fd1ba7f77ae1c1cce666a",
+      "tip_inclusive": "b3c9f640eef12175e61d140bf09b77e57bac8432",
+      "commits": [
+        {
+          "sha": "eea5267f61fd356ab0ee9da1c5ef975f1b82281a",
+          "committed_at": "2026-10-04T00:32:22+02:00",
+          "subject": "Record qualified 1 ms USB hardware results and restored host profile"
+        },
+        {
+          "sha": "eb32afdfb0520ccf3c3df7f7a264c6496407a387",
+          "committed_at": "2026-10-04T12:55:43+02:00",
+          "subject": "Document dual audio and lighting consoles for 0.2.3"
+        },
+        {
+          "sha": "99eb0f08050a9a86039af9f1ba2a3541649ca7b6",
+          "committed_at": "2026-10-04T13:19:00+02:00",
+          "subject": "Replace schematic hero with photorealistic dual-console stage scene"
+        },
+        {
+          "sha": "b3c9f640eef12175e61d140bf09b77e57bac8432",
+          "committed_at": "2026-10-04T20:47:20+02:00",
+          "subject": "Integrate local mixer control, role leases and owner modules"
+        }
+      ],
+      "changed_path_count": 148,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-rec",
+      "repository": "https://github.com/PaolaShultz/shr-rec",
+      "base_exclusive": "041758ed57303ea02e63c3b1afce9d5d48486808",
+      "tip_inclusive": "df93dc4f8ca487e52d6f7c26ee9aa75462e8856b",
+      "commits": [
+        {
+          "sha": "c0416d286eef2a455201dce4e992d9b3f6418f52",
+          "committed_at": "2026-10-04T00:31:11+02:00",
+          "subject": "Document H8 recording acceptance and physical continuity limits"
+        },
+        {
+          "sha": "df93dc4f8ca487e52d6f7c26ee9aa75462e8856b",
+          "committed_at": "2026-10-04T19:04:27+02:00",
+          "subject": "Add correlated recorder lifecycle and retained progress observers"
+        }
+      ],
+      "changed_path_count": 13,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-fx",
+      "repository": "https://github.com/PaolaShultz/shr-fx",
+      "base_exclusive": "fe44d48adc3791f1e75c097d4ad5e42f3899f76a",
+      "tip_inclusive": "e501e09b6721340a95516abc86da2c0480b6ddb4",
+      "commits": [
+        {
+          "sha": "cd943c6a5cbe3c06be4e9968f54f685e97baf84f",
+          "committed_at": "2026-10-04T00:27:40+02:00",
+          "subject": "Record qualified H8 low-latency FX integration evidence"
+        },
+        {
+          "sha": "e501e09b6721340a95516abc86da2c0480b6ddb4",
+          "committed_at": "2026-10-04T19:04:27+02:00",
+          "subject": "Expose fixed adapter capabilities and bounded status queries"
+        }
+      ],
+      "changed_path_count": 12,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-pa",
+      "repository": "https://github.com/PaolaShultz/shr-pa",
+      "base_exclusive": "1c690fb994967f0441e7197c19e02f2a2ad15ca8",
+      "tip_inclusive": "44a111f0e2e2d640d3fff1378a7f6131b3df3151",
+      "commits": [
+        {
+          "sha": "7683f9b38e2452e904468be3b90306ea450618ee",
+          "committed_at": "2026-10-04T00:27:07+02:00",
+          "subject": "Record low-latency integration results and physical qualifications"
+        },
+        {
+          "sha": "44a111f0e2e2d640d3fff1378a7f6131b3df3151",
+          "committed_at": "2026-10-04T19:04:27+02:00",
+          "subject": "Expose fixed embedding descriptors and numerical status"
+        }
+      ],
+      "changed_path_count": 16,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-lux",
+      "repository": "https://github.com/PaolaShultz/shr-lux",
+      "base_exclusive": "ba4ccd92656e6d2a3cbc6424cdc2a017d3e4f14d",
+      "tip_inclusive": "515ac001dad6e1fe530b76f4c5b12f8d82f4c6e8",
+      "commits": [
+        {
+          "sha": "1f0a5b40d660f31971b1c8666d4c45723f0aadde",
+          "committed_at": "2026-10-04T19:58:48+02:00",
+          "subject": "Implement local lighting authority and bounded audio automation"
+        },
+        {
+          "sha": "515ac001dad6e1fe530b76f4c5b12f8d82f4c6e8",
+          "committed_at": "2026-10-04T20:31:18+02:00",
+          "subject": "Clarify independent LX05 analysis and release capabilities"
+        }
+      ],
+      "changed_path_count": 57,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-desk",
+      "repository": "https://github.com/PaolaShultz/shr-desk",
+      "base_exclusive": null,
+      "tip_inclusive": "3d2d3a31edf440e0eb465b106dcc2f2e260b02c9",
+      "commits": [
+        {
+          "sha": "3d2d3a31edf440e0eb465b106dcc2f2e260b02c9",
+          "committed_at": "2026-10-04T20:52:57+02:00",
+          "subject": "Implement Desk native frontend and real GigPies provider control"
+        }
+      ],
+      "changed_path_count": 124,
+      "review_scope": "entire repository (root commit today)",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-lightdesk",
+      "repository": "https://github.com/PaolaShultz/shr-lightdesk",
+      "base_exclusive": null,
+      "tip_inclusive": "31c22ad0013938c2e3f3481d56344e0f3c8a1e49",
+      "commits": [
+        {
+          "sha": "94402b42aae434a158657b7de9a73f013e27e352",
+          "committed_at": "2026-10-04T12:42:46+02:00",
+          "subject": "Start lighting console blueprint and offline operator foundation"
+        },
+        {
+          "sha": "31c22ad0013938c2e3f3481d56344e0f3c8a1e49",
+          "committed_at": "2026-10-04T20:53:06+02:00",
+          "subject": "Implement Lightdesk native frontend and live Lux integration"
+        }
+      ],
+      "changed_path_count": 93,
+      "review_scope": "entire repository (root commit today)",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-daw",
+      "repository": "https://github.com/PaolaShultz/shr-daw",
+      "base_exclusive": "d93447d1ae391e7910c54965f886ed39baedab1c",
+      "tip_inclusive": "c156d011fd9bf137aefba7d109c979c74bf67f2f",
+      "commits": [
+        {
+          "sha": "c156d011fd9bf137aefba7d109c979c74bf67f2f",
+          "committed_at": "2026-10-04T19:04:28+02:00",
+          "subject": "Document scoped GigPies activation and ownership"
+        }
+      ],
+      "changed_path_count": 2,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-drums",
+      "repository": "https://github.com/PaolaShultz/shr-drums",
+      "base_exclusive": "f4a9a6a09e33f48aba11d77b9089cea03ec08460",
+      "tip_inclusive": "11e7e86ae34c38e12037029c43488fd741738dd8",
+      "commits": [
+        {
+          "sha": "11e7e86ae34c38e12037029c43488fd741738dd8",
+          "committed_at": "2026-10-04T19:04:28+02:00",
+          "subject": "Document scoped GigPies activation and ownership"
+        }
+      ],
+      "changed_path_count": 2,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-synth",
+      "repository": "https://github.com/PaolaShultz/shr-synth",
+      "base_exclusive": "818c94964334e9db183d136397b43d6461884f83",
+      "tip_inclusive": "05f5d64b2f5a8bd05fa6ae428709c5c769e9bc64",
+      "commits": [
+        {
+          "sha": "05f5d64b2f5a8bd05fa6ae428709c5c769e9bc64",
+          "committed_at": "2026-10-04T19:04:28+02:00",
+          "subject": "Document scoped GigPies activation and ownership"
+        }
+      ],
+      "changed_path_count": 2,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-sampler",
+      "repository": "https://github.com/PaolaShultz/shr-sampler",
+      "base_exclusive": "3aaabd50288a54e851618e1c464429a0dbab73eb",
+      "tip_inclusive": "1644abab846e4d32309d92d711a84943cb67cc64",
+      "commits": [
+        {
+          "sha": "1644abab846e4d32309d92d711a84943cb67cc64",
+          "committed_at": "2026-10-04T19:04:28+02:00",
+          "subject": "Document scoped GigPies activation and ownership"
+        }
+      ],
+      "changed_path_count": 2,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    },
+    {
+      "name": "shr-tone-over-9000",
+      "repository": "https://github.com/PaolaShultz/shr-tone-over-9000",
+      "base_exclusive": "3fec963b88777278413412625fe7cf09b8c77bef",
+      "tip_inclusive": "fdb59b3eef2fad50b87c21796c88c2b18476bf96",
+      "commits": [
+        {
+          "sha": "fdb59b3eef2fad50b87c21796c88c2b18476bf96",
+          "committed_at": "2026-10-04T19:04:28+02:00",
+          "subject": "Document scoped GigPies activation and ownership"
+        }
+      ],
+      "changed_path_count": 2,
+      "review_scope": "every daily changed path plus relevant unchanged implementation context",
+      "changed_path_count_method": "union of individual commit changes, including root and merge parent diffs"
+    }
+  ],
+  "commit_count": 20
+}

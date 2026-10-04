@@ -32,6 +32,7 @@ selection and evidence.
 | [Module contracts](MODULE_CONTRACTS.md) | Coordinated versioned provider/consumer definitions and shared acceptance examples |
 | [Parallel work](PARALLEL_WORK_PLAN.md) | Four worker lanes, two Pi4 sessions and one build slot per host |
 | [Continuation and publication prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md) | Authorized brief for the completed integrated software milestone and scoped source publication |
+| [October 4 review and repair prompt](DAILY_REVIEW_EXECUTION_PROMPT.md) | Stronger-model review on Pi5 of the pinned daily commits across all twelve owners, in-place fixes and final source synchronization |
 | [Module planning prompt](MODULE_PLANNING_EXECUTION_PROMPT.md) | Historical planning brief: owning module plans, shared contracts and independent implementation lanes |
 | [Audio transport execution prompt](AUDIO_TRANSPORT_EXECUTION_PROMPT.md) | Historical brief for the completed transport phase; not a fresh test authorization |
 | [Audio hardware execution prompt](AUDIO_HARDWARE_EXECUTION_PROMPT.md) | Historical brief for the qualified stereo host phase; follow the current hardware handoff |
