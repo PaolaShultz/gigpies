@@ -2,7 +2,11 @@
 
 Linux-only `gigpies-headless` is an opt-in GP06 local binding of the real GP03
 renderer/authority. Existing default CLI remains unchanged. No devices, playback,
-TCP listeners, host services, GPC1/GPA1 changes, PA/FX/REC or native GUI integration.
+TCP listeners, host services or GPC1/GPA1 changes. This document describes the
+base GP06 mode. Optional [named analysis](ANALYSIS_STREAM.md) and
+[owner-library integration](MODULE_GRAPH.md) extend it only when explicitly
+activated; [local integration](HEADLESS_INTEGRATION.md) documents real console
+clients.
 This is offline and unprotected, with no deadline or physical safety acceptance.
 
 Create a private directory owned by the invoking user, mode0700, then explicitly:
@@ -17,7 +21,8 @@ Use the shared host build lock for Cargo. The already-built binary can be launch
 explicitly without Cargo. Choose a new explicit epoch for each authority restart;
 volatile state and grants are not persisted. Startup prints exact show/epoch/path.
 `--ticks COUNT` is a bounded synthetic run; SIGINT/SIGTERM gracefully closes clients
-and removes only its original socket inode. There are no worker threads to join.
+and removes only its original socket inode. The base mode has no worker threads; optional analysis and module workers are
+joined by their owning lifetimes.
 
 Endpoint `audio.sock` mode0600 is in canonical absolute owned0700 nonsymlink dir.
 Preexisting endpoints, symlinks and unowned/permissive directories are refused.

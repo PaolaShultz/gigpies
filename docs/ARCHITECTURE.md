@@ -13,7 +13,8 @@ USB interface, runs independently built SHR PA/FX/REC libraries through versione
 C interfaces and records real samples on the PA node. Brain follows the PA's USB
 source-frame timeline without an audio device. The render section uses bounded
 module calls/queues; driver I/O and disk/network work stay outside it. This is a
-measured stereo bench, while the broader live mixer and both native consoles remain planned.
+measured stereo bench; the separately implemented local mixer and native consoles
+have device-free software validation, described below.
 The host preserves dry processing and recording through Brain failure, fades both
 wet channels and requires fresh control state. Device faults close the old take
 as incomplete and require a fresh epoch. Prototype control does not yet change
@@ -32,9 +33,14 @@ The [Brain console integration plan](BRAIN_CONSOLE_PLAN.md) records the developi
 monitors and two independently assigned MIDI keyboard controllers on one Brain,
 local NVMe recording on PA and richer FX on Brain. The surfaces own their human
 interfaces; GigPies owns integration/contracts and SHR Lux owns lighting authority.
-Both initial surface simulators are offline; native/live integration is planned.
+Both surfaces now have optional native frontends and actual local provider
+clients. The eight-input mixer, independent monitor sends, REC/FX/PA graph, named
+analysis and null-output Lux authority are implemented and software-validated.
+See [local integration](HEADLESS_INTEGRATION.md) for the contracts and evidence.
+Physical console integration and production remote authentication remain pending.
 The [preceding architecture draft](archive/architecture-before-brain-console-2026-10-03.md)
-is preserved for context. These live changes remain planned.
+is preserved for context. The remaining sections describe the intended complete
+system; software acceptance does not establish its physical topology.
 
 ## Stagebox / Mixer
 
@@ -59,7 +65,8 @@ focus and independent process. Automation is a mode inside these consoles.
 The audio desk displays applied state and sends scoped requests; the core mixes.
 AUTO, ASSIST and MANUAL operation, parameter holds and explicit return to automation are
 specified in its blueprint. Manual operation must not require an automixer.
-Live authority and ramps remain engine integration work. Physical Stagebox/PA
+Local mixer authority and bounded ramps are implemented; connecting that graph to
+the complete physical Stagebox remains integration work. Physical Stagebox/PA
 ownership does not make `shr-pa` the owner of a complete band-mixing engine.
 
 Own soundcheck analysis and prepared mix calculation, both full-HD (1920 × 1080)
@@ -72,7 +79,8 @@ future work with their own task.
 
 Lightdesk sends requests to SHR Lux; fixture evaluation, cue/effect execution,
 lighting arbitration and physical output remain in Lux. Its first static mock
-authority does not complete that engine. MANUAL operation is independent of
+authority is retained as a simulator; the real local client uses Lux
+fixture/programmer/Hold/cue authority with null output. MANUAL operation is independent of
 audio-reactive automation. Shared show identity and named cross-system cues do
 not grant one desk authority over the other. Display/controller assignment uses
 verified roles and independent workers; lighting failure/redraw must not block
@@ -84,7 +92,8 @@ The intended failure behavior is to preserve the last valid Stagebox mix, local
 protection and recording when Brain communication disappears. Define wet-return
 fades and local fallback FX separately. A UI restart must refresh authoritative
 state without recalling an old mix. Reconnection and manual override semantics
-must be implemented and tested when we build that boundary.
+are tested for the local provider boundary; production remote and physical
+recovery require their own acceptance.
 
 ## Connection and timing
 
@@ -97,7 +106,8 @@ UDP control. PA owns the 48 kHz source-frame timeline; Brain follows it.
 Packets carry epochs, channel groups and explicit wet output deadlines.
 Bounded queues, loss fades and fresh-state control recovery are implemented
 and synthetically tested. The stereo USB host integrates PA/FX/REC modules;
-complete mixer controls, multichannel integration and both console adapters remain pending.
+the separate eight-input local mixer and both console adapters are implemented.
+Full multichannel physical integration and wider mixer controls remain pending.
 The USB audio device supplies the local audio clock. No network clock or
 resampler is installed; independent device clocks need measured ASRC acceptance.
 

@@ -67,5 +67,5 @@
 <rect x="42" y="850" width="772" height="57" rx="10" fill="#111e2e" stroke="#2a3c52"/>
 <text x="62" y="876" font-size="18" fill="#eff5ff" font-weight="bold" text-anchor="start">Independent health and recovery</text>
 <text x="62" y="897" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">Lighting failure must not block audio control, protection or recording.</text>
-<text x="42" y="945" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">EVIDENCE: offline audio + qualified stereo bench; surface simulators. Native desks, full Lux engine and combined load remain open.</text>
+<text x="42" y="945" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">EVIDENCE: offline modules, native desks and Lux null output; qualified stereo bench. Physical integration and combined load remain open.</text>
 </g></svg>

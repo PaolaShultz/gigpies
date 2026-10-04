@@ -100,3 +100,6 @@ recreation, preserve the actual host cause for cancellation during preparation,
 and keep a quiesced handle available for cleanup if the finalizer thread cannot
 be spawned. Source rejection requires explicit recreation before starting another
 take. These are runtime corrections; the accepted status envelope stays unchanged.
+Cancellation during preparation publishes `finalizing` before handing the ready
+raw recorder to its finish worker. A concurrent progress observation cannot turn
+that cancelled operation into host recording readiness or a completed start reply.

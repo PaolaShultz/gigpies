@@ -520,6 +520,9 @@ impl ModuleGraph {
             WorkerResult::Prepared(Ok((mut r, observer))) => {
                 t.observer = Some(observer);
                 if worker.cancel_code != 0 {
+                    // Observer readiness describes the raw owner handle, not
+                    // permission to activate this cancelled host operation.
+                    t.status.state = "finalizing".into();
                     r.fault(worker.cancel_code);
                     self.finish_worker(r)?;
                 } else {

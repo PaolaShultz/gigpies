@@ -11,7 +11,18 @@ The preceding single-surface integration draft is preserved
 [unchanged](archive/brain-console-before-lightdesk-2026-10-04.md); the earlier
 [pre-Desk plan](archive/brain-console-before-shr-desk-2026-10-04.md) also remains.
 
-## Owners and current checkpoint
+## Current software checkpoint
+
+The subsequent [integrated milestone](HEADLESS_INTEGRATION.md) implements the
+eight-input local mixer, actual owner-library graph, named analysis, Lux null-output
+authority and both provider-backed native frontends. Process-held role leases use
+injected descriptors. Physical displays/controllers, fixture output and combined
+load remain unverified. The foundation assessment and backlog below are preserved
+as the original planning baseline; use the
+[implementation map](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+for completed tasks and remaining gates.
+
+## Original foundation checkpoint
 
 | Owner | Scope | Current evidence |
 |---|---|---|
@@ -76,7 +87,7 @@ combined surface PSS ≤384 MiB, local MIDI dispatch p99 ≤5 ms and visible fee
 p99 ≤33 ms. Whole-Brain FX/Lux/analysis/transport headroom must also pass. These
 are **unmeasured targets**, not evidence that a particular Pi meets them.
 
-## Integration backlog with owners
+## Original integration backlog with owners
 
 | ID / next owner | Concrete work and acceptance boundary |
 |---|---|

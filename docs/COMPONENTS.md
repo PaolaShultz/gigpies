@@ -53,12 +53,12 @@ These local paths are ownership references, not build or CI requirements.
 
 | Project | Useful existing work | Integration limit |
 |---|---|---|
-| shr-desk | Independent Rust offline surface simulator, MIDI translation and three 1080p screen drafts using the existing Terminus font | Native GPU frontend, complete control workflow and live engine/controller adapters remain planned; no mixing DSP belongs here |
-| shr-lightdesk | Independent Rust offline lighting loop, explicit synthetic authority, controller translation and seven 1080p screen drafts | Native UI, real Lux capability/control adapter, engine timing/output and physical acceptance remain planned; no second production lighting engine |
+| shr-desk | Independent Rust surface, optional native frontend, real GigPies control and read-only module status using the existing Terminus font | Physical display/controller acceptance and writable module controls remain separate; no mixing DSP belongs here |
+| shr-lightdesk | Independent Rust lighting surface, optional native frontend, real Lux control and read-only analysis/provenance | Physical display/controller/fixture acceptance remains separate; Lux owns timing, arbitration and output |
 | [shr-pa](https://github.com/PaolaShultz/shr-pa) | Rust 2-input/6-output PA DSP, EQ, crossovers, pink/white generators, pair delay/polarity, compression, limiting, presets and offline rendering | Fixed routing and linked L/R pair settings; setup-mic/RTA/automatic alignment and physical acoustic acceptance remain pending; direct ALSA transport |
 | [shr-fx](https://github.com/PaolaShultz/shr-fx) | Two wet-only engines, up to eight parallel slots each; reverb, delay, chorus, exciter | Send/return semantics; JACK host; listening and live acceptance remain |
 | [shr-daw](https://github.com/PaolaShultz/shr-daw) | Channel processing, EQ, dynamics, audio graph, controller support and recording | Coupled to workstation models; adapt narrowly and preserve provenance |
-| shr-lux | Offline multitrack replay, source activity/kick analysis, lighting simulation and pad previews | Private reference; actual DMX/live capture remain pending |
+| shr-lux | Offline replay, named live-source analysis subscription, fixture/programmer/cue authority, timed release and durable restart | Physical DMX and hardware acceptance remain pending; current integration uses null/disarmed output |
 | shr-rec | Bounded raw PCM24 recording/recovery library and application shell | Library integrated in the stereo bench; standalone recording UI and playback remain pending |
 | shr-drums, shr-synth, shr-sampler | Separate instrument engines and offline render/host patterns | Useful references, not automixing prerequisites |
 | shr-tone-over-9000 | NAM live processor, prepared chain changes | Guitar processing; no need to integrate for the first mix experiment |
@@ -121,8 +121,10 @@ assigned controllers. They own layout, navigation, mapping and authority present
 GigPies owns cross-module integration/contracts; Lux owns lighting arbitration,
 fixture/cue/effect execution and output. Missing Lux work is recorded in the
 integration backlog, not duplicated in Lightdesk.
-`winit` + `wgpu` remain candidates in the surface projects, not GigPies dependencies;
-their initial renderers export offline SVG drafts. PA DSP, FX, recorder and lighting
+The surface projects now use optional `winit` + `wgpu` native frontends;
+their renderers also export offline SVG drafts. These are not GigPies dependencies.
+See the [current software checkpoint](HEADLESS_INTEGRATION.md) for validation and
+physical acceptance limits. PA DSP, FX, recorder and lighting
 algorithms retain their owners. The Stagebox/PA node's mixer graph is distinct
 from the `shr-pa` speaker processor; a future mixer-core extraction is a separate
 task. No algorithms or source files were moved in this surface checkpoint.

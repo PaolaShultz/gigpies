@@ -327,7 +327,24 @@ mod actual {
             g.process(10, 2400, &[[f64::NAN; 8]; 48], &[[0.; 4]; 48]),
             Err(ProcessError::Source)
         );
-        finished(&mut g);
+        for attempt in 0..1000 {
+            g.poll_lifecycle().unwrap();
+            let state = g
+                .status(SHOW, 300 + attempt * 100)
+                .unwrap()
+                .recording
+                .unwrap();
+            assert_ne!(
+                state.state, "recording",
+                "cancelled preparation reactivated"
+            );
+            assert_eq!(state.first_source_frame, None);
+            if state.state == "finalized" {
+                break;
+            }
+            assert!(attempt < 999, "cancelled preparation finish timeout");
+            std::thread::sleep(Duration::from_millis(1));
+        }
         let rejected = g.status(SHOW, 300).unwrap().recording.unwrap();
         assert_eq!(rejected.host_fault, 7);
         assert_eq!(rejected.outcome, "incomplete");

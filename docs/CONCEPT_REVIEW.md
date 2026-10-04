@@ -32,8 +32,10 @@ is preserved; the technical system diagram and engine ownership are unchanged.
 - Audio FX/source transport and lighting control have distinct contracts. Lighting
   redraw/failure must not block audio control, protection or recording.
 
-Both surfaces currently have offline foundations. Native desks, full Lux/manual
-fixture control and combined display/controller/load acceptance remain planned.
+Both surfaces now have optional native frontends and real local provider clients.
+Lux implements manual fixture control with null output; see
+[local integration](HEADLESS_INTEGRATION.md) for software acceptance. Physical
+lighting and combined display/controller/load acceptance remain pending.
 The stereo audio bench has its own qualified evidence in [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md).
 
 ## Preserved original artwork
