@@ -5,6 +5,7 @@ use libloading::Library;
 use std::{
     ffi::{CString, c_void},
     path::Path,
+    sync::Arc,
 };
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 type Process = unsafe extern "C" fn(*mut c_void, *const f64, *mut f64, u32) -> i32;
@@ -65,13 +66,17 @@ impl Dsp {
         }
     }
     pub fn process(&mut self, input: &[f64], output: &mut [f64], outputs: usize) -> bool {
+        self.process_result(input, output, outputs) == 0
+    }
+    /// Exact owner result; shape refusal never calls the owner.
+    pub fn process_result(&mut self, input: &[f64], output: &mut [f64], outputs: usize) -> i32 {
         if input.is_empty()
             || !input.len().is_multiple_of(2)
             || output.len() != input.len() / 2 * outputs
             || outputs != self.outputs
             || input.len() / 2 > self.max_block
         {
-            return false;
+            return -1;
         }
         // SAFETY: live exclusive handle, complete buffers; owner checks max frames.
         unsafe {
@@ -80,7 +85,7 @@ impl Dsp {
                 input.as_ptr(),
                 output.as_mut_ptr(),
                 (input.len() / 2) as u32,
-            ) == 0
+            )
         }
     }
     pub fn reset(&mut self) {
@@ -106,7 +111,7 @@ pub struct Recorder {
     push: Push,
     finish: Finish,
     fault: unsafe extern "C" fn(*mut c_void, u32),
-    _library: Library,
+    _library: Arc<Library>,
 }
 impl Recorder {
     pub fn create(path: &Path, directory: &Path, block: u32, epoch: u64) -> Result<Self> {
@@ -142,7 +147,7 @@ impl Recorder {
                 push,
                 finish,
                 fault,
-                _library: library,
+                _library: Arc::new(library),
             })
         }
     }
@@ -180,3 +185,217 @@ impl Drop for Recorder {
         }
     }
 }
+
+// Exact additive fixed-width layouts from accepted owner headers. No DSP is
+// implemented here. These queries are control-side and serialized with processing.
+#[repr(C)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FxCapabilities {
+    pub version: u32,
+    pub size: u32,
+    pub identity: [i8; 32],
+    pub min_sample_rate: u32,
+    pub max_sample_rate: u32,
+    pub min_block_frames: u32,
+    pub max_block_frames: u32,
+    pub channels: u32,
+    pub sample_bits: u32,
+    pub reset_supported: u32,
+    pub writable_parameters: u32,
+    pub rack_available: u32,
+    pub adapter_buffer_frames: u32,
+    pub delay_ms: f64,
+    pub feedback: f64,
+    pub damping: f64,
+    pub wet_gain: f64,
+}
+#[repr(C)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FxStatus {
+    pub version: u32,
+    pub size: u32,
+    pub sample_rate: u32,
+    pub max_block_frames: u32,
+    pub intentional_delay_frames: u32,
+    pub adapter_buffer_frames: u32,
+    pub last_process_result: i32,
+    pub reset_reason: u32,
+    pub reset_count: u64,
+}
+#[repr(C)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaDescriptor {
+    pub version: u32,
+    pub size: u32,
+    pub input_channels: u32,
+    pub logical_outputs: u32,
+    pub active_output_mask: u32,
+    pub silent_output_mask: u32,
+    pub physical_io_owned: u32,
+    pub sample_format: u32,
+    pub fixed_preset: u32,
+    pub limiter_kind: u32,
+    pub limiter_threshold_millidbfs: i32,
+    pub limiter_linked: u32,
+    pub limiter_release_ms: u32,
+    pub startup_ramp_ms: u32,
+    pub fixed_delay_frames: u32,
+    pub min_rate: u32,
+    pub max_rate: u32,
+    pub min_block: u32,
+    pub max_block: u32,
+    pub unavailable_capabilities: u32,
+}
+#[repr(C)]
+#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaStatus {
+    pub version: u32,
+    pub size: u32,
+    pub sample_rate: u32,
+    pub max_block: u32,
+    pub fault_latched: u32,
+    pub recreate_required: u32,
+}
+impl Dsp {
+    fn descriptor<T: Default>(&self, name: &[u8]) -> Result<T> {
+        let mut out = T::default();
+        // SAFETY: names are selected internally with matching accepted repr(C)
+        // layouts. Output is live, aligned and disjoint from the exclusive owner.
+        unsafe {
+            let query = self
+                ._library
+                .get::<unsafe extern "C" fn(*mut T, u32, u32) -> i32>(name)?;
+            let rc = query(&mut out, 1, std::mem::size_of::<T>() as u32);
+            if rc != 0 {
+                return Err(format!("owner descriptor refused: {rc}").into());
+            }
+        }
+        Ok(out)
+    }
+    fn status<T: Default>(&self, name: &[u8]) -> Result<T> {
+        let mut out = T::default();
+        // SAFETY: exclusive live handle, matching layout, off render callback.
+        unsafe {
+            let query = self
+                ._library
+                .get::<unsafe extern "C" fn(*mut c_void, *mut T, u32, u32) -> i32>(name)?;
+            let rc = query(self.handle, &mut out, 1, std::mem::size_of::<T>() as u32);
+            if rc != 0 {
+                return Err(format!("owner status refused: {rc}").into());
+            }
+        }
+        Ok(out)
+    }
+    pub fn fx_capabilities(&self) -> Result<FxCapabilities> {
+        if self.outputs != 2 {
+            return Err("wrong owner query".into());
+        }
+        self.descriptor(b"shr_fx_v1_capabilities")
+    }
+    pub fn fx_status(&self) -> Result<FxStatus> {
+        if self.outputs != 2 {
+            return Err("wrong owner query".into());
+        }
+        self.status(b"shr_fx_v1_status")
+    }
+    pub fn pa_descriptor(&self) -> Result<PaDescriptor> {
+        if self.outputs != 6 {
+            return Err("wrong owner query".into());
+        }
+        self.descriptor(b"shr_pa_v1_descriptor")
+    }
+    pub fn pa_status(&self) -> Result<PaStatus> {
+        if self.outputs != 6 {
+            return Err("wrong owner query".into());
+        }
+        self.status(b"shr_pa_v1_status")
+    }
+}
+#[repr(C)]
+#[derive(Default, Debug, Clone, Copy)]
+pub struct RecorderProgress {
+    pub version: u32,
+    pub state: u32,
+    pub outcome: u32,
+    pub writer_fault: u32,
+    pub host_fault: u32,
+    pub reserved: u32,
+    pub epoch: u64,
+    pub accepted_frames: u64,
+    pub written_frames: u64,
+    pub durable_frames: u64,
+    pub dropped_frames: u64,
+    pub overflow_blocks: u64,
+    pub gap_frames: u64,
+    pub invalid_blocks: u64,
+    pub clipped_samples: u64,
+}
+pub struct RecorderObserver {
+    handle: *mut c_void,
+    snapshot: unsafe extern "C" fn(*const c_void, *mut RecorderProgress, u32) -> i32,
+    release: Destroy,
+    _library: Arc<Library>,
+}
+impl Recorder {
+    /// Producer is quiesced by exclusive borrow; creation is off callback.
+    pub fn observer(&mut self) -> Result<RecorderObserver> {
+        unsafe {
+            let create = self
+                ._library
+                .get::<unsafe extern "C" fn(*mut c_void) -> *mut c_void>(
+                    b"shr_rec_v2_observer_create",
+                )?;
+            let snapshot = *self._library.get::<unsafe extern "C" fn(
+                *const c_void,
+                *mut RecorderProgress,
+                u32,
+            ) -> i32>(b"shr_rec_v2_observer_snapshot")?;
+            let release = *self
+                ._library
+                .get::<Destroy>(b"shr_rec_v2_observer_release")?;
+            let handle = create(self.handle);
+            if handle.is_null() {
+                return Err("observer creation refused".into());
+            }
+            Ok(RecorderObserver {
+                handle,
+                snapshot,
+                release,
+                _library: Arc::clone(&self._library),
+            })
+        }
+    }
+}
+impl RecorderObserver {
+    /// Call off callback, at most 10 Hz. Library retained through terminal query.
+    pub fn snapshot(&self) -> Result<RecorderProgress> {
+        let mut out = RecorderProgress::default();
+        let rc = unsafe {
+            (self.snapshot)(
+                self.handle,
+                &mut out,
+                std::mem::size_of::<RecorderProgress>() as u32,
+            )
+        };
+        if rc != 0 || out.version != 2 {
+            return Err(format!("observer query refused: {rc}").into());
+        }
+        Ok(out)
+    }
+}
+impl Drop for RecorderObserver {
+    fn drop(&mut self) {
+        unsafe { (self.release)(self.handle) };
+    }
+}
+
+// Owner ABI requires exclusive use, not thread affinity. These handles are moved
+// only after producer quiescence; no process/query/release races are permitted.
+unsafe impl Send for Recorder {}
+// Independent observer atomics support a moved, retained handle; release remains
+// exclusive to its owning control thread and never races snapshot.
+unsafe impl Send for RecorderObserver {}

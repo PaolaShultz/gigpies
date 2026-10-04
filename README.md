@@ -46,11 +46,27 @@ These are the intended full-system boundaries. A qualified stereo bench exercise
 part of the audio path; full integration remains planned. See [architecture](docs/ARCHITECTURE.md).
 The [dual-console Brain](docs/BRAIN_CONSOLE_PLAN.md) pairs **two 1920×1080 monitors
 and two MIDI keyboard controllers**: SHR Desk for audio and SHR Lightdesk for
-lighting, both on one Brain. Each developing surface has an offline simulator
-and TUI-style screen drafts; native/live integration is planned. SHR Lux owns
-the lighting engine. The small display serves the PA unit.
+lighting, both on one Brain. Both surfaces now have optional native frontends over
+real local provider clients, checked with offscreen CPU rendering and injected
+role descriptors. Actual dual displays, controllers and physical outputs remain
+unverified. SHR Lux owns lighting authority and output; the small display serves
+the PA unit.
 
 ## Working today
+
+The [integrated software milestone](docs/MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+combines an eight-input mixer, independent monitor sends, bounded local control,
+process-held console roles and named PCM analysis. The optional graph records all
+eight raw inputs through SHR REC and sends stereo FOH through the actual fixed
+SHR FX and PA libraries. Desk reports their real health read-only. Lux consumes
+the named analysis with explicit calibration and bounded intensity automation,
+while preserving human holds and disarmed recovery.
+
+Desk and Lightdesk native software, real provider actions and failure recovery
+are validated without physical outputs. Rendering uses an explicitly selected
+CPU backend. The PA sample limiter applies to logical main outputs only; meters,
+acoustic protection and writable FX/PA controls remain unavailable. The existing
+offline workflows below remain available.
 
 The first offline automixer now provides causal soundcheck, editable instrument
 presets, frozen settings and full-song stereo rendering. A new unity-source workflow
@@ -89,10 +105,10 @@ The [audio transport prototype](docs/AUDIO_TRANSPORT.md) implements
 bounded UDP audio/control and a PA-owned sample timeline, with two-Pi synthetic
 validation. The [USB hardware bench](docs/AUDIO_HARDWARE.md) now connects selected stereo
 capture/output to real SHR PA, FX and recording, with explicit timing/fault evidence.
-The broader live mixer, performer monitor system, Lux fixture/cue/output engine
-and acoustic acceptance remain planned. The independently developed audio and
-lighting surfaces have offline interaction loops and screen drafts; this GigPies
-checkout documents their integration and does not bundle or launch them.
+Wider live routing, physical fixture output and acoustic acceptance remain
+separate. The audio and lighting surfaces are independently built native and
+headless clients; this checkout documents their integration and does not bundle
+or launch operator windows.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.
 The system is modular: PA processing and measurement are developed in SHR PA,
 with the finished module intended for [integration here](docs/COMPONENTS.md#pa-module-and-planned-integration).

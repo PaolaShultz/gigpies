@@ -1,0 +1,8 @@
+{
+  "format": "gigpies-roles",
+  "version": 1,
+  "generation": "7",
+  "bindings": [
+    {"role":"audio-desk","display_connector":"test-hdmi-a","display_edid":"test-edid-a","controller":"test-controller-a","profile":"test-profile-a","operator_label":null}
+  ]
+}

@@ -1,5 +1,23 @@
 # Validation and acceptance records
 
+## Integrated modules and native software — 2026-10-04
+
+The [current implementation checkpoint](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+and [integration evidence](HEADLESS_INTEGRATION.md#evidence-and-remaining-work)
+record the complete owner test counts, actual-provider checks and combined recovery
+result for this source milestone. Core runtime owners ran their normal suites,
+matching native/device-free host feature checks, formatting, warnings-denied Clippy
+and release builds. Hardware, historical media, auditions and long/load experiments
+remain separate. Rust 1.97.1, committed lockfiles, disabled incremental compilation
+and one parent-held build slot per host were used.
+
+The twelve owning repositories publish their own reviewed source and plans. Each
+complete index and outgoing history is checked; Desk/Lightdesk have independent
+publication guards with exact font/licence exceptions. Private worker records,
+provider binaries, recordings, role state and generated renders remain outside Git.
+This milestone adds no version bump, tag, binary release or deployment. Earlier
+entries below preserve their original acceptance and publication scope.
+
 ## Photorealistic hero correction — 2026-10-04
 
 Replaced the schematic README hero with the requested generated photographic

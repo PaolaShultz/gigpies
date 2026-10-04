@@ -1,0 +1,12 @@
+{
+  "format": "gigpies-role-fixture-manifest",
+  "version": 1,
+  "protocol": "gigpies-role-lease:1",
+  "files": {
+    "process-corpus.json": "542e1fa6419e3ca5b30d6bf8312ab765fc4a6f9abde98ae622eb1c0e8e99bb11",
+    "acquire-b.json": "ee874867a03d8f33c0d8c5a2f3897560575f1cdc2270380aae4b862c775641bb",
+    "grant-a.json": "6e8d7ef14eed800a04a8a4474c5e0485ae61060bbc4a544af9ec753c5b9a61a7",
+    "acquire-a.json": "9eded0c0a8151d5fad3c470338b0c5b72fc02d3f77c54ce172b7a53d4ffef2b6",
+    "reclaim-a.json": "d16dcd37c2a416baeb3ce0daa8ead212f7fa9ec0c2aaf180baa94dabc82d7075"
+  }
+}

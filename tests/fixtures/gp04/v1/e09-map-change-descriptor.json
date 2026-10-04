@@ -1,0 +1,25 @@
+{
+  "contract": "C-ANALYSIS",
+  "version": 1,
+  "subscription": "lux.aux.v1",
+  "source_epoch": "9",
+  "stream": 3,
+  "sample_rate": 48000,
+  "first_frame": "48000",
+  "sources": [
+    "kick",
+    "bass",
+    "guitar-1",
+    "guitar-2"
+  ],
+  "inputs": [
+    "input-01",
+    "input-02",
+    "input-03",
+    "input-04"
+  ],
+  "tap": "raw-pre-fader",
+  "map_revision": "2",
+  "calibration_revision": "2",
+  "clock": "linux-clock-monotonic-ms"
+}

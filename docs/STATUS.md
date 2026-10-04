@@ -1,5 +1,59 @@
 # Status and next steps
 
+## Integrated software milestone — 2026-10-04
+
+GigPies now provides descriptor-bound process-held roles (GP-09), bounded named
+PCM analysis (GP-04), and an optional graph using the actual SHR REC, FX and PA
+libraries (GP-05). Recording preserves all eight raw input streams; the stereo
+FOH sum passes through fixed wet/dry FX and the owner's logical PA main outputs.
+Desk displays the provider's recorder, FX and PA health read-only (DS-05).
+The unchanged monitor paths and control authority remain separate.
+
+Desk and Lightdesk have optional native frontends over their real provider clients,
+including resize/recovery, bounded input/output, complete protected reviews and
+explicit role leases. Native rendering is checked offscreen with a CPU Vulkan
+adapter. Real displays, controller enumeration, MIDI and LED output are unverified.
+
+Lux consumes actual named PCM through its existing analysis and show policy.
+Calibration and bounded intensity AUTO grants require explicit authority; human
+programmer/Hold values win. Source loss, stale acquisition timestamps, identity
+changes and expired grants freeze the last contribution without automatic rearming.
+Lightdesk decodes this opt-in schema while keeping Lux responsible for arbitration.
+
+REC-01/02 expose correlated lifecycle and retained, non-owning progress observation.
+FX-01 and PA-01 expose exact versioned capabilities/status with their existing DSP.
+Configurable FX racks, writable PA controls, acoustic measurements, true-peak protection
+and wider graph expansion remain unavailable. The PA integration applies its
+sample limiter to logical main outputs only; it establishes no physical protection.
+
+The prior GP-01/02/03, private GP-06 subset, LX-01..04 and console clients remain
+in place. Production remote authentication, physical I/O, combined-load/scheduler
+qualification and optional instruments are subsequent increments. No version bump,
+tag, binary release or deployment accompanies this source milestone.
+
+See the [current implementation map](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+and [local integration instructions](HEADLESS_INTEGRATION.md) for accepted checks,
+reproduction and remaining gates. Dated entries below retain their original scope.
+
+## Previous local-engine checkpoint — 2026-10-04
+
+The substantial software continuation now includes GP-01/02/03 and the private
+local subset of GP-06 in GigPies, LX-01/02/03/04 in Lux, and real provider clients
+in Desk and Lightdesk. All four normal suites and actual cross-process checks
+passed, including continued audio control while Lux restarts and restores its
+checkpoint disarmed. Reviewed source is saved in all four owning repositories.
+Follow the
+[current implementation map](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+and [explicit local session instructions](HEADLESS_INTEGRATION.md).
+
+Audio has eight mono inputs, stereo FOH, two post-mute pre-fader monitor sends,
+48-frame command boundaries and 240-frame coefficient ramps. Lux owns actual
+programmer/Hold/cue/playback state, timed release and durable disarmed recovery.
+These paths use synthetic audio and null lighting output. Native display/controller
+binding, PA/FX/REC binding into this graph, production remote authentication and
+physical/combined-load acceptance remain open. No version bump or public release
+is part of this work. Dated entries below preserve their original evidence.
+
 ## 0.2.3 — dual-console integration checkpoint, 2026-10-04
 
 The complete GigPies product includes **audio and lighting digital operator

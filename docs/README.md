@@ -3,7 +3,8 @@
 **GigPies 0.2.3: one system, two human-operated consoles.** Begin with the
 [system map](ARCHITECTURE.md), [Brain console plan](BRAIN_CONSOLE_PLAN.md) and
 [current handoff](NEXT_SESSION.md). SHR Desk owns audio UI, SHR Lightdesk lighting
-UI, and SHR Lux the lighting engine. Native/live integration remains planned.
+UI, and SHR Lux the lighting engine. Native software and local engine integration
+are implemented; physical and production remote acceptance remain separate.
 
 [Artistic FX pass](ARTISTIC_FX.md): six-example historical evidence, expert-selected
 effects, preserved direct tone, calibration and verification. The executed
@@ -23,6 +24,15 @@ selection and evidence.
 | [Audio transport](AUDIO_TRANSPORT.md) | GPA1 packet/control formats, PA clock, measured limits, recovery and physical acceptance gates |
 | [Audio transport plan](AUDIO_TRANSPORT_PLAN.md) | Owning execution plan, targets, repairs, verification and task completion |
 | [Brain console integration](BRAIN_CONSOLE_PLAN.md) | Dual audio/lighting Brain, SHR Desk/Lightdesk/Lux ownership, controller/display assignment and integration backlog |
+| [Local engine integration](HEADLESS_INTEGRATION.md) | Real offline audio and null lighting services, explicit console commands and acceptance limits |
+| [Owner-library graph](MODULE_GRAPH.md) | Actual REC/FX/PA activation, recorder lifecycle, fixed logical processing and health |
+| [Named analysis stream](ANALYSIS_STREAM.md) | Bounded raw PCM windows, identity, acquisition age and independent failure |
+| [Native role binding](ROLE_BINDING.md) | Descriptor identities, process-held ownership, generations and synthetic acceptance |
+| [Module implementation map](MODULE_IMPLEMENTATION_MAP.md) | Twelve owning plans, current execution state, dependencies and remaining gates |
+| [Module contracts](MODULE_CONTRACTS.md) | Coordinated versioned provider/consumer definitions and shared acceptance examples |
+| [Parallel work](PARALLEL_WORK_PLAN.md) | Four worker lanes, two Pi4 sessions and one build slot per host |
+| [Continuation and publication prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md) | Authorized brief for the completed integrated software milestone and scoped source publication |
+| [Module planning prompt](MODULE_PLANNING_EXECUTION_PROMPT.md) | Historical planning brief: owning module plans, shared contracts and independent implementation lanes |
 | [Audio transport execution prompt](AUDIO_TRANSPORT_EXECUTION_PROMPT.md) | Historical brief for the completed transport phase; not a fresh test authorization |
 | [Audio hardware execution prompt](AUDIO_HARDWARE_EXECUTION_PROMPT.md) | Historical brief for the qualified stereo host phase; follow the current hardware handoff |
 | [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |
@@ -77,3 +87,10 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 - [Frozen EQ matching](EQ_MATCHING.md): reference catalogue, provisional maps, amount/reset, CLI/local review and validation.
 - [Next session](NEXT_SESSION.md): dual Full-HD consoles, engine contracts, qualified hardware limits and listening/peer handoffs.
 - [Two-Pi development lab](NODE_LAB.md): fixed Ethernet addresses, SSH/Git handoffs and the first protocol experiments.
+
+## GigPies integration planning — 2026-10-04
+
+[Owning GigPies plan](MODULE_IMPLEMENTATION_PLAN.md) records scoped tasks, contract dependencies,
+validation and launch instructions. The [execution checkpoint](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+records the subsequent implementation; the original planning baseline and hardware
+evidence retain their dated scope.

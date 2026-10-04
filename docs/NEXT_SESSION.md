@@ -1,35 +1,36 @@
-# Next session: dual consoles and integration
+# Next session: physical gates and subsequent software increments
 
-Current handoff for **0.2.3**, 2026-10-04. The preceding accumulated handoff is
-[preserved unchanged](archive/next_session-before-0.2.3-2026-10-04.md). Historical
-execution prompts describe their original session scope; they do not authorize
-new hardware tests or override the current module map.
+Current handoff after the integrated software milestone, 2026-10-04. The
+[previous local-client handoff](archive/next-session-before-modules-2026-10-04.md)
+is preserved. The [continuation prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md)
+records this completed software/publication scope; recover the current source
+and acceptance before using any historical launch card.
 
-## First: continue the two operator surfaces
+Read the [local integration instructions](HEADLESS_INTEGRATION.md),
+[implementation map](MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
+[architecture](ARCHITECTURE.md) and [ownership map](COMPONENTS.md). The intended
+Brain hosts two 1920×1080 monitors and two independently assigned MIDI controllers:
+Desk for audio and Lightdesk for lighting. Manual operation remains independent;
+ASSIST proposes, and AUTO requires explicit bounded authority.
 
-Read [Brain integration](BRAIN_CONSOLE_PLAN.md), [architecture](ARCHITECTURE.md)
-and [module ownership](COMPONENTS.md). The intended Brain hosts **two 1920×1080
-monitors and two independently assigned MIDI keyboard controllers**: SHR Desk
-for audio and SHR Lightdesk for lighting. Manual operation stands on its own;
-ASSIST proposes and AUTO requires explicit bounded authority.
-
-| Owner | Current foundation | Concrete next work |
+| Owner | Accepted software foundation | Next separate increment |
 |---|---|---|
-| `../shr-desk` | Offline audio state/command simulator and three screen drafts | Native renderer, complete keyboard/controller navigation, real GigPies audio capability adapter |
-| `../shr-lightdesk` | Offline lighting loop, synthetic authority, seven screen drafts and 27 passing tests | Native window/focus/editors; then a read-only Lux adapter once a contract exists |
-| `../shr-lux` | Recorded-source analysis, show/LED previews; lighting design research | Authoritative fixture/patch/programmer/hold/cue contracts, null output first; timing, persistence and physical output later |
-| GigPies | Audio transport and qualified stereo PA/FX/REC bench | Shared show compatibility, display/controller role assignment, independent input/LED workers, real control schemas |
+| GigPies | GP-01..05, GP-09 and private local GP-06 subset; real owner graph, named analysis and role broker | Reviewed production remote authentication (B-NET), wider GP-07 scenes/channels; separately authorized physical/combined-load gates |
+| SHR Desk | DS-01..04 including native software frontend; read-only DS-05 actual module health | Physical dual-display/controller/LED acceptance (GP-H2); later writable controls only after owner contracts |
+| SHR Lightdesk | LD-01..04 including native software frontend and read-only LX05 compatibility | Physical role/display/controller acceptance; later analysis controls only as an explicit increment |
+| SHR Lux | LX-01..05 null-output authority, release/recovery and named source automation | LX-06 fixture output only with known patch, explicit arming and hardware reservation |
+| SHR REC / FX / PA | REC-01/02 and fixed-v1 FX-01/PA-01 implemented in their owners and consumed by GP-05 | Writable extensions/acoustic acceptance remain owner work; no duplicate algorithms in GigPies |
 
-Read each sibling's README, blueprint/status and AGENTS before changing its code;
-sibling writes need their own scope. Lightdesk must not become a second lighting
-engine. Lux must not compete for its assigned pad LEDs. Controller identity and
-active preset for the second device remain unverified. A stale or ambiguous
-assignment stays unbound rather than sending notes to another desk/instrument.
+Read each owner's instructions and current acceptance before changes. Console
+software rendering and injected descriptors do not verify actual display/controller
+identity, MIDI or LED ownership. Real enumeration and dual-device acceptance remain
+GP-H2. Missing or ambiguous identities must remain unbound.
 
-Native HDMI/controller acceptance, fixture output and combined CPU/GPU/memory
-acceptance are distinct gates. A drawn fixture or mock ACK establishes no DMX
-output. Preserve source holds/current looks through mode/reconnect changes until
-explicit release. Lighting failure must not block audio control or essential audio.
+Physical fixture output, acoustic protection and combined CPU/GPU/memory/scheduler
+acceptance require their own authorized sessions and reservations. Preserve human
+holds and current looks through loss/reconnect until explicit release. Lighting
+failure must not block audio control or recording. No physical operation follows
+from the completed software publication.
 
 ## Qualified stereo hardware handoff
 

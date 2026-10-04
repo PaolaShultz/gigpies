@@ -59,6 +59,18 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('credential-like', result.stderr)
         self.assertNotIn(secret.decode(), result.stderr)
 
+    def test_rust_inner_attribute_is_not_a_shebang_but_scripts_still_are(self):
+        self.write('src/lib.rs', b'#![cfg(target_os = "linux")]\n')
+        self.git('add', 'src/lib.rs')
+        self.assertEqual(self.check().returncode, 0)
+        self.write('src/lib.rs', b'#!/bin/sh\necho synthetic\n')
+        self.git('add', 'src/lib.rs')
+        self.assertIn('script absent', self.check().stderr)
+        self.write('src/lib.rs', b'#![cfg(target_os = "linux")]\n')
+        (self.root / 'src/lib.rs').chmod(0o755)
+        self.git('add', 'src/lib.rs')
+        self.assertIn('script absent', self.check().stderr)
+
     def test_renamed_audio_and_external_symlink_are_blocked(self):
         self.write('docs/evidence.txt', b'RIFF' + b'\0' * 4 + b'WAVE')
         self.git('add', 'docs/evidence.txt')
@@ -79,6 +91,13 @@ class PublicationTests(unittest.TestCase):
         tip = self.git('rev-parse', 'HEAD').decode().strip()
         self.assertEqual(self.check('--revision', tip).returncode, 0)
         result = self.check('--push', stdin=f'refs/heads/main {tip} refs/heads/main {baseline}\n')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('user/private.json', result.stderr)
+
+    def test_push_rejects_unsafe_index_even_with_no_outgoing_commits(self):
+        self.write('user/private.json', b'{}')
+        self.git('add', '-f', 'user/private.json')
+        result = self.check('--push', stdin='')
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('user/private.json', result.stderr)
 
