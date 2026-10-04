@@ -1,13 +1,29 @@
 # Visual map and historical concept review
 
-The current README [hero](assets/gigpies-banner.svg) and
-[system diagram](assets/architecture.svg) are original, code-authored SVGs updated
-for the dual-console direction in 0.2.3. They show the **intended complete system**,
-not a photograph of working hardware or proof of live integration.
+The current README [hero](assets/gigpies-hero.png) is an AI-generated,
+photorealistic visualization of the **intended complete system**. It replaces the
+schematic banner after the requested visual correction. The separate
+[system diagram](assets/architecture.svg) remains a code-authored SVG for precise
+module ownership. Neither image establishes hardware acceptance.
+
+The hero shows two physical LCDs and two MIDI piano keyboards in front of a lit
+band stage, with one Brain Pi between the desks. A second processing/Stagebox Pi
+has its own small screen and audio I/O rack; physical cable looms, three-way PA
+stacks, stage wedges, instruments and a personal-monitor phone show the setting.
+Device panels, speaker arrangements and cables are illustrative rather than a
+verified installation plan. The generated screens use the actual Desk/Lightdesk
+drafts as visual references, with added future-looking detail.
+
+Generated 2026-10-04 with the built-in image generation tool, using the preserved
+original concept plus the two projects' offline Mix/Stage screenshots. The exact
+[generation prompt](assets/gigpies-hero-prompt.txt) is retained. The selected
+1672×941 PNG is about 2.17 MiB and is explicitly reviewed in the publication policy.
+The superseded [schematic banner](archive/assets/gigpies-banner-schematic-2026-10-04.svg)
+is preserved; the technical system diagram and engine ownership are unchanged.
 
 - One Brain hosts the audio surface **SHR Desk** and lighting surface **SHR Lightdesk**.
   Each gets its own 1920×1080 screen and independently assigned MIDI controller.
-  The stylized controllers describe the intended vocabulary, not verified device models.
+  The pictured controllers describe the intended vocabulary, not verified device models.
 - Human operation comes first. MANUAL, ASSIST and bounded AUTO are console modes.
 - GigPies owns integration and the band mixer. Stagebox owns local audio I/O,
   monitor paths, PA protection and recording to NVMe; its small display is local PA UI.
@@ -44,6 +60,7 @@ Its generated device panels, labels and some mappings are inaccurate. In particu
 - Muted source analysis does not establish acoustic response, speaker protection,
   feedback behavior, lighting coverage or dependable unattended operation.
 
-Third-party names in the original artwork imply no endorsement. Read current
+Third-party names and rendered device designs in either image imply no endorsement.
+Read current
 [architecture](ARCHITECTURE.md), [owners](COMPONENTS.md) and
 [status](STATUS.md) for implementation and acceptance boundaries.

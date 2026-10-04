@@ -1,5 +1,21 @@
 # Validation and acceptance records
 
+## Photorealistic hero correction — 2026-10-04
+
+Replaced the schematic README hero with the requested generated photographic
+scene and archived the SVG banner. Visual inspection covers the two distinct
+screen/controller pairs, single foreground Brain, separate Stagebox/I/O rack
+with local screen, phone controls, lit instrument stage, PA and monitor wedges.
+The image remains an intended-system visualization rather than hardware evidence.
+
+The PNG signature, 1672×941 dimensions, SHA-256 and 2.17 MiB size were checked;
+its exact path is added to the reviewed artwork list. All 37 Python tests pass,
+including publication-policy regressions. Local current-document links and staged
+whitespace pass, with the full-index publication guard enabled. Runtime code and
+package versions are unchanged, so the 0.2.3 Rust/build evidence below is reused.
+No hardware, playback, shared load, long research or new Rust tests were run for
+this artwork/documentation-only correction. The existing v0.2.3 tag is retained.
+
 ## 0.2.3 publication checks — 2026-10-04
 
 Actual host **rpi5**, Rust 1.97.1, edition 2024, committed Cargo.lock and

@@ -50,6 +50,7 @@
     "src/automix/matching/review.html"
   ],
   "binary_artwork": [
-    "docs/assets/gigpies-concept.png"
+    "docs/assets/gigpies-concept.png",
+    "docs/assets/gigpies-hero.png"
   ]
 }

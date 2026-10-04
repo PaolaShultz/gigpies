@@ -1,5 +1,9 @@
 # Document archive
 
+- [Schematic dual-console banner](assets/gigpies-banner-schematic-2026-10-04.svg):
+  the initial 0.2.3 hero, superseded by the requested photorealistic stage/operator
+  scene. The [current visual review](../CONCEPT_REVIEW.md) records the new image.
+
 - [Next-session handoff before 0.2.3](next_session-before-0.2.3-2026-10-04.md)
   and [previous concept review](concept_review-before-0.2.3-2026-10-04.md): exact
   snapshots before reconciling completed bench work and the dual-console product.

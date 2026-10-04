@@ -1,8 +1,8 @@
 # Source, artwork and media
 
-The Rust foundation and the code-authored SVG hero/system diagrams are original
-project work under MIT, including the 0.2.3 dual-console revision and archived
-earlier SVGs. The depicted console screens/controllers are schematic original
+The Rust foundation, code-authored SVG system diagram and archived SVG banners
+are original project work under MIT, including the 0.2.3 dual-console revision.
+Their depicted console screens/controllers are schematic original
 artwork, not manufacturer screenshots. The original v0.1.0 foundation copied no
 sibling code; later DSP adaptations are attributed below. Dependency versions are locked in Cargo.lock;
 upstream dependency licences continue to apply.
@@ -17,6 +17,17 @@ upstream dependency licences continue to apply.
 project owner. It is preserved as a concept reference, with limitations documented in
 `docs/CONCEPT_REVIEW.md`. Third-party names and marks belong to their owners; no
 endorsement or ownership of those marks is claimed.
+
+`docs/assets/gigpies-hero.png` is the replacement photorealistic hero generated
+with the built-in image generation tool on 2026-10-04. It uses the owner-supplied
+concept and the projects' original offline Desk/Lightdesk screen drafts as visual
+references. It depicts an intended setup, not a photographed hardware test.
+The exact prompt is `docs/assets/gigpies-hero-prompt.txt`; limitations are in the
+[visual review](docs/CONCEPT_REVIEW.md). Rendered manufacturer names and device
+designs imply no endorsement or verified model/mapping. No manufacturer photograph
+or manual was downloaded or bundled for this revision.
+
+Hero PNG SHA-256: `0ee023cd70312a9c3820ad11960525dbfe99114f8a5bf1a5b7ba68dd8d34aa9b`.
 
 The Complainiacs / Dark Ride recordings are local educational experiment material.
 Their source notices remain with local files. They are not covered by this project's

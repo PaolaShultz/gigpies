@@ -1,6 +1,6 @@
 <div align="center">
 
-![GigPies — audio and light; two consoles on one Brain, each with a Full-HD screen and MIDI controller](docs/assets/gigpies-banner.svg)
+![GigPies — two audio and lighting console screens with MIDI keyboards and one Brain Pi, facing a lit band stage with PA, monitors, a separate processing stagebox and phone control](docs/assets/gigpies-hero.png)
 
 **Audio console · Lighting console · Performer monitors · Multitrack recording**
 
@@ -28,7 +28,8 @@ In MANUAL, the operator runs the show; ASSIST proposes changes; AUTO acts only
 within explicitly granted scopes. Soundcheck can prepare a baseline, while
 human control remains available independently of automation.
 
-The hero depicts the intended operator setup, with schematic screens and controllers.
+The hero is an AI-generated, photorealistic visualization of the intended operator
+setup and stage, with both digital desks, the separate processing node and phone control.
 The [original concept artwork](docs/CONCEPT_REVIEW.md) is retained as a historical reference.
 
 ## Two nodes. Clear responsibilities.
