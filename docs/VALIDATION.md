@@ -1,4 +1,45 @@
-# Foundation validation — 2026-10-01
+# Validation and acceptance records
+
+## 0.2.3 publication checks — 2026-10-04
+
+Actual host **rpi5**, Rust 1.97.1, edition 2024, committed Cargo.lock and
+`CARGO_INCREMENTAL=0`. This pass changes documentation, original SVG artwork
+and package version metadata; existing transport/hardware code is included in
+the outgoing state, with its prior qualified evidence preserved.
+
+- Complete normal Rust suite with the optional host code compiled:
+  `cargo test --locked --all-targets --features hardware-host` — **209 passed**.
+  Three historical private-media tests and one opt-in local socket test were
+  intentionally ignored. No audio/MIDI/DMX device was opened.
+- Complete Python suite — **37 passed**. Formatting, locked check and
+  all-target Clippy with `hardware-host` and warnings denied passed.
+- Locked optimized CLI build passed and reports `gigpies 0.2.3`. Manifest and
+  lockfile package versions agree. The optional hardware-host binary is also
+  built for publication; building it does not run a device session.
+- All 55 Markdown documents were scanned for local references and current
+  system/version wording. The 387 local link references have no missing current
+  targets. Archived snapshots retain their original `docs/` link context; the
+  preserved drafts are historical, not current operating instructions.
+- Hero and system SVGs were parsed, rendered and visually inspected. The diagrams
+  show both display/controller pairs, separate surface/engine owners, independent
+  performer monitor buses and Stagebox-local recording. They claim intended
+  topology, not live-console or physical-lighting acceptance.
+- Full-index and outgoing-history publication checks run with the versioned hooks.
+  Named staged files are reviewed; recordings, private state, generated media,
+  one-off review tooling and sibling source remain outside the publication.
+
+The independent Desk/Lightdesk sources are not bundled or pushed by this GigPies
+publication. Their earlier offline validation is recorded by their owners. Native
+windows, real lighting authority/output, controller/display assignment and combined
+CPU/GPU/memory acceptance remain planned. No historical research matrix, new music
+render, playback, load test, physical output or host/service configuration ran.
+
+Concise local logs/previews live under ignored `artifacts/publication-0.2.3/`.
+Existing build/evidence directories were reviewed and preserved. The normal build
+directory is about 7.6 GiB after both release builds; about 30 GiB remains free.
+This pass removed its idle temporary preview environment and one-off renderer,
+recovering 39 MiB, and retained about 428 KiB of logs/previews. Remote CI is a
+separate result for the pushed revision.
 
 ## Summing and delivery execution — 2026-10-03, unreleased
 

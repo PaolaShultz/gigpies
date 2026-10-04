@@ -1,5 +1,10 @@
 # Audio hardware execution plan
 
+Publication note, 2026-10-04: 0.2.3 includes this qualified stereo host checkpoint.
+The original scopes and failed/passed trials below remain historical evidence.
+Neither publication nor the dual-console plan renews hardware authorization;
+read [the current handoff](NEXT_SESSION.md) before a continuation.
+
 **Live latency acceptance is unmet.** The user rejected the 64 ms buffer / 56 ms
 prefill configuration as unsuitable for live use. Its clean soak is retained as
 a correctness benchmark. The next work fixes partial-read pacing and tests the

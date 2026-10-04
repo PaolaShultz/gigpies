@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.2.3 — 2026-10-04
+
+- Defines GigPies as the complete audio and lighting system: SHR Desk owns the
+  audio surface, SHR Lightdesk the lighting surface, and SHR Lux the lighting
+  engine. One Brain hosts two 1920×1080 displays and two independently assigned
+  MIDI keyboard controllers. MANUAL, ASSIST and bounded AUTO are operating modes.
+- Replaces the README hero and system diagram with accurate, original SVG maps;
+  archives superseded plans and clarifies current versus historical documentation.
+- Includes previously local GPA1 audio/control transport and the explicit optional
+  stereo USB host using independently built PA/FX/REC modules. The recorded bench
+  passed its ten-minute H8 gate; 5.19–5.23 ms working-channel delay still had two
+  unresolved one-frame changes. This is not complete-show or multichannel acceptance.
+- Includes summing observations, explicit delivery controls and offline true-peak
+  finalization, preserving the source settings and selected effects.
+- Records separate display/controller ownership, show compatibility, recovery and
+  combined workload gates. The two surface projects remain independent; their
+  mock authorities and screen drafts are not bundled live consoles or a Lux engine.
+
+Native console integration, full mixer/lighting controls, physical lighting and
+combined two-surface hardware acceptance remain planned. No new hardware or
+listening tests were performed for this version; publication checks are recorded
+in [validation](docs/VALIDATION.md).
+
 ## 0.2.2 — 2026-10-03
 
 - Paired EQ diagnostics and readable saved-report summaries separate spectral

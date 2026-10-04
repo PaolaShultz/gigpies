@@ -1,6 +1,8 @@
 # Execute the mixing-engine plan
 
-Copy the prompt below into the next working session.
+Historical execution brief for the completed [summing plan](SUMMING_PLAN.md).
+Retained verbatim below for context; use [the current handoff](NEXT_SESSION.md)
+instead of restarting the historical study. Its implementation is included in 0.2.3.
 
 ```text
 Work in /home/shome/p/gigpies. Execute docs/SUMMING_PLAN.md through its required

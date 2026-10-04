@@ -1,5 +1,9 @@
 # Summing mixer investigation and implementation plan
 
+Publication note, 2026-10-04: the completed implementation is included in 0.2.3.
+The execution records below retain the original local/unreleased scope and
+measurements. They do not request a new study or listening session.
+
 Prepared 2026-10-03. **Status: implemented, offline-validated and complete listening
 exports prepared, 2026-10-03. Listener preference pending; hardware unverified.**
 

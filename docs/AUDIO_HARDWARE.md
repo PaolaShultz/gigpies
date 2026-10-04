@@ -11,7 +11,7 @@ The earlier 56 ms prefill result is historical and rejected for live latency.
 Unreleased, bounded bench integration of the independently built SHR modules.
 The [execution plan](AUDIO_HARDWARE_PLAN.md) continues the preceding
 [synthetic transport phase](AUDIO_TRANSPORT.md). This implements an explicit ALSA host and real stereo module processing/recording.
-The live console, complete mixer, multichannel stagebox and recorder UI remain
+The live audio and lighting consoles, complete mixer, multichannel stagebox and recorder UI remain
 separate planned integrations.
 
 ## Topology and device scope

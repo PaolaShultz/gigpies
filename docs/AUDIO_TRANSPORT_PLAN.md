@@ -1,5 +1,10 @@
 # Audio transport execution plan
 
+Publication note, 2026-10-04: this completed phase is included in 0.2.3. Its
+original session/commit scope below is historical; new network/load work still
+requires its own reservation. Dual-console integration continues under the
+[Brain plan](BRAIN_CONSOLE_PLAN.md).
+
 Completed preceding phase. The authorized [hardware continuation plan](AUDIO_HARDWARE_PLAN.md)
 and [actual-device results](AUDIO_HARDWARE.md) now own PA/FX/REC integration;
 this plan retains its synthetic measurements and original limits.

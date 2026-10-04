@@ -1,10 +1,10 @@
 [package]
 name = "gigpies"
 default-run = "gigpies"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 rust-version = "1.97.1"
-description = "Experimental live-band soundcheck and show automation"
+description = "Experimental live-band audio and lighting system"
 license = "MIT"
 repository = "https://github.com/PaolaShultz/gigpies"
 publish = false

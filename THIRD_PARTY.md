@@ -1,7 +1,10 @@
 # Source, artwork and media
 
-The Rust foundation and the code-authored SVG banner/architecture diagram are original project work under MIT. No code from sibling SHR
-repositories is copied into v0.1.0. Dependency versions are locked in Cargo.lock;
+The Rust foundation and the code-authored SVG hero/system diagrams are original
+project work under MIT, including the 0.2.3 dual-console revision and archived
+earlier SVGs. The depicted console screens/controllers are schematic original
+artwork, not manufacturer screenshots. The original v0.1.0 foundation copied no
+sibling code; later DSP adaptations are attributed below. Dependency versions are locked in Cargo.lock;
 upstream dependency licences continue to apply.
 
 - hound: Apache-2.0 WAV library.

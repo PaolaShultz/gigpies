@@ -1,10 +1,239 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
-<title id="title">GigPies — Soundcheck prepares the show. Live automation protects it.</title><desc id="desc">Dark stage inspired GigPies wordmark with cyan and amber audio waveforms. Experimental live sound system built in Rust for Raspberry Pi.</desc>
-<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#071522"/><stop offset="1" stop-color="#13101c"/></linearGradient><linearGradient id="wave" gradientUnits="userSpaceOnUse" x1="780" x2="1132" y1="0" y2="0"><stop stop-color="#34dce8"/><stop offset=".55" stop-color="#8581ff"/><stop offset="1" stop-color="#ffc176"/></linearGradient><radialGradient id="glow"><stop stop-color="#1da8bc" stop-opacity=".22"/><stop offset="1" stop-color="#1da8bc" stop-opacity="0"/></radialGradient></defs>
-<rect width="1200" height="360" rx="20" fill="url(#bg)"/><ellipse cx="1000" cy="160" rx="400" ry="260" fill="url(#glow)"/>
-<g stroke="#6bacbc" opacity=".09"><path d="M0 0V360"/><path d="M40 0V360"/><path d="M80 0V360"/><path d="M120 0V360"/><path d="M160 0V360"/><path d="M200 0V360"/><path d="M240 0V360"/><path d="M280 0V360"/><path d="M320 0V360"/><path d="M360 0V360"/><path d="M400 0V360"/><path d="M440 0V360"/><path d="M480 0V360"/><path d="M520 0V360"/><path d="M560 0V360"/><path d="M600 0V360"/><path d="M640 0V360"/><path d="M680 0V360"/><path d="M720 0V360"/><path d="M760 0V360"/><path d="M800 0V360"/><path d="M840 0V360"/><path d="M880 0V360"/><path d="M920 0V360"/><path d="M960 0V360"/><path d="M1000 0V360"/><path d="M1040 0V360"/><path d="M1080 0V360"/><path d="M1120 0V360"/><path d="M1160 0V360"/><path d="M1200 0V360"/><path d="M0 0H1200"/><path d="M0 40H1200"/><path d="M0 80H1200"/><path d="M0 120H1200"/><path d="M0 160H1200"/><path d="M0 200H1200"/><path d="M0 240H1200"/><path d="M0 280H1200"/><path d="M0 320H1200"/><path d="M0 360H1200"/></g><g stroke="url(#wave)" stroke-width="6" stroke-linecap="round"><path d="M780 173.8v12.3"/><path d="M788 163.9v32.2"/><path d="M796 147.1v65.7"/><path d="M804 145.4v69.2"/><path d="M812 160.6v38.8"/><path d="M820 172.5v15.0"/><path d="M828 164.8v30.3"/><path d="M836 147.0v66.0"/><path d="M844 141.4v77.2"/><path d="M852 154.2v51.6"/><path d="M860 167.0v26.0"/><path d="M868 161.2v37.7"/><path d="M876 142.1v75.8"/><path d="M884 132.2v95.6"/><path d="M892 141.6v76.8"/><path d="M900 154.7v50.7"/><path d="M908 150.8v58.3"/><path d="M916 131.6v96.8"/><path d="M924 118.7v122.6"/><path d="M932 125.7v108.6"/><path d="M940 140.4v79.1"/><path d="M948 141.0v77.9"/><path d="M956 124.8v110.4"/><path d="M964 111.8v136.3"/><path d="M972 118.8v122.4"/><path d="M980 136.9v86.2"/><path d="M988 143.6v72.8"/><path d="M996 132.0v96.0"/><path d="M1004 119.9v120.3"/><path d="M1012 126.1v107.8"/><path d="M1020 145.9v68.2"/><path d="M1028 156.8v46.5"/><path d="M1036 148.0v64.1"/><path d="M1044 134.5v91.0"/><path d="M1052 137.3v85.5"/><path d="M1060 155.6v48.9"/><path d="M1068 168.0v24.1"/><path d="M1076 160.4v39.1"/><path d="M1084 144.7v70.5"/><path d="M1092 143.0v74.0"/><path d="M1100 158.8v42.5"/><path d="M1108 172.3v15.4"/><path d="M1116 166.5v26.9"/><path d="M1124 149.6v60.7"/><path d="M1132 144.2v71.7"/></g><path d="M48 42H104" stroke="#3bdce7" stroke-width="4"/>
-<g font-family="DejaVu Sans, sans-serif"><text x="48" y="84" fill="#93a8bd" font-size="14" letter-spacing="4">SMALL VENUES / SERIOUS SOUND</text>
-<text x="44" y="169" fill="#f5f7fc" font-size="78" font-weight="bold" letter-spacing="-3">Gig<tspan fill="#4dddea">Pies</tspan></text>
-<text x="48" y="218" fill="#f1f4fb" font-size="23">Soundcheck prepares the show.</text><text x="48" y="252" fill="#aab7ca" font-size="23">Live automation protects it.</text>
-<text x="48" y="319" fill="#ffc176" font-size="12" letter-spacing="2">RUST CORE</text><text x="200" y="319" fill="#879bb2" font-size="12" letter-spacing="2">RASPBERRY PI</text><text x="389" y="319" fill="#879bb2" font-size="12" letter-spacing="2">LOCAL FIRST</text><text x="946" y="319" fill="#4dddea" font-size="12" letter-spacing="2">IN DEVELOPMENT</text></g>
-<rect x=".5" y=".5" width="1199" height="359" rx="20" fill="none" stroke="#2c3e52"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="650" viewBox="0 0 1440 650" role="img" aria-labelledby="title desc">
+<title id="title">GigPies — Audio and light. Two consoles. One system.</title><desc id="desc">Intended GigPies operator setup: audio console SHR Desk and lighting console SHR Lightdesk, each with a 1920 by 1080 screen and a separate MIDI keyboard controller, on one Brain. Stagebox owns local audio and recording; SHR Lux owns the lighting engine. Manual, Assist and Auto are modes. Surface integration is planned.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#091b28"/><stop offset="1" stop-color="#171324"/></linearGradient><marker id="cyan-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="#48d8e7"/></marker><marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="#ffc078"/></marker></defs>
+<rect width="1440" height="650" rx="20" fill="url(#bg)"/>
+<g font-family="DejaVu Sans, sans-serif">
+<text x="48" y="55" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">SMALL VENUES / HUMAN CONTROL</text>
+<text x="44" y="142" font-size="82" fill="#eff5ff" font-weight="bold" text-anchor="start">GigPies</text>
+<text x="48" y="208" font-size="34" fill="#eff5ff" font-weight="bold" text-anchor="start">Audio and light.</text>
+<text x="48" y="250" font-size="25" fill="#eff5ff" font-weight="normal" text-anchor="start">Two consoles. One system.</text>
+<text x="48" y="299" font-size="22" fill="#9dadc2" font-weight="normal" text-anchor="start">Prepare the show.</text>
+<text x="48" y="333" font-size="22" fill="#9dadc2" font-weight="normal" text-anchor="start">Mix and play it your way.</text>
+<text x="48" y="392" font-size="17" fill="#ffc078" font-weight="bold" text-anchor="start">MANUAL  /  ASSIST  /  AUTO</text>
+<rect x="48" y="436" width="408" height="134" rx="10" fill="#102332" stroke="#2b5060"/>
+<text x="68" y="469" font-size="16" fill="#48d8e7" font-weight="bold" text-anchor="start">STAGEBOX / LOCAL AUDIO</text>
+<text x="68" y="503" font-size="20" fill="#eff5ff" font-weight="normal" text-anchor="start">Mix · monitors · PA protection</text>
+<text x="68" y="539" font-size="18" fill="#9dadc2" font-weight="normal" text-anchor="start">Recording stays on local NVMe.</text>
+<rect x="510" y="32" width="890" height="540" rx="18" fill="#101c2a" stroke="#3a4660"/>
+<text x="538" y="67" font-size="19" fill="#bb9fee" font-weight="bold" text-anchor="start">ONE BRAIN / TWO INDEPENDENT SURFACES</text>
+<text x="550" y="110" font-size="18" fill="#48d8e7" font-weight="bold" text-anchor="start">AUDIO / 1920 × 1080</text>
+<rect x="542" y="125" width="368" height="214.0" rx="9" fill="#1b2939" stroke="#48d8e7"/>
+<rect x="550" y="133" width="352" height="198.0" rx="2" fill="#080f19" stroke="#080f19"/>
+<text x="562" y="156" font-size="13" fill="#48d8e7" font-weight="bold" text-anchor="start">SHR DESK</text>
+<text x="892" y="156" font-size="9" fill="#9dadc2" font-weight="normal" text-anchor="end">OFFLINE DRAFT</text>
+<rect x="566.0" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M576.0 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="569.0" y="194" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="586.0" y="198" width="3" height="42" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="606.5" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M616.5 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="609.5" y="212" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="626.5" y="198" width="3" height="62" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="647.0" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M657.0 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="650.0" y="230" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="667.0" y="198" width="3" height="42" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="687.5" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M697.5 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="690.5" y="194" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="707.5" y="198" width="3" height="62" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="728.0" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M738.0 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="731.0" y="212" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="748.0" y="198" width="3" height="42" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="768.5" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M778.5 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="771.5" y="230" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="788.5" y="198" width="3" height="62" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="809.0" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M819.0 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="812.0" y="194" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="829.0" y="198" width="3" height="42" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<rect x="849.5" y="178" width="26" height="116.0" rx="2" fill="#18293a" stroke="#2a3c52"/>
+<path d="M859.5 190V281.0" stroke="#9dadc2" stroke-width="2" fill="none"/>
+<rect x="852.5" y="212" width="15" height="7" rx="1" fill="#48d8e7" stroke="#2a3c52"/>
+<rect x="869.5" y="198" width="3" height="62" rx="0" fill="#6bd2a0" stroke="#2a3c52"/>
+<text x="565" y="316.0" font-size="11" fill="#9dadc2" font-weight="normal" text-anchor="start">MIX / MONITORS / RECORD</text>
+<path d="M726.0 339.0v12" stroke="#9dadc2" stroke-width="4" fill="none"/>
+<rect x="550" y="364" width="352" height="126" rx="8" fill="#172335" stroke="#48d8e7"/>
+<circle cx="574.0" cy="380" r="7" fill="#334359"/>
+<path d="M574.0 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="617.4285714285714" cy="380" r="7" fill="#334359"/>
+<path d="M617.4285714285714 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="660.8571428571429" cy="380" r="7" fill="#334359"/>
+<path d="M660.8571428571429 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="704.2857142857142" cy="380" r="7" fill="#334359"/>
+<path d="M704.2857142857142 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="747.7142857142858" cy="380" r="7" fill="#334359"/>
+<path d="M747.7142857142858 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="791.1428571428571" cy="380" r="7" fill="#334359"/>
+<path d="M791.1428571428571 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="834.5714285714286" cy="380" r="7" fill="#334359"/>
+<path d="M834.5714285714286 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="878.0" cy="380" r="7" fill="#334359"/>
+<path d="M878.0 380v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="574.0" cy="402" r="7" fill="#334359"/>
+<path d="M574.0 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="617.4285714285714" cy="402" r="7" fill="#334359"/>
+<path d="M617.4285714285714 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="660.8571428571429" cy="402" r="7" fill="#334359"/>
+<path d="M660.8571428571429 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="704.2857142857142" cy="402" r="7" fill="#334359"/>
+<path d="M704.2857142857142 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="747.7142857142858" cy="402" r="7" fill="#334359"/>
+<path d="M747.7142857142858 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="791.1428571428571" cy="402" r="7" fill="#334359"/>
+<path d="M791.1428571428571 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="834.5714285714286" cy="402" r="7" fill="#334359"/>
+<path d="M834.5714285714286 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<circle cx="878.0" cy="402" r="7" fill="#334359"/>
+<path d="M878.0 402v-5" stroke="#48d8e7" stroke-width="2" fill="none"/>
+<rect x="564.0" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="604.5" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="645.0" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="685.5" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="726.0" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="766.5" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="807.0" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="847.5" y="421" width="35.5" height="18" rx="3" fill="#48d8e7" stroke="#48d8e7"/>
+<rect x="562.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="569.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="575.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="589.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="596.3333333333334" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="603.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="616.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="630.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="637.3333333333334" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="644.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="657.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="664.6666666666666" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="671.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="685.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="692.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="698.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="712.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="726.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="733.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="739.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="753.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="760.3333333333334" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="767.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="780.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="794.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="801.3333333333334" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="808.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="821.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="828.6666666666667" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="835.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="849.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="856.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="862.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="876.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<text x="726" y="523" font-size="15" fill="#48d8e7" font-weight="normal" text-anchor="middle">MIDI KEYBOARD / AUDIO</text>
+<text x="980" y="110" font-size="18" fill="#ffc078" font-weight="bold" text-anchor="start">LIGHTING / 1920 × 1080</text>
+<rect x="972" y="125" width="368" height="214.0" rx="9" fill="#1b2939" stroke="#ffc078"/>
+<rect x="980" y="133" width="352" height="198.0" rx="2" fill="#080f19" stroke="#080f19"/>
+<text x="992" y="156" font-size="13" fill="#ffc078" font-weight="bold" text-anchor="start">SHR LIGHTDESK</text>
+<text x="1322" y="156" font-size="9" fill="#9dadc2" font-weight="normal" text-anchor="end">OFFLINE DRAFT</text>
+<rect x="1005" y="186" width="65" height="38" rx="3" fill="#172737" stroke="#ffc078"/>
+<rect x="1013" y="194" width="15" height="15" rx="2" fill="#ffc078" stroke="#2a3c52"/>
+<text x="1035" y="209" font-size="12" fill="#eff5ff" font-weight="normal" text-anchor="start">01</text>
+<rect x="1101" y="186" width="65" height="38" rx="3" fill="#172737" stroke="#ffc078"/>
+<rect x="1109" y="194" width="15" height="15" rx="2" fill="#bb9fee" stroke="#2a3c52"/>
+<text x="1131" y="209" font-size="12" fill="#eff5ff" font-weight="normal" text-anchor="start">02</text>
+<rect x="1197" y="186" width="65" height="38" rx="3" fill="#172737" stroke="#ffc078"/>
+<rect x="1205" y="194" width="15" height="15" rx="2" fill="#48d8e7" stroke="#2a3c52"/>
+<text x="1227" y="209" font-size="12" fill="#eff5ff" font-weight="normal" text-anchor="start">03</text>
+<rect x="1005" y="245" width="65" height="38" rx="3" fill="#172737" stroke="#ffc078"/>
+<rect x="1013" y="253" width="15" height="15" rx="2" fill="#ffc078" stroke="#2a3c52"/>
+<text x="1035" y="268" font-size="12" fill="#eff5ff" font-weight="normal" text-anchor="start">04</text>
+<rect x="1101" y="245" width="65" height="38" rx="3" fill="#172737" stroke="#ffc078"/>
+<rect x="1109" y="253" width="15" height="15" rx="2" fill="#bb9fee" stroke="#2a3c52"/>
+<text x="1131" y="268" font-size="12" fill="#eff5ff" font-weight="normal" text-anchor="start">05</text>
+<rect x="1197" y="245" width="65" height="38" rx="3" fill="#172737" stroke="#ffc078"/>
+<rect x="1205" y="253" width="15" height="15" rx="2" fill="#48d8e7" stroke="#2a3c52"/>
+<text x="1227" y="268" font-size="12" fill="#eff5ff" font-weight="normal" text-anchor="start">06</text>
+<text x="995" y="316.0" font-size="11" fill="#9dadc2" font-weight="normal" text-anchor="start">SELECT / PROGRAM / PLAY</text>
+<path d="M1156.0 339.0v12" stroke="#9dadc2" stroke-width="4" fill="none"/>
+<rect x="980" y="364" width="352" height="126" rx="8" fill="#172335" stroke="#ffc078"/>
+<circle cx="1004.0" cy="380" r="7" fill="#334359"/>
+<path d="M1004.0 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1047.4285714285713" cy="380" r="7" fill="#334359"/>
+<path d="M1047.4285714285713 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1090.857142857143" cy="380" r="7" fill="#334359"/>
+<path d="M1090.857142857143 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1134.2857142857142" cy="380" r="7" fill="#334359"/>
+<path d="M1134.2857142857142 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1177.7142857142858" cy="380" r="7" fill="#334359"/>
+<path d="M1177.7142857142858 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1221.142857142857" cy="380" r="7" fill="#334359"/>
+<path d="M1221.142857142857 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1264.5714285714284" cy="380" r="7" fill="#334359"/>
+<path d="M1264.5714285714284 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1308.0" cy="380" r="7" fill="#334359"/>
+<path d="M1308.0 380v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1004.0" cy="402" r="7" fill="#334359"/>
+<path d="M1004.0 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1047.4285714285713" cy="402" r="7" fill="#334359"/>
+<path d="M1047.4285714285713 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1090.857142857143" cy="402" r="7" fill="#334359"/>
+<path d="M1090.857142857143 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1134.2857142857142" cy="402" r="7" fill="#334359"/>
+<path d="M1134.2857142857142 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1177.7142857142858" cy="402" r="7" fill="#334359"/>
+<path d="M1177.7142857142858 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1221.142857142857" cy="402" r="7" fill="#334359"/>
+<path d="M1221.142857142857 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1264.5714285714284" cy="402" r="7" fill="#334359"/>
+<path d="M1264.5714285714284 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<circle cx="1308.0" cy="402" r="7" fill="#334359"/>
+<path d="M1308.0 402v-5" stroke="#ffc078" stroke-width="2" fill="none"/>
+<rect x="994.0" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1034.5" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1075.0" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1115.5" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1156.0" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1196.5" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1237.0" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="1277.5" y="421" width="35.5" height="18" rx="3" fill="#ffc078" stroke="#ffc078"/>
+<rect x="992.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="999.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1005.6666666666666" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1019.3333333333334" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1026.3333333333335" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1033.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1046.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1060.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1067.3333333333333" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1074.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1087.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1094.6666666666667" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1101.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1115.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1122.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1128.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1142.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1156.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1163.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1169.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1183.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1190.3333333333333" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1197.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1210.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1224.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1231.3333333333333" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1238.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1251.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1258.6666666666667" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1265.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1279.0" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1286.0" y="452" width="7" height="16" rx="1" fill="#0a111c" stroke="#0a111c"/>
+<rect x="1292.6666666666667" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<rect x="1306.3333333333333" y="452" width="12.666666666666666" height="27" rx="1" fill="#dbe5ef" stroke="#536279"/>
+<text x="1156" y="523" font-size="15" fill="#ffc078" font-weight="normal" text-anchor="middle">MIDI KEYBOARD / LIGHTING</text>
+<text x="538" y="553" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">SHR Desk → audio control     •     SHR Lightdesk → SHR Lux engine</text>
+<path d="M48 600H1392" stroke="#2a3c52" stroke-width="2" fill="none"/>
+<text x="48" y="628" font-size="14" fill="#48d8e7" font-weight="normal" text-anchor="start">RUST / RASPBERRY PI / LOCAL FIRST</text>
+<text x="1392" y="628" font-size="14" fill="#9dadc2" font-weight="normal" text-anchor="end">INTENDED SYSTEM · OFFLINE FOUNDATIONS TODAY</text>
+</g></svg>

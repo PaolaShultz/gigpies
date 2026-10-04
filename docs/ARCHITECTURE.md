@@ -1,5 +1,11 @@
 # Intended architecture
 
+GigPies includes an **audio digital mixing surface and a lighting control surface**
+for human operation. Both run on one Brain, with a separate Full-HD screen and
+MIDI keyboard controller for each. Automation is an optional mode within them.
+
+![GigPies system and module map](assets/architecture.svg)
+
 ## Implemented USB bench boundary
 
 The [hardware host](AUDIO_HARDWARE.md) now opens one explicitly selected stereo
@@ -7,7 +13,7 @@ USB interface, runs independently built SHR PA/FX/REC libraries through versione
 C interfaces and records real samples on the PA node. Brain follows the PA's USB
 source-frame timeline without an audio device. The render section uses bounded
 module calls/queues; driver I/O and disk/network work stay outside it. This is a
-measured stereo bench, while the broader live mixer/console below remains planned.
+measured stereo bench, while the broader live mixer and both native consoles remain planned.
 The host preserves dry processing and recording through Brain failure, fades both
 wet channels and requires fresh control state. Device faults close the old take
 as incomplete and require a fresh epoch. Prototype control does not yet change
@@ -21,45 +27,87 @@ Status: live node boundaries remain design direction. Offline soundcheck/renderi
 is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
 The [component map](COMPONENTS.md) records module ownership across the `../shr-*`
 projects and their intended integration into GigPies.
+The [Brain console integration plan](BRAIN_CONSOLE_PLAN.md) records the developing
+`../shr-desk` audio and `../shr-lightdesk` lighting surfaces: two 1920×1080
+monitors and two independently assigned MIDI keyboard controllers on one Brain,
+local NVMe recording on PA and richer FX on Brain. The surfaces own their human
+interfaces; GigPies owns integration/contracts and SHR Lux owns lighting authority.
+Both initial surface simulators are offline; native/live integration is planned.
+The [preceding architecture draft](archive/architecture-before-brain-console-2026-10-03.md)
+is preserved for context. These live changes remain planned.
 
 ## Stagebox / Mixer
 
-Own physical audio I/O, channel processing, mixing, monitor buses, internal effects,
-PA processing and local protection. Keep the monitor and main audio paths local.
+Own physical audio I/O, f64 channel processing/mixing, monitor buses, PA processing,
+local protection and multitrack recording to local NVMe. Keep the dry monitor and
+main audio paths local. Own FX send taps and return routing; richer send/return
+engines run on Brain, with a defined reduced local FX mode for Brain failure.
+The small display serves local PA operation. Recording uses a bounded worker path
+independent of Brain communication and the audio callback.
 Prepare structural changes outside the audio callback and apply bounded changes at
 block boundaries. Continuous parameters need defined smoothing.
 
 The live callback must avoid allocation, deallocation, locks, filesystem access,
 logging and unbounded work. These are implementation requirements, not performance
-claims about the current skeleton.
+claims about the complete system's performance.
 
 ## Brain / Show
 
-Own soundcheck analysis and prepared mix calculation, operator and performer controls,
-lighting decisions, recording and show metadata. Send validated parameter/state
-updates to the Stagebox. The Brain is outside the critical audio path.
+Two human-operated consoles run on Brain: audio in `../shr-desk`, lighting in
+`../shr-lightdesk`. Each has its own Full-HD display/controller pairing, selection,
+focus and independent process. Automation is a mode inside these consoles.
+The audio desk displays applied state and sends scoped requests; the core mixes.
+AUTO, ASSIST and MANUAL operation, parameter holds and explicit return to automation are
+specified in its blueprint. Manual operation must not require an automixer.
+Live authority and ramps remain engine integration work. Physical Stagebox/PA
+ownership does not make `shr-pa` the owner of a complete band-mixing engine.
 
-The intended failure behavior is to preserve the last valid Stagebox mix and local
-protection when Brain communication disappears. Reconnection and manual override
-semantics must be implemented and tested when we build that boundary.
+Own soundcheck analysis and prepared mix calculation, both full-HD (1920 × 1080)
+HDMI consoles, operator and performer controls, doctor/analysis services, the SHR
+Lux lighting engine, richer send/return FX and shared show metadata. The audio
+console commands and observes the PA recorder; audio is written on PA. Send validated parameter/state
+updates to the Stagebox. Brain is outside the essential dry main/monitor path;
+its FX have separate latency and failure behavior. Music-analysis extensions are
+future work with their own task.
+
+Lightdesk sends requests to SHR Lux; fixture evaluation, cue/effect execution,
+lighting arbitration and physical output remain in Lux. Its first static mock
+authority does not complete that engine. MANUAL operation is independent of
+audio-reactive automation. Shared show identity and named cross-system cues do
+not grant one desk authority over the other. Display/controller assignment uses
+verified roles and independent workers; lighting failure/redraw must not block
+audio input, real-time processing, protection or recording. See the
+[dual-console integration backlog](BRAIN_CONSOLE_PLAN.md) for missing contracts,
+combined unverified budgets and separately scoped physical acceptance.
+
+The intended failure behavior is to preserve the last valid Stagebox mix, local
+protection and recording when Brain communication disappears. Define wet-return
+fades and local fallback FX separately. A UI restart must refresh authoritative
+state without recalling an old mix. Reconnection and manual override semantics
+must be implemented and tested when we build that boundary.
 
 ## Connection and timing
 
-A dedicated Ethernet link carries source audio for analysis/recording and control
-messages. Separate Wi-Fi serves performer access and optional venue services.
+A dedicated Ethernet link carries source audio for analysis, FX sends/returns and
+control/status messages. Primary multitrack recording stays local to PA. Separate
+Wi-Fi serves performer access and optional venue services.
 The [audio transport contract](AUDIO_TRANSPORT.md) selects GPA1 UDP unicast,
 packed PCM24 analysis, float32 FX sends/wet returns and separate acknowledged
 UDP control. PA owns the 48 kHz source-frame timeline; Brain follows it.
 Packets carry epochs, channel groups and explicit wet output deadlines.
 Bounded queues, loss fades and fresh-state control recovery are implemented
-and synthetically tested; physical mixer/FX/recorder integration is pending.
+and synthetically tested. The stereo USB host integrates PA/FX/REC modules;
+complete mixer controls, multichannel integration and both console adapters remain pending.
 The USB audio device supplies the local audio clock. No network clock or
 resampler is installed; independent device clocks need measured ASRC acceptance.
 
 ## Audio and soundcheck
 
-The intended live rate is 48 kHz. Preserve source recording rates and precision for
-initial offline work; resampling will be a deliberate, documented preparation step.
+The intended live rate is strictly 48 kHz, with 24-bit capture and f64 mixer DSP.
+The stereo bench records PCM24 through SHR REC; broader show/tap persistence
+contracts remain integration work. The network format is defined above.
+Preserve source recording rates and precision for initial offline work; resampling
+will be a deliberate, documented preparation step.
 The reference hardware in the blueprint is UMC1820 + ADA8200 over ADAT, subject to
 physical channel, clock and latency verification. Do not infer routing from enumeration.
 

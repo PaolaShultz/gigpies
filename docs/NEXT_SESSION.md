@@ -1,127 +1,89 @@
-# Next session: listening review and planned hardware
+# Next session: dual consoles and integration
 
-## Current hardware handoff
+Current handoff for **0.2.3**, 2026-10-04. The preceding accumulated handoff is
+[preserved unchanged](archive/next_session-before-0.2.3-2026-10-04.md). Historical
+execution prompts describe their original session scope; they do not authorize
+new hardware tests or override the current module map.
 
-Read [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md) and its
-[owning plan](AUDIO_HARDWARE_PLAN.md) before continuing. The selected USB host now
-uses 48-frame / 1 ms processing, independent device capacity and zero silent
-prefill, with real PA/FX/REC modules and sample-verified fault recovery. Do not
-use the historical 56 ms prefill as live acceptance or infer card latency from
-its 57 ms loopback. The final ten-minute working-channel run measured
-5.19–5.23 ms, with exact software output and zero xruns/late wet returns. Two one-frame physical offset
-changes remain unresolved; preserve that qualification. The next useful physical
-check is a narrowly scoped USB transfer/feedback trace around those changes under
-a fresh reservation. Existing one-second driver snapshots are too coarse to
-identify their cause. Keep the direct audio buffers fixed while investigating.
+## First: continue the two operator surfaces
 
-Read the final H7/H8 gates and exact host/kernel conditions before extending the
-tested scope. Earlier low-latency xruns, the traced locked-page migration stall and all
-failed takes are retained. New measurements need current ownership, fresh
-epoch/output paths and a mutually acknowledged reservation. Temporary settings
-must be restored; no persistent low-latency system profile was installed.
+Read [Brain integration](BRAIN_CONSOLE_PLAN.md), [architecture](ARCHITECTURE.md)
+and [module ownership](COMPONENTS.md). The intended Brain hosts **two 1920×1080
+monitors and two independently assigned MIDI keyboard controllers**: SHR Desk
+for audio and SHR Lightdesk for lighting. Manual operation stands on its own;
+ASSIST proposes and AUTO requires explicit bounded authority.
 
-The user connected stereo returns and authorized use of the working channel.
-The right return is about 69 dB weaker and needs a working route before stereo
-physical acceptance. The USB microphone remains absent. Acoustic PA acceptance,
-clock measurements, mixer controls and UI integration remain distinct tasks.
-Do not repeat unchanged baseline or music studies. The older offline/listening
-and console notes below keep their original scope.
+| Owner | Current foundation | Concrete next work |
+|---|---|---|
+| `../shr-desk` | Offline audio state/command simulator and three screen drafts | Native renderer, complete keyboard/controller navigation, real GigPies audio capability adapter |
+| `../shr-lightdesk` | Offline lighting loop, synthetic authority, seven screen drafts and 27 passing tests | Native window/focus/editors; then a read-only Lux adapter once a contract exists |
+| `../shr-lux` | Recorded-source analysis, show/LED previews; lighting design research | Authoritative fixture/patch/programmer/hold/cue contracts, null output first; timing, persistence and physical output later |
+| GigPies | Audio transport and qualified stereo PA/FX/REC bench | Shared show compatibility, display/controller role assignment, independent input/LED workers, real control schemas |
 
-## Offline handoff — unreleased summing work, 2026-10-03
+Read each sibling's README, blueprint/status and AGENTS before changing its code;
+sibling writes need their own scope. Lightdesk must not become a second lighting
+engine. Lux must not compete for its assigned pad LEDs. Controller identity and
+active preset for the second device remain unverified. A stale or ambiguous
+assignment stays unbound rather than sending notes to another desk/instrument.
 
-The [summing-engine plan](SUMMING_PLAN.md) has been implemented and offline-validated
-on top of 0.2.2. The new [delivery contract](SUMMING_DELIVERY.md) separates comparison
-gain and final limiting, observes production stages and verifies final true peaks.
-The existing f64 summer, channel choices and requested GigPies effects are retained.
-No supported new musical candidate was selected.
+Native HDMI/controller acceptance, fixture output and combined CPU/GPU/memory
+acceptance are distinct gates. A drawn fixture or mock ACK establishes no DMX
+output. Preserve source holds/current looks through mode/reconnect changes until
+explicit release. Lighting failure must not block audio control or essential audio.
 
-Use `artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`: six new complete
-mixes at a −1 dBTP ceiling, seven exact established excerpts and historical
-SOURCE/FINAL references reconstructed with exact PCM/float hashes. Independent
-measurements range from −1.400441 to −1.395178 dBTP. The largest production versus
-independent difference is 0.004922 dB. New deliveries use static gain on the same
-selected buses, with 0.4001 dB reserved margin and no loudness target.
+## Qualified stereo hardware handoff
 
-**Next action:** obtain a fresh playback go, then record preference by passage and
-concern. Listening is not reviewed and hardware is unverified. Do not rerender merely
-to open the queue. Do not rerun historical interleaved planners. Any new musical
-study needs a declared hypothesis, fresh chronological passages and stopping rules.
+Read [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md) and [its owning plan](AUDIO_HARDWARE_PLAN.md).
+The selected USB host uses 48-frame / 1 ms processing, independent device capacity
+and zero silent prefill, with real PA/FX/REC modules and sample-verified recovery.
+The final ten-minute working-channel H8 run measured **5.19–5.23 ms**, with exact
+software output and zero xruns/late wet returns. Two one-frame physical offset
+changes remain unresolved. The historical 56 ms prefill/57 ms loopback is not the
+current live-latency result.
 
-Formatting, locked check/release build, Clippy, 154 normal Rust tests and 37 Python
-tests pass. Three unrelated historical tests remain opt-in; the applicable 300-case
-meter study passes. `REPORT.md` and `complete.json` beside the index bind the result.
-Unused companion WAVs were removed and observation CSVs compressed losslessly;
-`cleanup.json` records the exact scope. All 2,473 retained evidence files and metadata
-for 428 original/library/test files are unchanged. Preserve these originals and
-selected outputs. Earlier retired queues remain historical.
+The next useful physical check is a narrowly scoped USB transfer/feedback trace
+around those changes under a fresh reservation. Existing one-second driver
+snapshots are too coarse to identify the cause. Keep direct audio buffers fixed.
+Read final H7/H8 conditions, retained xruns and the locked-page migration diagnosis
+before extending the tested scope. Temporary settings were restored; no persistent
+low-latency host profile was installed.
 
-The work is unreleased. No playback, hardware, service or sibling
-changes occurred. Publication would need its own authorized scope and the checks in
-[publication policy](PUBLICATION.md).
+The prior session authorized the working channel. That does not grant a new
+hardware session. The right return was about 69 dB weaker; verify a working route
+before stereo physical acceptance. The USB microphone was absent. Acoustic PA,
+clock, multichannel mixer, UI and complete-show acceptance remain separate.
 
-The unresolved Pi crash still needs separate diagnosis; zero current filesystem
-counters and boot recovery do not establish a complete offline scan. Keep siblings
-read-only and PA measurement/alignment algorithms in `../shr-pa`.
+## Offline listening handoff
 
-## Planned hardware session
+The [summing plan](SUMMING_PLAN.md) and [delivery contract](SUMMING_DELIVERY.md)
+are implemented and offline-validated, now included in 0.2.3. The f64 summer,
+channel choices and selected GigPies effects remain unchanged; no supported new
+musical candidate was selected.
 
-Recorded from the user's ideas on 2026-10-03, for tomorrow's hardware session.
-**Planned only.** No MIDI mapping, network service, host-audio change or hardware
-measurement has been performed or authorized by this note.
+Use the retained private listening index
+`artifacts/automix/summing-study/2026-10-03-engine/LISTEN.md`. It identifies six
+complete mixes, seven established excerpts and exact historical comparisons.
+Independent measurements range from −1.400441 to −1.395178 dBTP against the −1 dBTP
+ceiling; the largest production/independent difference is 0.004922 dB. Deliveries
+use static gain on the selected buses, with 0.4001 dB margin and no loudness target.
 
-## A small musician-facing console
+Obtain a fresh playback go, then record preference by passage and concern. Do not
+rerender just to reopen this queue, or repeat historical planners without a new
+hypothesis and stopping rules. Preserve source recordings, frozen settings, hashes
+and useful evidence. Latest publication checks live in [VALIDATION.md](VALIDATION.md).
+The unresolved earlier Pi crash still needs separate diagnosis; boot recovery and
+zero current filesystem counters do not establish a complete offline scan.
 
-Combine a 14-inch screen with the user's small Arturia MiniLab controller.
-The proposed control vocabulary is:
+## Peer work and resource ownership
 
-- Each keyboard key selects a channel; 12 keys make one octave of channel choices.
-- Octave switches select additional channel banks so a small keyboard can address
-  many inputs. Confirm how the exact controller model reports those switches.
-- Eight coloured, pressable pads show states and trigger named actions.
-- Sixteen rotary controls operate the selected channel's parameters.
-- The screen shows the selected channel, bank, parameter names/values and pad states.
+Read `/home/shome/p/AGENTS.md` and [NODE_LAB.md](NODE_LAB.md). Check the actual
+hostname and live working trees; development coordinator/worker roles do not fix
+the runtime Stagebox/Brain Pi assignment. The private ledger owns reservations,
+exact source revisions and immutable review/acceptance records.
 
-This could serve as the physical control surface for the larger GigPies system.
-The controller's exact model, available controls, feedback messages and encoder/pot
-behaviour still need inspection. The counts above describe the user's proposal.
-Do not assume MIDI keys or octave buttons expose particular messages until tested.
-
-Design questions for that session: visible bank/channel feedback, protection from
-changing the wrong channel, knob pickup or relative encoder behaviour after a bank
-change, an obvious reset, and a usable screen/keyboard alternative. Colour must not
-be the only state indication. Channel selection must retain the instrument's verified
-input-group assignment. A controller action's scope (shared mix, monitor or offline
-preview) needs to be visible. The offline EQ amount/reset contract is a useful first
-control to exercise without controlling live audio.
-
-## Two-Pi transport: next integration gate
-
-The [transport execution plan](AUDIO_TRANSPORT_PLAN.md) now records completed
-research, implementation and two-node synthetic work. The
-[protocol and evidence](AUDIO_TRANSPORT.md) select GPA1 UDP audio, separate
-acknowledged UDP control and a PA-owned 48 kHz source-frame timeline.
-SSH/Git remains the development channel. Read the accepted private ledger
-records and obtain a new resource reservation before repeating load tests.
-
-Next integrate SHR PA/FX/REC in their owning projects. Then, with explicit
-hardware-session authorization, use muted outputs to verify 24-bit capture,
-physical ADC/DAC/ADAT clocks and channel mapping, same-clock loopback latency
-and gap-free NVMe recording while an owned Brain process is restarted.
-Synthetic block counters do not establish physical dry-audio continuity.
-Independent device clocks may require a reviewed asynchronous resampler.
-No fixed runtime Pi assignment follows from identity-return benchmarks.
-
-## Coordinating the two Codex sessions
-
-Arrange a deliberate handoff workflow on the two Pis tomorrow. Start with a shared,
-versioned task/interface document: one owner per file/module, exact repository and
-revision, requested change, expected message/schema contract, reproducible commands,
-results and unresolved questions. Exchange small patches or commits after reviewing
-local work; do not let both sessions independently rewrite the same files or run
-hardware actions concurrently. A task ledger can distinguish queued, running,
-ready-for-review and accepted work, with explicit evidence attached to each handoff.
-
-The installed `gigpies-peer` now launches bounded workers over pinned SSH.
-Follow `/home/shome/p/AGENTS.md` and [the node lab](NODE_LAB.md); workers own
-explicit scopes, while immutable ledger records retain separate review and
-acceptance. Existing interactive sessions keep their work and ownership.
+Use bounded `gigpies-peer` workers only within the current authorized scope; never
+resume or take over an existing interactive session. Keep one owner per file and
+resource. Shared load, hardware and restart experiments require a new explicit
+reservation. Completed synthetic transport and stereo integration are recorded in
+[transport](AUDIO_TRANSPORT_PLAN.md) and [hardware](AUDIO_HARDWARE_PLAN.md); do not
+repeat them merely because an old execution prompt says to start them.

@@ -1,5 +1,10 @@
 # Documentation
 
+**GigPies 0.2.3: one system, two human-operated consoles.** Begin with the
+[system map](ARCHITECTURE.md), [Brain console plan](BRAIN_CONSOLE_PLAN.md) and
+[current handoff](NEXT_SESSION.md). SHR Desk owns audio UI, SHR Lightdesk lighting
+UI, and SHR Lux the lighting engine. Native/live integration remains planned.
+
 [Artistic FX pass](ARTISTIC_FX.md): six-example historical evidence, expert-selected
 effects, preserved direct tone, calibration and verification. The executed
 [summing-engine plan](SUMMING_PLAN.md) adds verified [delivery controls](SUMMING_DELIVERY.md).
@@ -17,6 +22,9 @@ selection and evidence.
 | [Audio hardware plan](AUDIO_HARDWARE_PLAN.md) | Continuation targets, device ownership, failed targets and acceptance gates |
 | [Audio transport](AUDIO_TRANSPORT.md) | GPA1 packet/control formats, PA clock, measured limits, recovery and physical acceptance gates |
 | [Audio transport plan](AUDIO_TRANSPORT_PLAN.md) | Owning execution plan, targets, repairs, verification and task completion |
+| [Brain console integration](BRAIN_CONSOLE_PLAN.md) | Dual audio/lighting Brain, SHR Desk/Lightdesk/Lux ownership, controller/display assignment and integration backlog |
+| [Audio transport execution prompt](AUDIO_TRANSPORT_EXECUTION_PROMPT.md) | Historical brief for the completed transport phase; not a fresh test authorization |
+| [Audio hardware execution prompt](AUDIO_HARDWARE_EXECUTION_PROMPT.md) | Historical brief for the qualified stereo host phase; follow the current hardware handoff |
 | [Musician review](PERFORMER_REVIEW.md) | Planned QR station preferences, collective readiness and shared previews |
 | [Status](STATUS.md) | Implemented behavior and next increments |
 | [Components](COMPONENTS.md) | SHR module ownership, PA integration intent, existing work and dependency choices |
@@ -26,10 +34,10 @@ selection and evidence.
 | [Development](DEVELOPMENT.md) | Directory layout, validation and contribution workflow |
 | [Publication](PUBLICATION.md) | Private directories, reviewed scripts, commit/push hooks and release boundaries |
 | [Validation](VALIDATION.md) | Dated foundation checks and acceptance limits |
-| [Concept review](CONCEPT_REVIEW.md) | Image discrepancies and unresolved claims |
+| [Visual map and concept review](CONCEPT_REVIEW.md) | Current hero/system mapping and limits of the preserved original artwork |
 | [Archive](archive/README.md) | Preserved source drafts |
 
-The original draft and image capture the broader ambition. Current status is explicit;
+Historical research and validation entries keep their dated scope. Current status is explicit;
 a feature described in a blueprint is not evidence that it is implemented or verified.
 
 - [Offline automixer](AUTOMIX.md): CLI, soundcheck/freeze, presets, A/B and validation.
@@ -67,5 +75,5 @@ a feature described in a blueprint is not evidence that it is implemented or ver
   production-engine decay and return calibration, ensemble guards and finished mixes.
 
 - [Frozen EQ matching](EQ_MATCHING.md): reference catalogue, provisional maps, amount/reset, CLI/local review and validation.
-- [Next hardware session](NEXT_SESSION.md): module integration, physical audio acceptance and separate console work.
+- [Next session](NEXT_SESSION.md): dual Full-HD consoles, engine contracts, qualified hardware limits and listening/peer handoffs.
 - [Two-Pi development lab](NODE_LAB.md): fixed Ethernet addresses, SSH/Git handoffs and the first protocol experiments.

@@ -1,5 +1,15 @@
 # Two-Pi development lab
 
+## Dual-console integration direction, 2026-10-04
+
+GigPies' intended Brain hosts the audio Desk and lighting Lightdesk, each with its
+own 1920×1080 monitor and independently assigned controller. Lux owns the lighting
+engine; Stagebox keeps essential audio, protection and recording local. The
+[console plan](BRAIN_CONSOLE_PLAN.md) owns display/controller identity, separate
+workers and combined workload targets. These targets remain unmeasured. Pi 5's
+development-coordinator role does not decide which Pi becomes the runtime Brain.
+Version 0.2.3 publishes the documented state; it grants no new hardware reservation.
+
 ## USB hardware continuation, 2026-10-03
 
 Private task 0004 follows accepted synthetic task 0003. Pi 5 owns the selected
@@ -41,13 +51,48 @@ Existing interactive sessions and project checkouts were preserved.
 The first lab step is development coordination over a dedicated Ethernet cable.
 GigPies owns the Stagebox/Brain control contract and integration. The
 [component map](COMPONENTS.md) keeps PA DSP/measurement in SHR PA, effects in
-SHR FX, and lighting in SHR Lux. See the original
+SHR FX and lighting execution in SHR Lux; Desk and Lightdesk own the two operator
+surfaces. See the current
 [architecture](ARCHITECTURE.md) and [hardware handoff](NEXT_SESSION.md).
 
 The development channel uses SSH, Git and small result files. It does not choose
 the eventual live control or audio transport. Stagebox audio, monitors and local
 protection must continue with the last valid state when Brain communication fails.
 The Pi models' eventual Stagebox/Brain assignments remain open until profiling.
+
+## Direct peer workers — installed, 2026-10-03
+
+The current operating protocol is `/home/shome/p/AGENTS.md`. Its installed
+`/home/shome/.local/bin/gigpies-peer` helper starts a new bounded Codex worker on
+the other Pi through pinned SSH and returns the final reply. The existing peer
+authentication is used; interactive sessions are neither resumed nor interrupted.
+Local instructions and the helper were inspected for the
+[Brain console plan](BRAIN_CONSOLE_PLAN.md); no fresh peer check or dispatch was
+performed for that planning task.
+
+The initial bootstrap record accepted pinned SSH, prepared source revisions and
+software checks. Its then-queued baseline task is historical: the later transport
+and hardware records above describe completed experiments. Refresh the live ledger
+before assigning work. Old acceptance does not establish current connectivity,
+reserve a new test window or decide runtime hardware assignments.
+
+For future authorized work, the helper accepts `-p 'TASK PROMPT'` or
+`--prompt-file /absolute/path/to/task.txt`. Default execution is read-only with a
+600-second timeout. Assign writes explicitly using `--write` and `--cwd` pointing
+to an isolated checkout. Include task ID, base SHA, owned files/resources,
+deliverable, allowed commands, validation and stopping rules in every assignment.
+A read-only reply cannot append a durable acknowledgment; the coordinator records
+its review through the private ledger.
+
+One helper receiver runs per node at a time. Its lock does not reserve hardware
+or another interactive session's files. Private prompts/events/results remain in
+the receiving node's `~/.local/state/gigpies/peer-runs/`. Inspect partial work after
+a timeout before retrying; timeout does not undo writes. Never recursively launch
+peer workers. Generic dispatch grants no audio, MIDI, DMX, load or interruption
+authorization.
+
+The Git ledger supplies task states and review history. There is no graphical
+Kanban board or integration with the controller chat's built-in subagent list.
 
 ## Address plan
 
@@ -61,10 +106,12 @@ Wi-Fi connection. Persist configuration in the network manager's owning files;
 when Netplan generates NetworkManager profiles, update Netplan too. An address
 added with `ip addr` alone does not survive a reboot.
 
-On 2026-10-03 the Pi 5's `eth0` negotiated 1000 Mb/s full duplex. Its static address,
-saved Netplan generation and Wi-Fi default route were checked. The Pi 4 was not
-yet configured, so connectivity, SSH, throughput and reconnect acceptance remain
-pending. Pi 5 reports hardware timestamp capability; that alone does not establish
+At the initial 2026-10-03 setup checkpoint, Pi 5's `eth0` negotiated 1000 Mb/s
+full duplex. Its static address, saved Netplan generation and Wi-Fi default route
+were checked. The Pi 4 was not
+yet configured at that checkpoint. Later bootstrap, transport and hardware evidence
+is recorded above; repeated throughput/reconnect experiments need a fresh test window.
+Pi 5 reports hardware timestamp capability; that alone does not establish
 a shared clock or PTP accuracy. Machine configuration, backups and peer keys stay
 outside published source.
 
@@ -108,9 +155,10 @@ transfer larger explicitly requested artifacts separately with rsync and verify
 their hashes. Do not mirror private media into the coordination repository.
 
 During a coordinated experiment, each active session checks the repository before
-work and while waiting for a peer. There is no session wake-up integration in this
-setup. A session that is idle needs the operator to resume it. Timeouts retain work
-and post a named blocker; a restart resumes from the last acknowledged task state.
+work and while waiting for a peer. The coordinator can launch a new bounded worker
+directly; an existing idle interactive session is not automatically awakened.
+Timeouts retain partial work and logs. Review them, record the outcome and resume
+from the last acknowledged state without blindly repeating a mutation.
 
 ## Experiment procedure and remaining gates
 

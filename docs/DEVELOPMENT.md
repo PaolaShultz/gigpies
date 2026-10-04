@@ -1,5 +1,14 @@
 # Development
 
+## Console and engine ownership
+
+GigPies owns final integration and show/control contracts. Audio surface work
+belongs in `../shr-desk`, lighting surface work in `../shr-lightdesk`, and lighting
+engine algorithms/output in `../shr-lux`. Both desks target one Brain with two
+1920×1080 monitors and separate MIDI controllers. They currently build and run
+offline independently; this CLI does not launch either desk. See
+[Brain integration](BRAIN_CONSOLE_PLAN.md) before adding adapters.
+
 ## Explicit hardware host
 
 The optional `hardware-host` feature builds `gigpies-hardware`, a bounded stereo
@@ -51,7 +60,7 @@ tests/                  fast synthetic integration and CLI tests
 examples/               instructions for runnable examples as they are added
 sessions/               public session-format guidance; local/ is ignored
 docs/                   maintained design, status and development guides
-docs/assets/            supplied concept artwork
+docs/assets/            current SVG diagrams and retained historical concept artwork
 docs/archive/           preserved draft documents
 recordings              ignored link to ../waves/recordings
 artifacts/              ignored renders, reports and scratch evidence
@@ -99,8 +108,9 @@ Preserve source licences when adapting code. The skeleton starts no hardware.
 Hardware sessions and audible playback require a specific authorized task.
 
 Before publication inspect staged files, confirm music/private data are absent,
-run `git diff --cached --check`, and run the normal checks above. Version 0.2.2 is
-the current offline release. Release notes must distinguish
+run `git diff --cached --check`, and run the normal checks above. Version 0.2.3
+includes offline tools and an explicit optional hardware bench, with both consoles
+still in development. Release notes must distinguish
 implemented, offline-validated and physically verified behavior.
 Run `python3 scripts/check_publication.py` after staging. The guard checks the
 actual Git blobs, private directory boundaries and the reviewed script list.

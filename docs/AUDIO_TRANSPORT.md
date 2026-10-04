@@ -21,7 +21,7 @@ free-running audio clock. SSH/Git remains the development channel.
 |---|---|---|
 | RTP with L24 payload | Standard packet sequence/timestamp, packed integer PCM, external ecosystem | Keep as interoperability alternative. GigPies still needs negotiated channel groups, epoch identity and absolute return-frame mapping; RTCP/session interoperability is outside this prototype |
 | GPA1 custom UDP | Explicit epoch, 64-bit frame and output offset in a fixed bounded parser; matches a single PA clock and private point-to-point link | Selected for the synthetic integration contract; requires an adapter for other endpoints |
-| Zita-njbridge | Existing Linux JACK network audio with adaptive resampling and independent device clocks | Suitable alternative when independent JACK devices are required; not selected for a headless Brain following PA frames without opening a second audio device |
+| Zita-njbridge | Existing Linux JACK network audio with adaptive resampling and independent device clocks | Suitable alternative when independent JACK devices are required; not selected for the Brain audio worker following PA frames without a second audio device; the Brain also hosts two graphical consoles |
 
 [RFC 3190](https://www.rfc-editor.org/rfc/rfc3190.html) defines L24's packed
 big-endian interleaved representation. [RTP](https://www.rfc-editor.org/rfc/rfc3550.html)
@@ -370,7 +370,7 @@ source commit; no GitHub push or release was performed.
 
 ### Small-buffer host compatibility
 
-The hardware latency follow-up extends the unreleased wet-delay validator's
+The hardware latency follow-up, included in 0.2.3, extends the wet-delay validator's
 minimum from 192 to 48 frames. Both endpoints must use this revision for budgets
 below 4 ms; earlier binaries refuse those packets. The hardware host requires
 whole 48-frame packets and a wet budget at least as long as its capture period.

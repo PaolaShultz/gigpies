@@ -1,5 +1,63 @@
 # Status and next steps
 
+## 0.2.3 — dual-console integration checkpoint, 2026-10-04
+
+The complete GigPies product includes **audio and lighting digital operator
+surfaces** on one Brain: two 1920×1080 monitors and two separately assigned MIDI
+keyboard controllers. SHR Desk owns audio UI, SHR Lightdesk lighting UI, and SHR
+Lux lighting execution/output. Automation is one mode within each console.
+
+This version brings the previously local summing/delivery, GPA1 transport and
+qualified stereo USB host work into the publication checkpoint. The new hero and
+system map show both console pairings, Stagebox-local recording and the separate
+lighting engine. Both surface implementations remain independent sibling projects;
+they are not bundled live applications in GigPies.
+
+Native windows/controller integration, full mixer/Lux contracts, physical lighting
+and combined load acceptance remain open. Read [Brain integration](BRAIN_CONSOLE_PLAN.md),
+[current next steps](NEXT_SESSION.md), [0.2.3 changes](../CHANGELOG.md) and
+[publication validation](VALIDATION.md). The dated entries below preserve their
+original scope; “unreleased” in those historical records describes that session,
+not the current publication state. No new hardware acceptance was performed here.
+
+## Dual-console Brain / SHR Lightdesk — offline foundation, 2026-10-04
+
+GigPies explicitly includes human-operated audio and lighting consoles on one Brain,
+with two 1920×1080 monitors and two separately assigned MIDI keyboard controllers.
+SHR Desk owns audio UI; the new `../shr-lightdesk` owns lighting UI; SHR Lux owns
+the lighting engine. Automation is one mode within each console.
+
+Lightdesk now has a source-linked MA/MagicQ/Titan/Eos/ONYX screen/workflow study,
+blueprint, screen map, controller plan and capability/integration backlog. Its
+independent Rust offline loop implements synthetic fixture selection, programmer
+holds, static look storage/playback, bounded automation proposals, explicit release,
+request/recovery states and seven state-driven Full-HD drafts with the existing
+licensed font. Its authority is a mock, not a completed Lux engine.
+
+Native rendering, full controller navigation, real engine contracts, cue timing,
+physical lighting and combined hardware/load acceptance remain planned. Exact
+validation and next steps live in [Lightdesk status](../../shr-lightdesk/docs/STATUS.md);
+[the Brain integration plan](BRAIN_CONSOLE_PLAN.md) owns cross-module work. Existing
+sibling projects remained read-only. No device output, host configuration, shared
+load test, publication or deployment occurred. The older audio-desk checkpoint
+below retains its historical scope.
+
+## SHR Desk module — offline foundation, 2026-10-04
+
+The requested Brain control surface now has its own `../shr-desk` project.
+Its blueprint, console-reference study, screen map and MiniLab plan distinguish
+existing module capabilities from missing live interfaces and optional scope.
+An independent Rust simulator implements channel selection, command/ACK state,
+manual fader holds, Auto/Assist/Manual transitions, MIDI input primitives and
+three state-driven 1920×1080 SVG screen drafts with the existing Terminus font.
+The [integration plan](BRAIN_CONSOLE_PLAN.md) links the owning documents.
+
+This is implemented/offline-validated surface work, not a native GPU window or
+live mixing console. Controller/HDMI acceptance and real engine adapters remain
+planned. No audio, MIDI, DMX, service or host-font state changed. GigPies remains
+the final product and live integration owner; module DSP remains with its owners.
+The October 3 console checkpoint below is historical.
+
 ## USB host integration — unreleased, actual-device bench, 2026-10-03
 
 The [hardware plan](AUDIO_HARDWARE_PLAN.md) and [measured host contract](AUDIO_HARDWARE.md)
@@ -40,6 +98,20 @@ targets are stated in the transport document. SSH/Git remains development
 coordination. That preceding phase did not implement physical I/O or real modules; the
 hardware continuation above records the later stereo integration. Full-show
 reliability remains unverified.
+
+## Historical single-console Brain plan — 2026-10-03
+
+The [then-current console draft](archive/brain-console-before-shr-desk-2026-10-04.md) fixed Brain's display at
+1920 × 1080 over HDMI; the small display belongs to PA. It proposes native GPU
+rendering with a TUI-style layout, custom glyphs, spectrogram/stereo panels and
+MIDI control. The backlog starts with synthetic state and an offline console,
+then adds live contracts and module integration. No console code is implemented.
+
+The planned node split now puts the mixer, protection and local NVMe recorder on
+PA, with the console, analysis/doctor, lighting and richer FX on Brain. Performance
+figures are targets; live and hardware acceptance remain pending. Updated peer
+instructions and the installed runner were inspected locally; no peer task or
+hardware check was launched. This checkpoint changes documentation only.
 
 ## Summing and delivery — unreleased, offline-validated, 2026-10-03
 

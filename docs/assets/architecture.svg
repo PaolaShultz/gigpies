@@ -1,7 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="530" viewBox="0 0 1200 530" role="img" aria-labelledby="title desc"><title id="title">GigPies intended two-node architecture</title><desc id="desc">Sources enter the Stagebox for local mixing, monitors and PA processing. Source audio travels to the Brain for soundcheck, recording and lighting decisions. Bounded parameter updates return to the Stagebox. All node integrations are planned.</desc><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 10 5 0 10" fill="#46dce9"/></marker><marker id="amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="#ffc176"/></marker></defs><rect width="1200" height="530" rx="18" fill="#0b1320"/>
-<g font-family="DejaVu Sans, sans-serif"><text x="36" y="43" fill="#f0f5ff" font-size="22" font-weight="bold">Two nodes. One prepared show.</text><text x="36" y="70" fill="#91a3ba" font-size="14">Intended architecture · node integration is planned</text>
-<rect x="36" y="105" width="370" height="225" rx="14" fill="#102837" stroke="#37cad7"/><text x="58" y="139" fill="#48deea" font-size="12" letter-spacing="2">STAGEBOX / MIXER</text><text x="58" y="176" fill="#f0f5ff" font-size="25" font-weight="bold">Keep audio local.</text><text x="58" y="215" fill="#c2cedd" font-size="16">Inputs → channel DSP → buses</text><text x="58" y="245" fill="#c2cedd" font-size="16">Monitors · PA · FX · protection</text><text x="58" y="294" fill="#88a6b8" font-size="13">Owns the latency-critical audio path</text>
-<rect x="794" y="105" width="370" height="225" rx="14" fill="#262132" stroke="#b497e9"/><text x="816" y="139" fill="#c6aff4" font-size="12" letter-spacing="2">BRAIN / SHOW ENGINE</text><text x="816" y="176" fill="#f0f5ff" font-size="25" font-weight="bold">Prepare. Observe. Cue.</text><text x="816" y="215" fill="#c2cedd" font-size="16">Soundcheck → prepared mix state</text><text x="816" y="245" fill="#c2cedd" font-size="16">Analysis · recording · lighting</text><text x="816" y="294" fill="#a89cbe" font-size="13">Operator + performer controls</text>
-<path d="M422 185H778" stroke="#46dce9" stroke-width="2" marker-end="url(#arrow)"/><text x="600" y="171" text-anchor="middle" fill="#a9dae3" font-size="14">Source audio + status</text><path d="M778 248H422" stroke="#ffc176" stroke-width="2" marker-end="url(#amber)"/><text x="600" y="277" text-anchor="middle" fill="#e9c49c" font-size="14">Bounded parameter updates</text><text x="600" y="219" text-anchor="middle" fill="#6d879d" font-size="11" letter-spacing="2">DEDICATED ETHERNET</text>
-<path d="M220 330V363" stroke="#46dce9" stroke-width="2" marker-end="url(#arrow)"/><rect x="36" y="375" width="370" height="55" rx="10" fill="#14212e"/><text x="221" y="409" text-anchor="middle" fill="#e4edf8" font-size="16">PA outputs + independent monitors</text><path d="M979 330V363" stroke="#46dce9" stroke-width="2" marker-end="url(#arrow)"/><rect x="794" y="375" width="370" height="55" rx="10" fill="#211d2e"/><text x="979" y="409" text-anchor="middle" fill="#e4edf8" font-size="16">Local UI · storage · DMX interface</text>
-<path d="M36 460H1164" stroke="#28384b"/><text x="36" y="493" fill="#ffc176" font-size="14">FIRST SLICE</text><text x="150" y="493" fill="#a7b7ca" font-size="14">Original multitracks → measurements → balance → listen and refine</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="970" viewBox="0 0 1440 970" role="img" aria-labelledby="title desc">
+<title id="title">GigPies system map — two consoles, separate engine owners</title><desc id="desc">Planned system map. Sources enter the Stagebox and local mixer, PA protection, performer monitors and NVMe recorder. Ethernet carries source audio and FX sends to Brain and wet FX and acknowledged control back. Brain has separate audio and lighting display/controller pairs; SHR Lightdesk commands SHR Lux, which owns fixture evaluation, cues, effects and physical output. Lights are outside the audio path. Broad live integration remains planned.</desc>
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#091b28"/><stop offset="1" stop-color="#171324"/></linearGradient><marker id="cyan-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="#48d8e7"/></marker><marker id="amber-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10" fill="#ffc078"/></marker></defs>
+<rect width="1440" height="970" rx="20" fill="url(#bg)"/>
+<g font-family="DejaVu Sans, sans-serif">
+<text x="42" y="51" font-size="30" fill="#eff5ff" font-weight="bold" text-anchor="start">GigPies / system and module map</text>
+<text x="42" y="85" font-size="18" fill="#9dadc2" font-weight="normal" text-anchor="start">Intended topology · human operation first · full-system and physical acceptance remain open</text>
+<rect x="42" y="146" width="454" height="664" rx="16" fill="#102332" stroke="#347c8c"/>
+<text x="66" y="184" font-size="21" fill="#48d8e7" font-weight="bold" text-anchor="start">STAGEBOX / MIXER NODE</text>
+<text x="66" y="214" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">Audio I/O · source clock · local PA display</text>
+<rect x="66" y="246" width="406" height="66" rx="10" fill="#101e2e" stroke="#2a3c52"/>
+<text x="85" y="276" font-size="21" fill="#eff5ff" font-weight="normal" text-anchor="start">Physical inputs → GigPies mixer</text>
+<text x="85" y="300" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="start">Channel DSP, buses and send/return routing</text>
+<path d="M268 312v34" stroke="#48d8e7" stroke-width="2" fill="none" marker-end="url(#cyan-arrow)"/>
+<rect x="66" y="352" width="406" height="76" rx="10" fill="#101e2e" stroke="#2a3c52"/>
+<text x="85" y="383" font-size="21" fill="#48d8e7" font-weight="normal" text-anchor="start">SHR PA / speaker processing</text>
+<text x="85" y="411" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">Alignment · crossovers · protection</text>
+<path d="M268 428v28" stroke="#48d8e7" stroke-width="2" fill="none" marker-end="url(#cyan-arrow)"/>
+<rect x="66" y="465" width="406" height="52" rx="10" fill="#101e2e" stroke="#2a3c52"/>
+<text x="85" y="498" font-size="20" fill="#eff5ff" font-weight="normal" text-anchor="start">Main PA outputs</text>
+<rect x="66" y="539" width="406" height="54" rx="10" fill="#101e2e" stroke="#2a3c52"/>
+<text x="85" y="572" font-size="18" fill="#eff5ff" font-weight="normal" text-anchor="start">Independent performer monitor buses</text>
+<path d="M472 278h12v288h-12" stroke="#48d8e7" stroke-width="2" fill="none" marker-end="url(#cyan-arrow)"/>
+<rect x="66" y="615" width="406" height="100" rx="10" fill="#101e2e" stroke="#2a3c52"/>
+<text x="85" y="649" font-size="22" fill="#48d8e7" font-weight="normal" text-anchor="start">SHR REC → local NVMe</text>
+<text x="85" y="681" font-size="18" fill="#eff5ff" font-weight="normal" text-anchor="start">Declared taps · bounded worker</text>
+<text x="85" y="705" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">No Brain or redraw dependency</text>
+<text x="66" y="752" font-size="18" fill="#eff5ff" font-weight="normal" text-anchor="start">GigPies: mixer + integration.</text>
+<text x="66" y="782" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">SHR PA: speaker processor.</text>
+<rect x="864" y="146" width="534" height="664" rx="16" fill="#201d2f" stroke="#806b9d"/>
+<text x="888" y="184" font-size="21" fill="#bb9fee" font-weight="bold" text-anchor="start">BRAIN / SHOW NODE</text>
+<text x="888" y="214" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">One Brain · independent processes and input</text>
+<rect x="888" y="246" width="229" height="146" rx="10" fill="#111e2e" stroke="#48d8e7"/>
+<text x="902" y="274" font-size="15" fill="#48d8e7" font-weight="bold" text-anchor="start">AUDIO CONSOLE</text>
+<text x="902" y="309" font-size="23" fill="#eff5ff" font-weight="normal" text-anchor="start">SHR Desk</text>
+<text x="902" y="342" font-size="17" fill="#eff5ff" font-weight="normal" text-anchor="start">1920 × 1080 screen</text>
+<text x="902" y="374" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="start">Assigned MIDI keyboard</text>
+<rect x="1145" y="246" width="229" height="146" rx="10" fill="#111e2e" stroke="#ffc078"/>
+<text x="1159" y="274" font-size="15" fill="#ffc078" font-weight="bold" text-anchor="start">LIGHTING CONSOLE</text>
+<text x="1159" y="309" font-size="23" fill="#eff5ff" font-weight="normal" text-anchor="start">SHR Lightdesk</text>
+<text x="1159" y="342" font-size="17" fill="#eff5ff" font-weight="normal" text-anchor="start">1920 × 1080 screen</text>
+<text x="1159" y="374" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="start">Assigned MIDI keyboard</text>
+<text x="888" y="425" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">Separate focus · selection · MIDI / LED ownership</text>
+<rect x="888" y="457" width="486" height="102" rx="10" fill="#101e2e" stroke="#2a3c52"/>
+<text x="906" y="488" font-size="22" fill="#bb9fee" font-weight="normal" text-anchor="start">SHR FX + analysis / show services</text>
+<text x="906" y="518" font-size="15" fill="#eff5ff" font-weight="normal" text-anchor="start">Prepared mix · source subscriptions · shared show ID</text>
+<text x="906" y="542" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="start">Audio FX follows the Stagebox source timeline</text>
+<path d="M1374 320h15v338h-14" stroke="#ffc078" stroke-width="2" fill="none" marker-end="url(#amber-arrow)"/>
+<rect x="888" y="590" width="486" height="145" rx="10" fill="#2a2333" stroke="#ffc078"/>
+<text x="906" y="625" font-size="24" fill="#ffc078" font-weight="normal" text-anchor="start">SHR Lux / lighting engine</text>
+<text x="906" y="657" font-size="18" fill="#eff5ff" font-weight="normal" text-anchor="start">Fixture evaluation · cues · lighting effects</text>
+<text x="906" y="688" font-size="17" fill="#eff5ff" font-weight="normal" text-anchor="start">Arbitration · output policy · physical output</text>
+<text x="906" y="716" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">Lightdesk sends requests; Lux owns execution.</text>
+<text x="888" y="776" font-size="18" fill="#ffc078" font-weight="normal" text-anchor="start">MANUAL / ASSIST / explicitly bounded AUTO</text>
+<path d="M510 333H846" stroke="#48d8e7" stroke-width="2" fill="none" marker-end="url(#cyan-arrow)"/>
+<text x="678" y="304" font-size="17" fill="#48d8e7" font-weight="normal" text-anchor="middle">Source audio / FX sends</text>
+<text x="678" y="325" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">+ status</text>
+<text x="678" y="378" font-size="15" fill="#eff5ff" font-weight="bold" text-anchor="middle">DEDICATED ETHERNET</text>
+<path d="M846 445H510" stroke="#ffc078" stroke-width="2" fill="none" marker-end="url(#amber-arrow)"/>
+<text x="678" y="477" font-size="17" fill="#ffc078" font-weight="normal" text-anchor="middle">Wet FX / acknowledged</text>
+<text x="678" y="501" font-size="17" fill="#ffc078" font-weight="normal" text-anchor="middle">audio control / status</text>
+<text x="678" y="564" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">Lighting control remains</text>
+<text x="678" y="587" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">a distinct engine contract.</text>
+<path d="M1132 810v30" stroke="#ffc078" stroke-width="2" fill="none" marker-end="url(#amber-arrow)"/>
+<rect x="864" y="850" width="534" height="57" rx="10" fill="#282230" stroke="#ffc078"/>
+<text x="1131" y="886" font-size="20" fill="#ffc078" font-weight="normal" text-anchor="middle">Lighting interface → patched fixtures</text>
+<rect x="42" y="850" width="772" height="57" rx="10" fill="#111e2e" stroke="#2a3c52"/>
+<text x="62" y="876" font-size="18" fill="#eff5ff" font-weight="bold" text-anchor="start">Independent health and recovery</text>
+<text x="62" y="897" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">Lighting failure must not block audio control, protection or recording.</text>
+<text x="42" y="945" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">EVIDENCE: offline audio + qualified stereo bench; surface simulators. Native desks, full Lux engine and combined load remain open.</text>
+</g></svg>

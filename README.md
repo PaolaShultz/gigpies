@@ -1,11 +1,11 @@
 <div align="center">
 
-![GigPies — soundcheck prepares the show; live automation protects it](docs/assets/gigpies-banner.svg)
+![GigPies — audio and light; two consoles on one Brain, each with a Full-HD screen and MIDI controller](docs/assets/gigpies-banner.svg)
 
-**Live sound · Performer monitors · Music-aware lights · Multitrack recording**
+**Audio console · Lighting console · Performer monitors · Multitrack recording**
 
 [![CI](https://github.com/PaolaShultz/gigpies/actions/workflows/ci.yml/badge.svg)](https://github.com/PaolaShultz/gigpies/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/PaolaShultz/gigpies?color=44d8e5&label=foundation)](https://github.com/PaolaShultz/gigpies/releases)
+[![Version](https://img.shields.io/badge/version-0.2.3-44d8e5)](CHANGELOG.md)
 [![Rust](https://img.shields.io/badge/Rust-1.97.1-f0b77b?logo=rust&logoColor=white)](rust-toolchain.toml)
 [![License](https://img.shields.io/badge/license-MIT-b6a0ec)](LICENSE)
 [![Status](https://img.shields.io/badge/status-experimental-e7a85d)](docs/STATUS.md)
@@ -14,22 +14,22 @@
 
 </div>
 
-## A prepared show. Room to perform.
+## Audio and light. Two consoles. One system.
 
-GigPies is an experimental live-band sound system built in **Rust for Raspberry Pi**.
-Version **0.2.2** delivers the offline processing and review workflow described below.
-Soundcheck prepares a baseline mix. During the show, deterministic rules make bounded
-corrections when meaningful exceptions occur. The live core needs no Internet or
-external AI service.
+GigPies is an experimental live-band sound and lighting system built in **Rust for Raspberry Pi**.
+Version **0.2.3** brings together offline processing, transport and qualified stereo
+USB bench work, with the dual-console integration plan. The complete live system
+is still in development. Its intended live core needs no Internet or external AI service.
 
-The vision combines mixing, PA management, independent performer monitors, lighting
-and recording. We are building it **part by part**, starting with automixing experiments
-on real band multitracks.
+GigPies is the complete system, with human-operated audio and lighting consoles.
+Automation is one operating mode within those consoles. The vision combines
+mixing, PA management, independent performer monitors, lighting and recording.
+In MANUAL, the operator runs the show; ASSIST proposes changes; AUTO acts only
+within explicitly granted scopes. Soundcheck can prepare a baseline, while
+human control remains available independently of automation.
 
-![GigPies live sound concept](docs/assets/gigpies-concept.png)
-
-*Supplied AI-generated concept artwork. Device drawings and some labels are inaccurate;
-read the [concept review](docs/CONCEPT_REVIEW.md). This image depicts the intended system.*
+The hero depicts the intended operator setup, with schematic screens and controllers.
+The [original concept artwork](docs/CONCEPT_REVIEW.md) is retained as a historical reference.
 
 ## Two nodes. Clear responsibilities.
 
@@ -38,10 +38,16 @@ read the [concept review](docs/CONCEPT_REVIEW.md). This image depicts the intend
 | Stagebox / Mixer | Brain / Show |
 |---|---|
 | Owns audio I/O and the local signal path | Analyzes soundcheck and prepares mix settings |
-| Runs channel DSP, FX, monitors and PA processing | Coordinates recording, lighting and show controls |
+| Runs channel DSP, monitors, PA protection and local NVMe recording | Hosts audio/lighting consoles, richer FX and analysis |
 | Applies validated settings and local protection | Sends bounded parameter updates |
 
-These are design boundaries. Node integration is planned; see [architecture](docs/ARCHITECTURE.md).
+These are the intended full-system boundaries. A qualified stereo bench exercises
+part of the audio path; full integration remains planned. See [architecture](docs/ARCHITECTURE.md).
+The [dual-console Brain](docs/BRAIN_CONSOLE_PLAN.md) pairs **two 1920×1080 monitors
+and two MIDI keyboard controllers**: SHR Desk for audio and SHR Lightdesk for
+lighting, both on one Brain. Each developing surface has an offline simulator
+and TUI-style screen drafts; native/live integration is planned. SHR Lux owns
+the lighting engine. The small display serves the PA unit.
 
 ## Working today
 
@@ -62,7 +68,7 @@ Plan reviews expose individual target residuals and bounds; saved plans can be
 audited without audio, and new plans bind their completion record to source hashes.
 It builds independently and opens no audio hardware. Mix quality awaits listening.
 
-The current unreleased checkout adds [summing observations and delivery controls](docs/SUMMING_DELIVERY.md):
+Version 0.2.3 includes [summing observations and delivery controls](docs/SUMMING_DELIVERY.md):
 independent neutral-routing checks, production stage and peak attribution, an explicit
 delivery sidecar and validated true-peak finalization. Comparison gain and final
 limiting are separate controls. The legacy renderer preserves frozen session and
@@ -78,11 +84,14 @@ variation, without changing matching tolerances or selecting another mix.
 Readable summaries can also be created from saved diagnostic reports. New FX and
 EQ plans require training before held out to protect against continuous DSP history.
 
-The unreleased [audio transport prototype](docs/AUDIO_TRANSPORT.md) implements
+The [audio transport prototype](docs/AUDIO_TRANSPORT.md) implements
 bounded UDP audio/control and a PA-owned sample timeline, with two-Pi synthetic
 validation. The [USB hardware bench](docs/AUDIO_HARDWARE.md) now connects selected stereo
 capture/output to real SHR PA, FX and recording, with explicit timing/fault evidence.
-The broader live mixer, monitors, lighting and acoustic acceptance remain planned.
+The broader live mixer, performer monitor system, Lux fixture/cue/output engine
+and acoustic acceptance remain planned. The independently developed audio and
+lighting surfaces have offline interaction loops and screen drafts; this GigPies
+checkout documents their integration and does not bundle or launch them.
 [The component map](docs/COMPONENTS.md) records the related developing SHR projects.
 The system is modular: PA processing and measurement are developed in SHR PA,
 with the finished module intended for [integration here](docs/COMPONENTS.md#pa-module-and-planned-integration).
@@ -118,6 +127,7 @@ Each step should produce something we can assess before adding the next layer.
 | | |
 |---|---|
 | [**Architecture**](docs/ARCHITECTURE.md) | Audio ownership, node responsibilities and timing |
+| [**Brain consoles**](docs/BRAIN_CONSOLE_PLAN.md) | Audio Desk, lighting Lightdesk, two displays/controllers and engine boundaries |
 | [**Status & next steps**](docs/STATUS.md) | Implemented behavior and the gradual build sequence |
 | [**Existing components**](docs/COMPONENTS.md) | SHR PA, FX, DAW, lighting and library choices |
 | [**Development**](docs/DEVELOPMENT.md) | Build, validation, directories and contribution workflow |
@@ -128,7 +138,7 @@ Each step should produce something we can assess before adding the next layer.
 
 <div align="center">
 
-**Small venues. Prepared sound. Musicians in control.**
+**Small venues. Sound and light. People in control.**
 
 [MIT code](LICENSE) · [Artwork & third-party notes](THIRD_PARTY.md) · [Report an issue](https://github.com/PaolaShultz/gigpies/issues)
 
