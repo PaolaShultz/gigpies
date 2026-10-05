@@ -114,3 +114,13 @@ preview, renew, cancel, canceled-token refusal, successful release commit and
 expiry-at-boundary refusal. The previously accepted `v1/e03-rendered.json` bytes
 remain unchanged. Regenerate only the amendment with its documented ignored test;
 normal tests replay both producer corpora.
+
+
+## FOH processing extension
+
+[GP07-processing:1](CHANNEL_PROCESSING.md) adds separate complete channel EQ and
+compressor configuration, boundary application and detector feedback. GP03 request,
+reply and fixture bytes remain unchanged. Both contracts share writer history,
+revision and pending renderer capacity. GP03 mode changes retain manual processing
+settings; processing automation is unavailable. Monitor arithmetic continues to
+use raw samples after shared mute, independently of FOH EQ/dynamics.

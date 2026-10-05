@@ -10,8 +10,8 @@ is preserved.
 
 | Owner | Implemented path | Boundary |
 |---|---|---|
-| GigPies | Eight raw inputs, stereo FOH, two monitor sends, private control, GP09 live roles, GP04 named analysis and GP05 fixed owner graph | Synthetic source; logical main-only PA sample limiter; meters and physical verification unavailable |
-| SHR Desk | Real GP03 actions, native/headless views, protected confirmations and read-only GP05 module status | No recorder writes, writable PA/FX controls or mixer/arbitration implementation |
+| GigPies | Eight raw inputs, per-input FOH EQ/dynamics, stereo FOH, two monitor sends, private control, GP09 live roles, GP04 named analysis and GP05 fixed owner graph | Synthetic source; logical main-only PA sample limiter; meters and physical verification unavailable |
+| SHR Desk | Real GP03 actions, opt-in GP07 channel editing, native/headless views, protected confirmations and read-only GP05 module status | No recorder writes, writable PA/FX controls or mixer/arbitration implementation |
 | SHR Lux | Fixture/programmer/Hold/cue/playback authority, timed release, durable restart and named source automation | Explicit calibration/grants; null/disarmed output; musical beat/downbeat/harmony unavailable |
 | SHR Lightdesk | Real Lux actions, native/headless views, complete reviews and read-only LX05 analysis/provenance | Lux remains the owner of output and arbitration |
 | SHR REC / FX / PA | Actual independently built owner libraries, retained progress observer and versioned capability/status queries | Fixed existing DSP; recorder durability unknown; acoustic and true-peak protection unavailable |
@@ -23,6 +23,22 @@ identity and revision fence writes. Audio applies commands at 48-frame boundarie
 and ramps for 240 frames; monitor sends remain post-mute and pre-FOH-fader.
 Admission is separate from rendered or lifecycle completion. Exact retries retain
 identity; a reconnected client does not replay uncertain commands as new writes.
+
+## Channel processing
+
+[GP07-processing:1](CHANNEL_PROCESSING.md) adds atomic three-band EQ and compressor
+configuration on the existing audio socket. It shares the FOH lease, revision and
+request history with GP03; transport delivery is not application. At 48 kHz, a
+prepared edit applies at the next 48-frame boundary and crossfades for 240 frames.
+Raw input remains the REC/analysis source. FOH uses EQ → compressor → shared mute
+→ fader/pan → sum → fixed FX wet/dry → PA. Monitors remain raw → shared mute → send.
+
+The Desk processing view is opt-in with `--processing`; see the owner’s
+`docs/NATIVE_FRONTEND.md` for selection, field editing and explicit apply/cancel.
+Bypass, settled/current and committed/target values, readiness and compressor gain
+reduction come from the provider. Unknown, bypassed or transitioning GR is unavailable.
+Processing does not add a monitor tap selector, automated DSP writes or writable
+PA/FX controls.
 
 ## Run an explicit local session
 

@@ -257,3 +257,39 @@ The normal `tests/summing.rs` and `tests/delivery.rs` protect independent arithm
 conversion, mode independence, static output identity and failure recovery.
 The policy checkpoint and external-meter script have synthetic Python regressions;
 normal tests do not require FFmpeg. See [commands and contracts](SUMMING_DELIVERY.md).
+
+## GP07 channel processing checks
+
+Normal `gp07`, `gp07_alloc` and `gp07_local` tests protect DSP references,
+transition/neutral behavior, every input, allocation-free rendering, strict wire,
+shared authority/retry history and private-endpoint recovery. Run Cargo under the
+parent-held nonblocking build lock with the existing Rust1.97.1, locked, jobs1 and
+incremental0 policy. Default and hardware-host complete suites remain required.
+
+The ignored `gp07_frontend` acceptance test requires an explicitly hash-verified
+Desk test executable (`GP07_DESK_DRIVER`) and actual owner libraries (`GP05_MANIFEST`).
+It runs the actual LocalAudio pump and Desk frontend, checks every monitor block,
+independent actual FX wet+dry→PA output, raw analysis and all eight recorded PCM24
+stems. See the fixture README for the opt-in producer-corpus regeneration command.
+No hardware or operator windows are opened. Private task manifests bind artifacts
+and results; tests cannot substitute fixtures for actual-provider acceptance.
+
+
+After independently building and checking the Desk `gp07_frontend` test binary and
+owner-library manifest, run from this repository with explicit absolute paths:
+
+```sh
+flock -xn /home/shome/p/.gigpies-build.lock \
+  env CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1 \
+  GP05_MANIFEST=/absolute/private/modules.json \
+  GP07_DESK_DRIVER=/absolute/private/gp07_frontend-test-binary \
+  GP07_ACCEPTANCE_EVIDENCE=/absolute/private/acceptance.json \
+  cargo +1.97.1 test --locked -j1 --features hardware-host \
+  --test gp07_frontend -- --ignored --exact \
+  actual_frontend_processing_preserves_raw_and_monitors_and_module_order
+```
+
+The test requires exactly two driver edits, checks their sample-frame boundaries,
+and replays each physical input through an independent slot-zero mixer to verify
+channel mapping across the entire captured FOH timeline. It checks recording
+coverage and retained settings after the driver exits and the lease expires.

@@ -68,6 +68,13 @@ CPU backend. The PA sample limiter applies to logical main outputs only; meters,
 acoustic protection and writable FX/PA controls remain unavailable. The existing
 offline workflows below remain available.
 
+The [channel-processing increment](docs/CHANNEL_PROCESSING.md) adds three-band
+EQ and compression on each of the eight FOH inputs, with neutral defaults,
+explicit makeup gain and provider-confirmed Desk editing. Raw recording/analysis
+and the post-mute monitor sends retain their established samples. The real
+operator/provider/sample chain is software-validated; listening and hardware
+acceptance remain separate.
+
 The first offline automixer now provides causal soundcheck, editable instrument
 presets, frozen settings and full-song stereo rendering. A new unity-source workflow
 keeps source gains intact and exports comparisons without loudness matching.

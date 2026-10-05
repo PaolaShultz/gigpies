@@ -38,3 +38,8 @@ pub mod module_graph;
 
 /// Separately discriminated read-only module health and scoped recorder envelope.
 pub mod module_wire;
+
+/// Versioned fixed-storage channel EQ and dynamics.
+pub mod channel_processing;
+/// Strict GP07 processing extension.
+pub mod processing_wire;

@@ -1,5 +1,8 @@
 //! GP03 control-side offline pump. Authority/JSON/heap work stays outside Mixer::process.
 //! This is not a realtime multi-thread host integration.
+use crate::processing_wire::{
+    Channel, ProcessingCommand, ProcessingReply, ProcessingRequest, ProcessingSnapshot,
+};
 use crate::{
     control_model::{Authority, Command, Edit, Reply, Request, Scope, Snapshot},
     mixer::{INPUTS, Mixer, Prepared},
@@ -44,7 +47,7 @@ pub struct RequestContext {
     pub expected_revision: Option<Counter>,
 }
 impl RequestContext {
-    fn request(r: &Request) -> Self {
+    pub(crate) fn request(r: &Request) -> Self {
         Self {
             show_id: r.show_id.clone(),
             module: r.module.clone(),
@@ -66,7 +69,7 @@ impl RequestContext {
             expected_revision: r.expected_revision,
         }
     }
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         let command = if self.writer.is_none() {
             Command::Snapshot {}
         } else if self.lease.is_none() {
@@ -223,6 +226,12 @@ struct Pending {
     scope: Scope,
 }
 #[derive(Debug)]
+struct ProcessingPending {
+    request: ProcessingRequest,
+    ticket: u64,
+    frame: u64,
+}
+#[derive(Debug)]
 pub struct OfflineEngine {
     authority: Authority,
     mixer: Mixer,
@@ -230,6 +239,9 @@ pub struct OfflineEngine {
     next_ticket: u64,
     outcomes: BTreeMap<String, VecDeque<(Request, RenderedReply)>>,
     holds: [[Option<u64>; 6]; INPUTS],
+    processing_pending: Option<ProcessingPending>,
+    processing_outcomes: BTreeMap<String, VecDeque<(ProcessingRequest, ProcessingReply)>>,
+    processing_completions: Vec<ProcessingReply>,
     module_ids: BTreeMap<String, VecDeque<(Request, String, Option<String>)>>,
 }
 impl OfflineEngine {
@@ -244,6 +256,9 @@ impl OfflineEngine {
             outcomes: BTreeMap::new(),
             holds: [[None; 6]; INPUTS],
             module_ids: BTreeMap::new(),
+            processing_pending: None,
+            processing_outcomes: BTreeMap::new(),
+            processing_completions: Vec::new(),
         })
     }
     pub fn frame(&self) -> u64 {
@@ -324,6 +339,206 @@ impl OfflineEngine {
                 .collect(),
         })
     }
+    pub fn processing_snapshot(&mut self) -> Result<ProcessingSnapshot> {
+        let a = self.authority.snapshot()?;
+        Ok(ProcessingSnapshot {
+            show_id: a.show_id,
+            epoch: a.epoch,
+            revision: a.revision,
+            sequence: a.sequence,
+            frame: Counter(self.frame()),
+            sample_rate: 48000,
+            foh_tap: crate::processing_wire::FOH_TAP.into(),
+            monitor_tap: crate::processing_wire::MONITOR_TAP.into(),
+            faulted: self.mixer.faulted(),
+            channels: self
+                .mixer
+                .processing_observations()
+                .into_iter()
+                .enumerate()
+                .map(|(i, (current, target, remaining, gr))| Channel {
+                    input: format!("input-{:02}", i + 1),
+                    current,
+                    target,
+                    transition_remaining_frames: remaining,
+                    ready: remaining == 0,
+                    gain_reduction_mdb: gr,
+                })
+                .collect(),
+        })
+    }
+    fn remember_processing(&mut self, r: ProcessingRequest, p: ProcessingReply) {
+        let cache = self
+            .processing_outcomes
+            .entry(r.writer.clone().expect("mutation"))
+            .or_default();
+        cache.push_back((r, p));
+        if cache.len() > 64 {
+            cache.pop_front();
+        }
+    }
+    fn processing_pending_reply(&self, p: &ProcessingPending) -> ProcessingReply {
+        let mut r = ProcessingReply::new(&p.request, "pending", None, self.revision());
+        r.ticket = Some(Counter(p.ticket));
+        r.effective_frame = Some(Counter(p.frame));
+        r.ramp_frames = Some(240);
+        r
+    }
+    /// Complete atomic processing admission; all preparation remains off render.
+    pub fn handle_processing(
+        &mut self,
+        r: &ProcessingRequest,
+        now: u64,
+    ) -> Result<ProcessingReply> {
+        self.handle_processing_with_freshness(r, now, true)
+    }
+    pub(crate) fn handle_processing_with_freshness(
+        &mut self,
+        r: &ProcessingRequest,
+        now: u64,
+        fresh: bool,
+    ) -> Result<ProcessingReply> {
+        r.validate()?;
+        if matches!(r.command, ProcessingCommand::ProcessingSnapshot {}) {
+            let reply = self.authority.handle(&r.authority_request(), now);
+            let mut p = ProcessingReply::new(r, "final", reply.body.reason, self.revision());
+            if reply.kind == "applied" {
+                p.snapshot = Some(self.processing_snapshot()?);
+            }
+            return Ok(p);
+        }
+        let history = r.history_request();
+        if let Some(reason) = self.authority.processing_identity(&history, now) {
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                Some(reason.into()),
+                self.revision(),
+            ));
+        }
+        self.authority.observe_control_time(now)?;
+        self.processing_outcomes
+            .retain(|w, _| self.authority.writer_live(w, now));
+        if self.authority.cached(&history, now).is_some() {
+            if let Some((old, p)) = self
+                .processing_outcomes
+                .get(r.writer.as_ref().unwrap())
+                .and_then(|v| v.iter().find(|(old, _)| old.request_id == r.request_id))
+            {
+                return Ok(if old == r {
+                    p.clone()
+                } else {
+                    ProcessingReply::new(r, "final", Some("reused_id".into()), self.revision())
+                });
+            }
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                Some("expired_id".into()),
+                self.revision(),
+            ));
+        }
+        if let Some(p) = &self.processing_pending {
+            if p.request == *r {
+                return Ok(self.processing_pending_reply(p));
+            }
+            if p.request.writer == r.writer && p.request.request_id == r.request_id {
+                return Ok(ProcessingReply::new(
+                    r,
+                    "final",
+                    Some("reused_id".into()),
+                    self.revision(),
+                ));
+            }
+        }
+        if let Some(p) = &self.pending
+            && p.request.writer == r.writer
+            && p.request.request_id == r.request_id
+        {
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                Some("reused_id".into()),
+                self.revision(),
+            ));
+        }
+        // Probe shared high-water/cache before pressure; do not consume new IDs.
+        let mut check = self.authority.clone();
+        let refusal = if !fresh {
+            Some("stale_snapshot")
+        } else {
+            self.mixer.faulted().then_some("faulted")
+        };
+        let checked = check.processing_transaction(&history, now, refusal);
+        if matches!(
+            checked.body.reason.as_deref(),
+            Some("reused_id" | "expired_id")
+        ) {
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                checked.body.reason,
+                self.revision(),
+            ));
+        }
+        if self.pending.is_some()
+            || self.processing_pending.is_some()
+            || !self.mixer.processing_ready()
+            || !self.processing_completions.is_empty()
+        {
+            return Ok(ProcessingReply::new(
+                r,
+                "backpressure",
+                None,
+                self.revision(),
+            ));
+        }
+        if checked.kind != "applied" {
+            let reply = self
+                .authority
+                .processing_transaction(&history, now, refusal);
+            let p = ProcessingReply::new(r, "final", reply.body.reason, self.revision());
+            if self.authority.cached(&history, now).is_some() {
+                self.remember_processing(r.clone(), p.clone());
+            }
+            return Ok(p);
+        }
+        let ProcessingCommand::ProcessingSet { input, config } = r.command.clone() else {
+            unreachable!()
+        };
+        let prepared = Prepared::processing(
+            crate::processing_wire::input_index(&input)?,
+            crate::channel_processing::Prepared::new(config)?,
+        )?;
+        let Some(next) = self.next_ticket.checked_add(1) else {
+            return Ok(ProcessingReply::new(
+                r,
+                "backpressure",
+                None,
+                self.revision(),
+            ));
+        };
+        let Ok(frame) = self.mixer.schedule(prepared, self.next_ticket) else {
+            return Ok(ProcessingReply::new(
+                r,
+                "backpressure",
+                None,
+                self.revision(),
+            ));
+        };
+        let pending = ProcessingPending {
+            request: r.clone(),
+            ticket: self.next_ticket,
+            frame,
+        };
+        self.next_ticket = next;
+        let reply = self.processing_pending_reply(&pending);
+        self.processing_pending = Some(pending);
+        Ok(reply)
+    }
+    pub fn take_processing_completions(&mut self) -> Vec<ProcessingReply> {
+        std::mem::take(&mut self.processing_completions)
+    }
     /// GP05 admission shares the authority's session high-water with GP03.
     /// Fingerprints include contract/kind/body. A private Renew reserves the ID;
     /// GP03 is fenced from replaying that internal reservation below. No graph
@@ -365,7 +580,13 @@ impl OfflineEngine {
         if self.authority.cached(r, now).is_some() {
             return Err("reused_id".into());
         }
-        if self.pending.is_some() {
+        if let Some(p) = &self.processing_pending
+            && p.request.writer == r.writer
+            && p.request.request_id == r.request_id
+        {
+            return Err("reused_id".into());
+        }
+        if self.pending.is_some() || self.processing_pending.is_some() {
             return Err("backpressure".into());
         }
         let reply = self.authority.handle(r, now);
@@ -424,6 +645,26 @@ impl OfflineEngine {
                 return Ok(reply.clone());
             }
             return Ok(Self::wrapped(cached));
+        }
+        if let Some(p) = &self.processing_pending
+            && !matches!(r.command, Command::Snapshot {})
+        {
+            let mut check = self.authority.clone();
+            let checked = check.handle(r, now);
+            if matches!(
+                checked.body.reason.as_deref(),
+                Some("wrong_show" | "epoch" | "lease" | "clock" | "expired_id" | "reused_id")
+            ) {
+                return Ok(Self::wrapped(checked));
+            }
+            if p.request.writer == r.writer && p.request.request_id == r.request_id {
+                return Ok(Self::wrapped(self.authority.reply(
+                    r,
+                    "rejected",
+                    Some("reused_id"),
+                )));
+            }
+            return Ok(Self::backpressure(r));
         }
         if let Some(p) = &self.pending {
             // Identity and current lease validity precede pending retry identity.
@@ -552,6 +793,54 @@ impl OfflineEngine {
             .checked_add(input.len() as u64)
             .ok_or("clock exhausted")?;
         let mut replies = Vec::new();
+        if let Some(split) = self
+            .processing_pending
+            .as_ref()
+            .filter(|p| p.frame < end)
+            .map(|p| (p.frame - self.frame()) as usize)
+        {
+            self.mixer
+                .process(&input[..split], &mut output[..split])
+                .map_err(|e| format!("{e:?}"))?;
+            let p = self.processing_pending.take().expect("pending");
+            let mut staged = self.authority.clone();
+            let checked = staged.processing_transaction(
+                &p.request.history_request(),
+                now_ms,
+                self.mixer.faulted().then_some("faulted"),
+            );
+            if checked.kind != "applied" {
+                self.mixer.cancel(p.ticket);
+                self.authority = staged;
+                let reply =
+                    ProcessingReply::new(&p.request, "final", checked.body.reason, self.revision());
+                self.remember_processing(p.request, reply.clone());
+                self.processing_completions.push(reply);
+                self.mixer
+                    .process(&input[split..], &mut output[split..])
+                    .map_err(|e| format!("{e:?}"))?;
+            } else {
+                self.mixer
+                    .process(&input[split..split + 1], &mut output[split..split + 1])
+                    .map_err(|e| format!("{e:?}"))?;
+                let done = self.mixer.take_completion().ok_or("completion missing")?;
+                if done.ticket != p.ticket || done.frame != p.frame {
+                    return Err("completion identity".into());
+                }
+                self.authority = staged;
+                let mut reply = ProcessingReply::new(&p.request, "final", None, self.revision());
+                reply.ticket = Some(Counter(p.ticket));
+                reply.effective_frame = Some(Counter(p.frame));
+                reply.ramp_frames = Some(240);
+                reply.snapshot = Some(self.processing_snapshot()?);
+                self.remember_processing(p.request, reply.clone());
+                self.processing_completions.push(reply);
+                self.mixer
+                    .process(&input[split + 1..], &mut output[split + 1..])
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            return Ok(replies);
+        }
         let split = self
             .pending
             .as_ref()

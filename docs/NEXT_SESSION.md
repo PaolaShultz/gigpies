@@ -1,16 +1,18 @@
 # Next session: physical gates and subsequent software increments
 
-Current handoff after the integrated software milestone, 2026-10-04. The
+Current handoff includes the 2026-10-05 channel-processing slice and the
+integrated software milestone of 2026-10-04. The
 [previous local-client handoff](archive/next-session-before-modules-2026-10-04.md)
 is preserved. The [continuation prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md)
 records this completed software/publication scope; recover the current source
 and acceptance before using any historical launch card.
 
-The requested next software action is the [October 4 review and repair pass](DAILY_REVIEW_EXECUTION_PROMPT.md)
-using the stronger model selected for a new session on Pi5. Its exact daily commit
-inventory includes all twelve owners; it authorizes in-place fixes, validation,
-publication and final source synchronization. This prompt has been prepared;
-the stronger-model review itself has not yet run.
+The [October 4 review and repair pass](DAILY_REVIEW_EXECUTION_PROMPT.md) is complete.
+Task0011 reviewed the twelve-owner daily inventory, repaired confirmed defects,
+validated the changes, published five scoped owner commits and synchronized both
+Pis. Historical launch cards do not reopen that completed assignment.
+The current task0012 increment adds [FOH channel processing](CHANNEL_PROCESSING.md);
+its implementation and acceptance are tracked separately from physical gates.
 
 Read the [local integration instructions](HEADLESS_INTEGRATION.md),
 [implementation map](MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
@@ -21,8 +23,8 @@ ASSIST proposes, and AUTO requires explicit bounded authority.
 
 | Owner | Accepted software foundation | Next separate increment |
 |---|---|---|
-| GigPies | GP-01..05, GP-09 and private local GP-06 subset; real owner graph, named analysis and role broker | Reviewed production remote authentication (B-NET), wider GP-07 scenes/channels; separately authorized physical/combined-load gates |
-| SHR Desk | DS-01..04 including native software frontend; read-only DS-05 actual module health | Physical dual-display/controller/LED acceptance (GP-H2); later writable controls only after owner contracts |
+| GigPies | GP-01..05, GP-09, private local GP-06 subset and GP-07 FOH EQ/dynamics; real owner graph, named analysis and role broker | Reviewed production remote authentication (B-NET), wider GP-07 scenes/channels; separately authorized physical/combined-load gates |
+| SHR Desk | DS-01..04 native frontend, read-only DS-05 health and GP07 channel editing/readback | Physical dual-display/controller/LED acceptance (GP-H2); later writable controls only after owner contracts |
 | SHR Lightdesk | LD-01..04 including native software frontend and read-only LX05 compatibility | Physical role/display/controller acceptance; later analysis controls only as an explicit increment |
 | SHR Lux | LX-01..05 null-output authority, release/recovery and named source automation | LX-06 fixture output only with known patch, explicit arming and hardware reservation |
 | SHR REC / FX / PA | REC-01/02 and fixed-v1 FX-01/PA-01 implemented in their owners and consumed by GP-05 | Writable extensions/acoustic acceptance remain owner work; no duplicate algorithms in GigPies |

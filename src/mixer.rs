@@ -44,14 +44,25 @@ enum Change {
 #[derive(Debug, Clone, Copy)]
 pub struct Prepared {
     changes: [[Change; COEFFICIENTS]; INPUTS],
+    processing: Option<(usize, crate::channel_processing::Prepared)>,
 }
 impl Prepared {
+    pub fn processing(input: usize, prepared: crate::channel_processing::Prepared) -> Result<Self> {
+        if input >= INPUTS {
+            return Err("target".into());
+        }
+        Ok(Self {
+            changes: [[Change::Keep; COEFFICIENTS]; INPUTS],
+            processing: Some((input, prepared)),
+        })
+    }
     pub fn edits(edits: &[Edit]) -> Result<Self> {
         if edits.is_empty() || edits.len() > 64 {
             return Err("capacity".into());
         }
         let mut p = Self {
             changes: [[Change::Keep; COEFFICIENTS]; INPUTS],
+            processing: None,
         };
         let mut seen = [[false; 5]; INPUTS];
         for e in edits {
@@ -91,6 +102,7 @@ impl Prepared {
     pub fn freeze(scope: crate::control_model::Scope) -> Self {
         let mut p = Self {
             changes: [[Change::Keep; COEFFICIENTS]; INPUTS],
+            processing: None,
         };
         for row in &mut p.changes {
             match scope {
@@ -145,6 +157,7 @@ pub struct Mixer {
     pending: Option<Pending>,
     completion: Option<Completion>,
     fault: bool,
+    processing: [crate::channel_processing::Strip; INPUTS],
 }
 impl Default for Mixer {
     fn default() -> Self {
@@ -167,6 +180,7 @@ impl Mixer {
             pending: None,
             completion: None,
             fault: false,
+            processing: [crate::channel_processing::Strip::default(); INPUTS],
         }
     }
     pub fn frame(&self) -> u64 {
@@ -174,6 +188,20 @@ impl Mixer {
     }
     pub fn faulted(&self) -> bool {
         self.fault
+    }
+    pub fn processing_observations(
+        &self,
+    ) -> [(
+        crate::channel_processing::Config,
+        crate::channel_processing::Config,
+        u32,
+        Option<i32>,
+    ); INPUTS] {
+        self.processing
+            .map(|s| s.observation(self.clock, self.fault))
+    }
+    pub fn processing_ready(&self) -> bool {
+        self.processing_observations().iter().all(|v| v.2 == 0)
     }
     pub fn next_boundary(&self) -> Result<u64> {
         self.clock
@@ -183,7 +211,10 @@ impl Mixer {
             .ok_or("clock exhausted".into())
     }
     pub fn schedule(&mut self, prepared: Prepared, ticket: u64) -> Result<u64> {
-        if self.pending.is_some() || self.completion.is_some() {
+        if self.pending.is_some()
+            || self.completion.is_some()
+            || (prepared.processing.is_some() && !self.processing_ready())
+        {
             return Err("capacity".into());
         }
         let frame = self.next_boundary()?;
@@ -252,6 +283,9 @@ impl Mixer {
                         }
                     }
                 }
+                if let Some((input, prepared)) = p.prepared.processing {
+                    self.processing[input].apply(prepared, self.clock);
+                }
                 self.pending = None;
                 self.completion = Some(Completion {
                     ticket: p.ticket,
@@ -263,15 +297,23 @@ impl Mixer {
                 self.fault = true;
             }
             if !self.fault {
-                for (sample, row) in sources.iter().zip(self.ramps) {
+                for ((sample, row), strip) in
+                    sources.iter().zip(self.ramps).zip(&mut self.processing)
+                {
                     let c = row.map(|r| r.at(self.clock));
                     if c.iter().any(|x| !x.is_finite()) {
                         self.fault = true;
                         break;
                     }
                     let shared = sample * c[3];
-                    out[0] += shared * c[0] * c[1];
-                    out[1] += shared * c[0] * c[2];
+                    let processed = strip.tick(*sample, self.clock);
+                    if !processed.is_finite() {
+                        self.fault = true;
+                        break;
+                    }
+                    let foh = processed * c[3];
+                    out[0] += foh * c[0] * c[1];
+                    out[1] += foh * c[0] * c[2];
                     out[2] += shared * c[4];
                     out[3] += shared * c[5];
                 }

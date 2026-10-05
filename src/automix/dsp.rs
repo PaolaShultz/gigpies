@@ -8,7 +8,7 @@ pub fn gain(db: f64) -> f64 {
 pub fn db(x: f64) -> f64 {
     20. * x.max(1e-12).log10()
 }
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Biquad {
     b: [f64; 3],
     a: [f64; 2],

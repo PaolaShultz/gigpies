@@ -235,3 +235,29 @@ Desk and Lightdesk are public repositories. Optional/reference DAW, Drums, Synth
 Sampler and Tone received planning/index changes only; no new runtime project was
 activated. [Local session instructions and evidence](HEADLESS_INTEGRATION.md) give
 reproduction and the limits of these checks.
+
+
+## Channel-processing checkpoint — 2026-10-05
+
+GP-07's first slice is implemented and software-accepted: all eight mono FOH
+inputs have prepared three-band EQ and compression, using existing GigPies DSP.
+[The accepted contract](CHANNEL_PROCESSING.md) owns neutral defaults, units,
+48-frame application, 240-frame crossfades, manual FOH authority and truthful
+current/target/readiness/GR. Desk uses the real versioned provider envelope and
+existing semantic actions for keyboard and injected-controller edits, protected
+confirmation, cancellation and reconnect.
+
+The actual operator/provider/sample chain passed with independent per-input
+mapping references, exact raw PCM24 recording and analysis, unchanged monitors,
+and actual FX→PA order. REC covered the complete editing interval; settings and
+revision remained stable after reconnect and lease expiry. Provider/consumer
+schema, authority and frontend polling repairs were independently reviewed.
+
+Complete GigPies normal suites passed (297 default, 320 `hardware-host`), alongside
+39 Python checks, formatting, warnings-denied Clippy and release builds. Four
+actual-owner GP05 regressions passed in addition to the joint GP07 acceptance.
+Historical media/research matrices and physical/shared-load checks were skipped.
+
+GP-07 remains partial: scenes, PFL, routing/channel expansion, writable PA/FX and
+production remote authentication retain their separate gates. Source publication
+and two-Pi synchronization do not deploy a service or establish hardware quality.

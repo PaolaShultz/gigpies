@@ -74,3 +74,15 @@ entire private namespace is outside this restart guarantee. A crash may leave
 its socket behind; startup preserves any preexisting endpoint and refuses until
 the owner explicitly removes its verified dead endpoint. An unsuccessful
 startup after reservation may consume an epoch, which must never be reused.
+
+
+## Channel processing
+
+The same endpoint accepts explicitly versioned
+[GP07-processing:1](CHANNEL_PROCESSING.md) snapshot and atomic channel replacement
+requests. The client uses its existing C-AUDIO connection, FOH grant, revision and
+request-ID sequence. Before a new edit it must query a processing snapshot within
+250 ms; exact retries still return their original outcome after that snapshot
+ages. Separate processing snapshots are queried explicitly; legacy GP03 telemetry
+is unchanged. Final completion follows actual boundary application, with readiness
+and gain reduction observed separately after the 240-frame transition.

@@ -1,0 +1,28 @@
+{
+  "contract": "GP07-processing",
+  "version": 1,
+  "provider_repository": "https://github.com/PaolaShultz/gigpies",
+  "provider_base": "b2442dd2fe76a1d652b9ccde8ed3ffdbdb0d6d34",
+  "source_snapshot_sha256": {
+    "src/channel_processing.rs": "1e9bfe63796785f0cd4eb37725a719bf5591c5ba3955dd689d54f961e94021bf",
+    "src/processing_wire.rs": "74369390d385b40b0c7dd9ff75d9314de5d2a9a1d004d0cab0fad9eafb9eb1c3",
+    "src/mixer.rs": "66a825c6873b68b37bfe6f00fecdb05218f52a7a58c49a9ceabfd29d976956b2",
+    "src/mixer_control.rs": "d755c4be9c7432bef021c8b38f3b3f460cd9ed4bfe719545473ac482cc5c3854",
+    "src/control_model.rs": "4841d07ab2ea493017fa1b0f3fdd99b132e2fe632c6fc97dac726954599142be",
+    "src/local_audio.rs": "ac832c66717e9eee43a49c9d896af84d39b8cfe71fd5734aa71b355de16fbe53",
+    "src/lib.rs": "5f7eb6a2ef3e116e1eb35b3384576a067caeaf90677f9a604e6c0f56efa01f1b",
+    "src/automix/dsp.rs": "594926182a549d9174505db2259ca694ed5eb4ecc9e12029b0e48cbda7b6a3b8",
+    "tests/gp07.rs": "698fb40bf2e6cd0d3f310b44a31aeecbd0c73d3fb52cc5e766a63db4535f77b3"
+  },
+  "fixture_sha256": {
+    "backpressure.json": "0532ba70df566f1f8c87faa769e19c7fddbcab4ecebfbd4807971e311ca0c8d2",
+    "ready-reply.json": "978fa21b4f695973a7cd6367dc55fff2dad25c80e14a8bfc125365f1890b1ccd",
+    "set-final.json": "ffde663b1e7bbbdd3c0c35a2c9ef0071269783e9ba938ef6fa0b4b82908b3c4e",
+    "set-pending.json": "b28a7f1b5f77ad8c09b13f495e6cf3a1c8b97fc16da19f166a2ab0eee09fd3b1",
+    "set-request.json": "fc9f5f3e81c7de28e1d636471724ecbcc81281884cf6e079d3742d04f104ad26",
+    "snapshot-reply.json": "8b293485551077599f9365e6ec267f5a2c4c4bd45d4c698da938b667414a1c64",
+    "snapshot-request.json": "7f72014d45e0044adf3452fd8f1a483bedd35ab153357404ba96f602c4398c93",
+    "stale-revision.json": "1fc782fe1775eba9176d9baddeaea98049070e38a86c3b23d1e4d94a3f6aa97d"
+  },
+  "provenance": "Executed by real OfflineEngine; source snapshot is generation provenance, normal test replay validates subsequent implementation revisions."
+}

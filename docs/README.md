@@ -25,6 +25,7 @@ selection and evidence.
 | [Audio transport plan](AUDIO_TRANSPORT_PLAN.md) | Owning execution plan, targets, repairs, verification and task completion |
 | [Brain console integration](BRAIN_CONSOLE_PLAN.md) | Dual audio/lighting Brain, SHR Desk/Lightdesk/Lux ownership, controller/display assignment and integration backlog |
 | [Local engine integration](HEADLESS_INTEGRATION.md) | Real offline audio and null lighting services, explicit console commands and acceptance limits |
+| [Channel EQ and dynamics](CHANNEL_PROCESSING.md) | GP07 FOH-only strip DSP, strict processing control/readback and monitor/raw-tap preservation |
 | [Owner-library graph](MODULE_GRAPH.md) | Actual REC/FX/PA activation, recorder lifecycle, fixed logical processing and health |
 | [Named analysis stream](ANALYSIS_STREAM.md) | Bounded raw PCM windows, identity, acquisition age and independent failure |
 | [Native role binding](ROLE_BINDING.md) | Descriptor identities, process-held ownership, generations and synthetic acceptance |

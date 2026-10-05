@@ -60,6 +60,7 @@ impl Packet {
 enum Incoming {
     Audio(Request),
     Modules(crate::module_wire::ModuleRequest),
+    Processing(crate::processing_wire::ProcessingRequest),
 }
 struct Client {
     id: u64,
@@ -71,6 +72,7 @@ struct Client {
     telemetry: Option<Packet>,
     last_write: u64,
     snapshot: bool,
+    processing_snapshot_ms: Option<u64>,
     writer: Option<String>,
     lease: Option<Counter>,
 }
@@ -124,6 +126,8 @@ impl Client {
         let value: serde_json::Value = crate::show::decode(bytes)?;
         let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
             Incoming::Modules(crate::module_wire::ModuleRequest::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP07-processing") {
+            Incoming::Processing(crate::processing_wire::ProcessingRequest::decode(bytes)?)
         } else {
             Incoming::Audio(Request::decode(bytes)?)
         };
@@ -335,6 +339,7 @@ pub struct LocalAudio {
     ticks: u64,
     last_now: u64,
     pending_owner: Option<(u64, u64)>,
+    processing_owner: Option<(u64, u64)>,
     writer_connections: BTreeMap<String, u64>,
     show: String,
     epoch: Counter,
@@ -401,6 +406,7 @@ impl LocalAudio {
             ticks: 0,
             last_now: 0,
             pending_owner: None,
+            processing_owner: None,
             writer_connections: BTreeMap::new(),
             show: show.into(),
             epoch,
@@ -573,6 +579,45 @@ impl LocalAudio {
         };
         self.clients[index].queue_module(&reply, now)
     }
+    fn processing_request(
+        &mut self,
+        index: usize,
+        r: crate::processing_wire::ProcessingRequest,
+        now: u64,
+    ) -> Result<()> {
+        use crate::processing_wire::{ProcessingCommand, ProcessingReply};
+        let read = matches!(r.command, ProcessingCommand::ProcessingSnapshot {});
+        let client = &self.clients[index];
+        let reply = if !read
+            && (!client.snapshot || client.writer != r.writer || client.lease != r.lease)
+        {
+            ProcessingReply::new(&r, "final", Some("lease".into()), self.engine.revision())
+        } else {
+            self.engine.handle_processing_with_freshness(
+                &r,
+                now,
+                client
+                    .processing_snapshot_ms
+                    .is_some_and(|t| now.saturating_sub(t) <= 250),
+            )?
+        };
+        if read && reply.snapshot.is_some() {
+            self.clients[index].processing_snapshot_ms = Some(now);
+        }
+        if reply.state == "pending" {
+            self.processing_owner = Some((
+                reply.ticket.expect("pending ticket").0,
+                self.clients[index].id,
+            ));
+        }
+        reply.validate()?;
+        self.clients[index].queue_module(&reply, now)
+    }
+    /// Captured final PA output from the actual owner graph, when enabled.
+    #[cfg(feature = "hardware-host")]
+    pub fn module_output(&self) -> Option<&[f64; 48 * 6]> {
+        self.modules.as_ref().map(|g| g.output())
+    }
     #[cfg(feature = "hardware-host")]
     fn module_completions(&mut self, now: u64) -> Result<()> {
         use crate::module_wire::{ModuleCommand, ModuleReply};
@@ -625,9 +670,18 @@ impl LocalAudio {
     pub fn snapshot(&mut self) -> Result<crate::mixer_control::RenderedSnapshot> {
         self.engine.snapshot()
     }
+    /// Control-side observation, outside the bounded mixer callback.
+    pub fn processing_snapshot(&mut self) -> Result<crate::processing_wire::ProcessingSnapshot> {
+        self.engine.processing_snapshot()
+    }
     /// Bounded synthetic work: <=4 accepts, one frame/client,8KiB read/write/client,
     ///48 render frames. All parsing/IPC/heap work is outside Mixer::process.
     pub fn tick(&mut self, now: u64) -> Result<()> {
+        self.tick_with_output(now, &mut [[0.; 4]; 48])
+    }
+    /// Same provider pump, with caller-owned observation of the FOH/monitor block.
+    /// This is software evidence; it does not open a hardware endpoint.
+    pub fn tick_with_output(&mut self, now: u64, output: &mut [[f64; 4]; 48]) -> Result<()> {
         if now < self.last_now {
             return Err("clock".into());
         }
@@ -652,6 +706,7 @@ impl LocalAudio {
                         telemetry: None,
                         last_write: now,
                         snapshot: false,
+                        processing_snapshot_ms: None,
                         writer: None,
                         lease: None,
                     });
@@ -668,6 +723,11 @@ impl LocalAudio {
             match result {
                 Err(_) => keep = false,
                 Ok(None) => (),
+                Ok(Some(Incoming::Processing(request))) => {
+                    if self.processing_request(index, request, now).is_err() {
+                        keep = false;
+                    }
+                }
                 Ok(Some(Incoming::Modules(request))) => {
                     if self.module_request(index, request, now).is_err() {
                         keep = false;
@@ -721,7 +781,7 @@ impl LocalAudio {
         }
         #[cfg(feature = "hardware-host")]
         self.module_completions(now)?;
-        let mut output = [[0.0; 4]; 48];
+        output.fill([0.; 4]);
         let mut inputs = [[0.125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; 48];
         let source_frame = self.frame();
         if self.synthetic_fouraux {
@@ -734,16 +794,25 @@ impl LocalAudio {
             }
             inputs = raw.map(|f| f.map(|v| f64::from(v) / 8_388_608.0));
         }
-        let completions = self.engine.process(&inputs, &mut output, now)?;
+        let completions = self.engine.process(&inputs, output, now)?;
         #[cfg(feature = "hardware-host")]
         if let Some(graph) = &mut self.modules {
-            let _ = graph.process(self.epoch.0, source_frame, &inputs, &output);
+            let _ = graph.process(self.epoch.0, source_frame, &inputs, output);
         }
         for reply in completions {
             if let Some((ticket, owner)) = self.pending_owner.take()
                 && reply.ticket.is_none_or(|t| t.0 == ticket)
                 && let Some(index) = self.clients.iter().position(|c| c.id == owner)
                 && self.clients[index].queue(&reply, now).is_err()
+            {
+                self.clients.remove(index);
+            }
+        }
+        for reply in self.engine.take_processing_completions() {
+            if let Some((ticket, owner)) = self.processing_owner.take()
+                && reply.ticket.is_none_or(|t| t.0 == ticket)
+                && let Some(index) = self.clients.iter().position(|c| c.id == owner)
+                && self.clients[index].queue_module(&reply, now).is_err()
             {
                 self.clients.remove(index);
             }

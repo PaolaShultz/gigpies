@@ -449,6 +449,77 @@ impl Authority {
     pub fn revision(&self) -> Counter {
         self.revision
     }
+    /// GP07 uses the same high-water/cache as C-AUDIO, with a distinct internal
+    /// contract marker. This transaction never extends the writer's lease.
+    pub(crate) fn processing_identity(&self, r: &Request, now: u64) -> Option<&'static str> {
+        if r.show_id != self.show {
+            Some("wrong_show")
+        } else if r.epoch != self.epoch {
+            Some("epoch")
+        } else if now < self.now {
+            Some("clock")
+        } else if self.live_scope(r, now).is_none() {
+            Some("lease")
+        } else {
+            None
+        }
+    }
+    pub(crate) fn processing_transaction(
+        &mut self,
+        r: &Request,
+        now: u64,
+        refusal: Option<&str>,
+    ) -> Reply {
+        if let Some(reason) = self.processing_identity(r, now) {
+            return self.reply(r, "rejected", Some(reason));
+        }
+        self.now = now;
+        let writer = r.writer.as_ref().expect("validated extension");
+        let session = &self.sessions[writer];
+        if let Some((old, p)) = session
+            .cache
+            .iter()
+            .find(|(old, _)| old.request_id == r.request_id)
+        {
+            return if old == r {
+                p.clone()
+            } else {
+                self.reply(r, "rejected", Some("reused_id"))
+            };
+        }
+        let number = r.request_id.expect("validated extension").0;
+        if number <= session.high {
+            return self.reply(r, "rejected", Some("expired_id"));
+        }
+        let reason = if session.scope != Scope::Foh {
+            Some("scope")
+        } else if r.expected_revision != Some(self.revision) {
+            Some("stale_revision")
+        } else if self.revision.0 == u64::MAX {
+            Some("capacity")
+        } else {
+            refusal
+        };
+        if reason.is_none() {
+            self.revision.0 += 1;
+        }
+        let reply = self.reply(
+            r,
+            if reason.is_none() {
+                "applied"
+            } else {
+                "rejected"
+            },
+            reason,
+        );
+        let session = self.sessions.get_mut(writer).expect("live session");
+        session.high = number;
+        session.cache.push_back((r.clone(), reply.clone()));
+        if session.cache.len() > 64 {
+            session.cache.pop_front();
+        }
+        reply
+    }
     pub fn state(&self) -> (&[Parameter], &BTreeMap<Scope, Mode>) {
         (&self.parameters, &self.modes)
     }

@@ -13,6 +13,7 @@ GPA1/GPH1/GPC1/GPK1 and versioned C symbols retain their exact behavior.
 | C-SHOW | 1, READY for implementation | GigPies; coordinator → all core modules | This document, Show; GP-01, DS-03, LD-03, LX-03 |
 | C-ROLE | 1, READY for pure model | GigPies; assignment registry → Desk/Lightdesk | This document, Roles; GP-01, GP-09, DS-02, LD-02 |
 | C-AUDIO | 1, READY for offline model/codec/graph | GigPies; Stagebox authority ↔ Desk | This document, Audio; GP-02, GP-03, DS-03, DS-04 |
+| GP07-processing | 1, accepted first GP-07 contract | GigPies → SHR Desk; manual FOH EQ/dynamics | [Channel processing](CHANNEL_PROCESSING.md); preserves C-AUDIO:1 / GP03-rendered:1 |
 | C-LIGHT | 1, READY for null-output authority | SHR Lux; Lux ↔ Lightdesk | This document, Lighting, plus Lightdesk CONTROL_CONTRACT.md arbitration; LX-01..LX-04, LD-03, LD-04 |
 | C-REC | 1, READY for software lifecycle/status | SHR REC; recorder → GigPies → Desk | This document, Recorder; REC-01, REC-02, GP-05, DS-05; raw v1 remains RAW_RECORDER.md |
 | C-FX | 1, READY for current ABI/descriptor; writable ABI unresolved B-FX | SHR FX; FX ↔ GigPies; Desk via GigPies | This document, FX; FX-01..FX-03, GP-05, DS-05; include/shr_fx.h and ARCHITECTURE.md own v1 |
