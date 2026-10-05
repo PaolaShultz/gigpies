@@ -237,7 +237,7 @@ activated. [Local session instructions and evidence](HEADLESS_INTEGRATION.md) gi
 reproduction and the limits of these checks.
 
 
-## Channel-processing checkpoint — 2026-10-05
+## Historical three-band checkpoint — 2026-10-05
 
 GP-07's first slice is implemented and software-accepted: all eight mono FOH
 inputs have prepared three-band EQ and compression, using existing GigPies DSP.
@@ -261,3 +261,17 @@ Historical media/research matrices and physical/shared-load checks were skipped.
 GP-07 remains partial: scenes, PFL, routing/channel expansion, writable PA/FX and
 production remote authentication retain their separate gates. Source publication
 and two-Pi synchronization do not deploy a service or establish hardware quality.
+
+## Four-band parametric EQ correction — task0013
+
+The accepted [processing v2 contract](CHANNEL_PROCESSING.md) gives each of four
+stable bands independent frequency, gain, Q and bypass on every mono input.
+It preserves the compressor, FOH authority, shared retry history, raw recording
+and analysis, and independent monitor sends. Valid legacy processing requests
+receive an explicit unsupported-version refusal; GP03 remains compatible.
+Actual operator/provider/sample acceptance passed with 17 edits, independent
+bell references, unchanged raw/monitor paths and actual owner FX/PA order.
+Actual CPU native channel/review rendering passes exact pixel comparisons at
+1920×1080, 960×540, 540×960 and 3840×2160, plus zero-size suspension.
+These checks establish software acceptance only; physical and combined-load gates
+remain separate.

@@ -1,4 +1,4 @@
-//! Strict GP07-processing:1 envelope, independent of legacy wire bytes.
+//! Strict GP07-processing:2 envelope, independent of legacy wire bytes.
 use crate::{
     channel_processing::Config,
     control_model::{Command, Request},
@@ -7,7 +7,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 pub const CONTRACT: &str = "GP07-processing";
-pub const FOH_TAP: &str = "foh-post-eq-dynamics-v1";
+pub const FOH_TAP: &str = "foh-post-eq-dynamics-v2";
 pub const MONITOR_TAP: &str = "raw-post-mute-v1";
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -63,13 +63,14 @@ impl ProcessingRequest {
     pub(crate) fn history_request(&self) -> Request {
         let mut r = self.authority_request();
         r.contract = CONTRACT.into();
+        r.version = 2;
         r
     }
     pub fn context(&self) -> RequestContext {
         RequestContext::request(&self.authority_request())
     }
     pub fn validate(&self) -> Result<()> {
-        if self.contract != CONTRACT || self.version != 1 {
+        if self.contract != CONTRACT || self.version != 2 {
             return Err("version".into());
         }
         self.authority_request().encode()?;
@@ -97,6 +98,9 @@ impl ProcessingRequest {
                 "body",
             ],
         )?;
+        if v["contract"] != CONTRACT || v["version"].as_u64() != Some(2) {
+            return Err("version".into());
+        }
         let r: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
         r.validate()?;
         Ok(r)
@@ -104,6 +108,88 @@ impl ProcessingRequest {
     pub fn encode(&self) -> Result<Vec<u8>> {
         self.validate()?;
         serde_json::to_vec(self).map_err(|e| e.to_string())
+    }
+}
+/// Validated outer request for a version this provider does not implement.
+/// The opaque body is never interpreted as a supported Config or admitted to authority.
+#[derive(Debug, Clone)]
+pub struct UnsupportedRequest {
+    version: u32,
+    context: RequestContext,
+}
+impl UnsupportedRequest {
+    pub fn decode(bytes: &[u8]) -> Result<Option<Self>> {
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Outer {
+            contract: String,
+            version: u32,
+            show_id: String,
+            module: String,
+            epoch: Counter,
+            writer: Option<String>,
+            lease: Option<Counter>,
+            request_id: Option<Counter>,
+            expected_revision: Option<Counter>,
+            kind: String,
+            body: serde_json::Value,
+        }
+        let v: serde_json::Value = crate::show::decode(bytes)?;
+        keys(
+            &v,
+            &[
+                "contract",
+                "version",
+                "show_id",
+                "module",
+                "epoch",
+                "writer",
+                "lease",
+                "request_id",
+                "expected_revision",
+                "kind",
+                "body",
+            ],
+        )?;
+        let o: Outer = serde_json::from_value(v).map_err(|e| e.to_string())?;
+        if o.contract != CONTRACT {
+            return Err("contract".into());
+        }
+        let command = match o.kind.as_str() {
+            "processing_snapshot" => {
+                keys(&o.body, &[])?;
+                Command::Snapshot {}
+            }
+            "processing_set" if o.body.is_object() => Command::Renew {},
+            _ => return Err("kind/body".into()),
+        };
+        let authority = Request {
+            contract: "C-AUDIO".into(),
+            version: 1,
+            show_id: o.show_id,
+            module: o.module,
+            epoch: o.epoch,
+            writer: o.writer,
+            lease: o.lease,
+            request_id: o.request_id,
+            expected_revision: o.expected_revision,
+            command,
+        };
+        authority.encode()?;
+        if o.version == 2 {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            version: o.version,
+            context: RequestContext::request(&authority),
+        }))
+    }
+    /// Dedicated serializer: supported-v2 reply validation cannot emit legacy snapshots.
+    pub fn refusal(&self, revision: Counter) -> serde_json::Value {
+        serde_json::json!({"contract": CONTRACT, "version": self.version,
+            "context": self.context, "state": "final", "reason": "unsupported_version",
+            "ticket": null, "effective_frame": null, "ramp_frames": null,
+            "revision": revision, "snapshot": null})
     }
 }
 pub fn input_index(input: &str) -> Result<usize> {
@@ -212,7 +298,7 @@ impl ProcessingReply {
     ) -> Self {
         Self {
             contract: CONTRACT.into(),
-            version: 1,
+            version: 2,
             context: r.context(),
             state: state.into(),
             reason,
@@ -224,7 +310,7 @@ impl ProcessingReply {
         }
     }
     pub fn validate(&self) -> Result<()> {
-        if self.contract != CONTRACT || self.version != 1 {
+        if self.contract != CONTRACT || self.version != 2 {
             return Err("version".into());
         }
         self.context.validate()?;

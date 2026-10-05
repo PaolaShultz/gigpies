@@ -1,5 +1,8 @@
 # Document archive
 
+- [Channel processing v1](channel-processing-v1-2026-10-05.md): exact three-band
+  contract and dated acceptance before the four-band processing v2 correction.
+
 - [Schematic dual-console banner](assets/gigpies-banner-schematic-2026-10-04.svg):
   the initial 0.2.3 hero, superseded by the requested photorealistic stage/operator
   scene. The [current visual review](../CONCEPT_REVIEW.md) records the new image.

@@ -61,6 +61,7 @@ enum Incoming {
     Audio(Request),
     Modules(crate::module_wire::ModuleRequest),
     Processing(crate::processing_wire::ProcessingRequest),
+    UnsupportedProcessing(crate::processing_wire::UnsupportedRequest),
 }
 struct Client {
     id: u64,
@@ -127,7 +128,11 @@ impl Client {
         let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
             Incoming::Modules(crate::module_wire::ModuleRequest::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP07-processing") {
-            Incoming::Processing(crate::processing_wire::ProcessingRequest::decode(bytes)?)
+            if let Some(request) = crate::processing_wire::UnsupportedRequest::decode(bytes)? {
+                Incoming::UnsupportedProcessing(request)
+            } else {
+                Incoming::Processing(crate::processing_wire::ProcessingRequest::decode(bytes)?)
+            }
         } else {
             Incoming::Audio(Request::decode(bytes)?)
         };
@@ -723,6 +728,12 @@ impl LocalAudio {
             match result {
                 Err(_) => keep = false,
                 Ok(None) => (),
+                Ok(Some(Incoming::UnsupportedProcessing(request))) => {
+                    let reply = request.refusal(self.engine.revision());
+                    if self.clients[index].queue_module(&reply, now).is_err() {
+                        keep = false;
+                    }
+                }
                 Ok(Some(Incoming::Processing(request))) => {
                     if self.processing_request(index, request, now).is_err() {
                         keep = false;

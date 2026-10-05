@@ -28,7 +28,10 @@ fn public_process_has_no_heap_allocation_or_retirement() {
     let mut m = Mixer::default();
     let config = gigpies::channel_processing::Config {
         eq_bypass: false,
-        mid_gain_mdb: 6000,
+        band1_gain_mdb: -3000,
+        band2_gain_mdb: 6000,
+        band3_gain_mdb: 12000,
+        band4_gain_mdb: -12000,
         compressor_bypass: false,
         ratio_milli: 4000,
         ..Default::default()

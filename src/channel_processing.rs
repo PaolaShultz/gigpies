@@ -10,13 +10,22 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub eq_bypass: bool,
-    pub low_hz: i32,
-    pub low_gain_mdb: i32,
-    pub mid_hz: i32,
-    pub mid_gain_mdb: i32,
-    pub mid_q_milli: i32,
-    pub high_hz: i32,
-    pub high_gain_mdb: i32,
+    pub band1_hz: i32,
+    pub band1_gain_mdb: i32,
+    pub band1_q_milli: i32,
+    pub band1_bypass: bool,
+    pub band2_hz: i32,
+    pub band2_gain_mdb: i32,
+    pub band2_q_milli: i32,
+    pub band2_bypass: bool,
+    pub band3_hz: i32,
+    pub band3_gain_mdb: i32,
+    pub band3_q_milli: i32,
+    pub band3_bypass: bool,
+    pub band4_hz: i32,
+    pub band4_gain_mdb: i32,
+    pub band4_q_milli: i32,
+    pub band4_bypass: bool,
     pub compressor_bypass: bool,
     pub threshold_mdb: i32,
     pub ratio_milli: i32,
@@ -29,13 +38,22 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             eq_bypass: true,
-            low_hz: 120,
-            low_gain_mdb: 0,
-            mid_hz: 1000,
-            mid_gain_mdb: 0,
-            mid_q_milli: 1000,
-            high_hz: 8000,
-            high_gain_mdb: 0,
+            band1_hz: 120,
+            band1_gain_mdb: 0,
+            band1_q_milli: 1000,
+            band1_bypass: false,
+            band2_hz: 500,
+            band2_gain_mdb: 0,
+            band2_q_milli: 1000,
+            band2_bypass: false,
+            band3_hz: 2000,
+            band3_gain_mdb: 0,
+            band3_q_milli: 1000,
+            band3_bypass: false,
+            band4_hz: 8000,
+            band4_gain_mdb: 0,
+            band4_q_milli: 1000,
+            band4_bypass: false,
             compressor_bypass: true,
             threshold_mdb: -18000,
             ratio_milli: 1000,
@@ -49,13 +67,18 @@ impl Default for Config {
 impl Config {
     pub fn validate(&self) -> Result<()> {
         for (v, lo, hi, step) in [
-            (self.low_hz, 20, 20000, 1),
-            (self.mid_hz, 20, 20000, 1),
-            (self.high_hz, 20, 20000, 1),
-            (self.low_gain_mdb, -12000, 12000, 100),
-            (self.mid_gain_mdb, -12000, 12000, 100),
-            (self.high_gain_mdb, -12000, 12000, 100),
-            (self.mid_q_milli, 100, 10000, 100),
+            (self.band1_hz, 20, 20000, 1),
+            (self.band1_gain_mdb, -12000, 12000, 100),
+            (self.band1_q_milli, 100, 10000, 100),
+            (self.band2_hz, 20, 20000, 1),
+            (self.band2_gain_mdb, -12000, 12000, 100),
+            (self.band2_q_milli, 100, 10000, 100),
+            (self.band3_hz, 20, 20000, 1),
+            (self.band3_gain_mdb, -12000, 12000, 100),
+            (self.band3_q_milli, 100, 10000, 100),
+            (self.band4_hz, 20, 20000, 1),
+            (self.band4_gain_mdb, -12000, 12000, 100),
+            (self.band4_q_milli, 100, 10000, 100),
             (self.threshold_mdb, -60000, 0, 100),
             (self.ratio_milli, 1000, 20000, 100),
             (self.knee_mdb, 0, 18000, 100),
@@ -70,11 +93,11 @@ impl Config {
         Ok(())
     }
 }
-/// Three prepared filters and detector coefficients. No heap ownership.
+/// Four prepared filters and detector coefficients. No heap ownership.
 #[derive(Debug, Clone, Copy)]
 pub struct Prepared {
     pub(crate) config: Config,
-    filters: [Biquad; 3],
+    filters: [Biquad; 4],
     attack: f64,
     release: f64,
 }
@@ -82,27 +105,38 @@ impl Prepared {
     pub fn new(config: Config) -> Result<Self> {
         config.validate()?;
         let filters = [
-            (EqKind::LowShelf, config.low_hz, config.low_gain_mdb, 1000),
             (
-                EqKind::Bell,
-                config.mid_hz,
-                config.mid_gain_mdb,
-                config.mid_q_milli,
+                config.band1_hz,
+                config.band1_gain_mdb,
+                config.band1_q_milli,
+                config.band1_bypass,
             ),
             (
-                EqKind::HighShelf,
-                config.high_hz,
-                config.high_gain_mdb,
-                1000,
+                config.band2_hz,
+                config.band2_gain_mdb,
+                config.band2_q_milli,
+                config.band2_bypass,
+            ),
+            (
+                config.band3_hz,
+                config.band3_gain_mdb,
+                config.band3_q_milli,
+                config.band3_bypass,
+            ),
+            (
+                config.band4_hz,
+                config.band4_gain_mdb,
+                config.band4_q_milli,
+                config.band4_bypass,
             ),
         ]
-        .map(|(kind, hz, g, q)| {
-            if g == 0 {
+        .map(|(hz, g, q, bypass)| {
+            if bypass || g == 0 {
                 Biquad::new([1., 0., 0.], [1., 0., 0.])
             } else {
                 Biquad::equalizer(
                     &EqBand {
-                        kind,
+                        kind: EqKind::Bell,
                         hz: hz as f64,
                         q: q as f64 / 1000.,
                         db: g as f64 / 1000.,

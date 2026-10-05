@@ -1,22 +1,22 @@
-# GP07 channel processing, version 2
+# GP07 channel processing, version 1
 
-Accepted four-band GP-07 contract; software implementation and acceptance tracked below. Software-only, fixed 48000 Hz, eight mono inputs;
+Accepted first GP-07 contract. Software-only, fixed 48000 Hz, eight mono inputs;
 no physical/listening acceptance. Existing C-AUDIO:1 and GP03-rendered:1 bytes
-remain unchanged. Processing is an explicit `GP07-processing:2` extension on the
-same private local endpoint. Older providers may disconnect on a v2 probe; clients mark processing unavailable and require explicit reconnect without replay. A disconnect alone does not identify the unsupported version.
+remain unchanged. Processing is an explicit `GP07-processing:1` extension on the
+same private local endpoint. Older providers reject it; clients mark it unavailable.
 
 ## Signal and state
 
 Raw PCM24 REC and named analysis remain before all processing, byte-identical.
-FOH: raw -> four independent parametric bells -> compressor (including explicit makeup) -> shared
+FOH: raw -> three-band EQ -> compressor (including explicit makeup) -> shared
 mute -> FOH fader/pan -> existing sum -> existing FX -> existing PA.
 Monitors: raw -> shared mute -> existing independent sends. Advertised processing
-tap is `foh-post-eq-dynamics-v2`; monitor tap is `raw-post-mute-v1`.
+tap is `foh-post-eq-dynamics-v1`; monitor tap is `raw-post-mute-v1`.
 No monitor selector, latency/lookahead, normalization or automatic makeup.
 
 Reuse GigPies automix Biquad and compressor static law. Fixed storage; prepare
 coefficients off render. Independent EQ and compressor bypass default true.
-EQ bypass removes all four filters; compressor bypass removes reduction and
+EQ bypass removes all three filters; compressor bypass removes reduction and
 makeup. Neutral enabled EQ is identity; ratio1/makeup0 compressor is identity.
 The compressor uses instantaneous mono magnitude, floor -240 dBFS, static soft
 knee and existing dB reduction attack/release recursion. Gain reduction excludes
@@ -42,18 +42,16 @@ fault. Engine restart resets histories/settings to defaults; no automatic replay
 All values integers, all fields mandatory; booleans only for bypass. Stable IDs
 are input-01 through input-08. One complete channel per atomic edit.
 
-`config` has exactly `eq_bypass`; `band1_hz`, `band1_gain_mdb`,
-`band1_q_milli`, `band1_bypass`, and the corresponding `band2`, `band3`, `band4`
-fields; `compressor_bypass`, `threshold_mdb`, `ratio_milli`, `knee_mdb`,
-`attack_us`, `release_ms`, `makeup_mdb`. All 24 fields are mandatory.
+`config` has exactly `eq_bypass`, `low_hz`, `low_gain_mdb`, `mid_hz`,
+`mid_gain_mdb`, `mid_q_milli`, `high_hz`, `high_gain_mdb`, `compressor_bypass`,
+`threshold_mdb`, `ratio_milli`, `knee_mdb`, `attack_us`, `release_ms`, `makeup_mdb`.
 
 | Fields | Range, inclusive | Default |
 |---|---|---|
 | eq_bypass, compressor_bypass | boolean | true |
-| bandN_bypass | boolean | false |
-| bandN_hz | 20..20000 Hz, integer | 120, 500, 2000, 8000 for bands 1..4 |
-| bandN_gain_mdb | -12000..12000 milli-dB, step100 | 0 |
-| bandN_q_milli | 100..10000, step100 | 1000 |
+| low_hz, mid_hz, high_hz | 20..20000 Hz, integer | 120, 1000, 8000 |
+| low_gain_mdb, mid_gain_mdb, high_gain_mdb | -12000..12000 milli-dB, step100 | 0 |
+| mid_q_milli | 100..10000, step100 | 1000 |
 | threshold_mdb | -60000..0 milli-dBFS, step100 | -18000 |
 | ratio_milli | 1000..20000, step100 | 1000 |
 | knee_mdb | 0..18000 milli-dB, step100 | 6000 |
@@ -61,17 +59,13 @@ fields; `compressor_bypass`, `threshold_mdb`, `ratio_milli`, `knee_mdb`,
 | release_ms | 10..2000 milliseconds, step1 | 100 |
 | makeup_mdb | -12000..12000 milli-dB, step100 | 0 |
 
-Each band uses the existing GigPies RBJ bell biquad, with independent frequency,
-gain, Q and bypass across the full range. Bands execute in stable 1..4 order;
-crossed frequencies never reorder identities. Zero gain or per-band bypass
-prepares exact identity. Global bypass skips the complete EQ. There are no shelves
-or implicit conversions from the former shelf/bell/shelf settings. Makeup applies
-after compression and only when the compressor is enabled.
+Low/high are RBJ S=1 shelves; mid is bell. Makeup applies after compression and
+only when compressor enabled. No separate output trim in this increment.
 
 ## Strict wire and authority
 
 Requests have exactly the C-AUDIO envelope keys, with `contract` =
-`GP07-processing`, `version` = 2 and `module` = `audio`. `kind` is
+`GP07-processing`, `version` = 1 and `module` = `audio`. `kind` is
 `processing_snapshot` with empty `body` and null writer/lease/request/revision,
 or `processing_set` with body `{ "input": "input-01", "config": CONFIG }` and
 all four authority fields present. Counter encodings and identity validation
@@ -129,81 +123,34 @@ Cancel. Display units Hz/dB/Q/ratio/ms and bypass; provider-confirmed config and
 transition/GR are separate from draft/pending/failed. Selection/page/bank/revision,
 role, connection and generation fence drafts and confirmations. Keyboard and
 injected controller use the same semantic actions. Physical devices remain closed.
-Producer fixture version `tests/fixtures/gp07/v2` is frozen from real owner code
+Producer fixture version `tests/fixtures/gp07/v1` is frozen from real owner code
 before consumer decoding acceptance; record file SHA256 and provider source pin.
 Real frontend/provider/sample tests must prove changed FOH, second-channel
 isolation, monitor independence, exact raw REC/analysis, FX/PA order and reconnect.
 
-## Legacy policy
+## Software acceptance — 2026-10-05
 
-The provider supports processing version 2 only. For a bounded, valid outer GP07
-envelope with an unsupported integer version, it validates the outer identity,
-command kind and authority-field shape before returning the existing reply keys:
-requested contract/version and echoed context, `state: "final"`,
-`reason: "unsupported_version"`, the actual shared revision, and null ticket,
-effective frame, ramp and snapshot. The dedicated refusal path does not deserialize
-Config, consult retry caches, admit authority, consume an ID, renew a lease or
-change processing/revision. It consumes the whole frame and keeps GP03 usable on
-the connection. Malformed outer envelopes retain the existing disconnect policy.
+The real Desk frontend drove the actual provider through keyboard and injected
+controller actions, confirmed channel 1 EQ/compression with positive detector GR,
+then changed channel 2 independently. Context cancellation and reconnect retained
+revision 2 without replay, including the subsequent lease-expiry interval.
 
-The old Desk can decode this v1 refusal and disable processing while preserving
-GP03. New Desk refuses unsolicited v1 replies. An unchanged old provider closes
-the connection on a v2 probe; the new client shows processing unavailable and uses
-explicit reconnect without replay. No v1 readback or shelf approximation is invented.
-The original `tests/fixtures/gp07/v1` corpus remains unchanged as compatibility
-evidence. The [archived v1 contract](archive/channel-processing-v1-2026-10-05.md)
-retains its dated acceptance, not a claim of continuing v1 processing support.
+The joint `gp07_frontend` test compared 1,698 blocks against eight independent
+single-input mixer references, applying the observed configurations at their exact
+boundaries. The entire FOH sample timeline matched bit-for-bit. Monitors matched
+the neutral reference every block, and the actual FX wet-plus-dry → PA libraries
+matched the observed module output. Raw analysis matched before, during and after
+editing. All eight PCM24 stems matched 81,216 source frames each, covering the
+complete frontend run, with complete finalization and no gaps, drops or faults.
+Timing-dependent counts are evidence for this run, not fixed test thresholds.
 
-The internal processing history marker includes version 2. GP03, GP05 and v2
-processing still share a writer's ID history, revision and lease. Cross-contract
-ID reuse refuses; an unsupported-version request neither retrieves a cached v2
-success nor reserves its ID. Explicit regressions cover both directions.
+The real release-provider Desk run also passed independently. Its complete
+1920×1080 processing scene was visually checked for confirmed/draft separation,
+units, readiness, GR and unavailable meter labels. These are synthetic software
+checks; no physical audio, controller, display or listening acceptance is implied.
 
-## Software signal acceptance — 2026-10-05
-
-The actual Desk frontend drove 17 atomic changes through keyboard and injected
-semantic field actions: two frequency/gain/Q settings for each of four individual
-bands, a crossed-frequency cascade, each band's bypass, global bypass, enabled
-neutral EQ, compression with positive GR, and a second channel. Complete reviews
-preceded confirmation. Exact final-reply frames matched independently observed
-provider boundaries. Context cancellation and reconnect did not replay a change;
-revision 17/settings remained stable through the subsequent lease-expiry interval.
-
-The joint run compared 8,172 full blocks. Eight isolated input-mapping references
-matched the complete FOH timeline exactly. A separate direct-form-I bell reference
-checked 304,848 EQ-only samples and transitions against the production direct-form-II
-engine; maximum absolute error was 3.06e-16. Every active single-band/cascade setting
-produced nontrivial changed samples; settled neutral and global bypass matched the
-reference bit-for-bit. These are synthetic numerical checks, not listening evidence.
-
-All eight raw PCM24 stems matched 391,968 source frames each and covered the
-complete edit interval, with complete finalization and no gaps/drops/faults.
-Monitors stayed bit-exact and raw named analysis matched before/during/after.
-Independent actual FX wet-plus-dry -> PA output matched each processed block;
-those algorithms and their order are unchanged, while their FOH input follows EQ.
-Timing-dependent counts describe this run, not fixed thresholds.
-
-Complete normal GigPies suites pass: 303 default and 326 hardware-host tests.
-Formatting, both warnings-denied Clippy configurations, default/hardware-host release and
-39 Python publication checks pass; four actual owner-library GP05 regressions pass.
-Historical media, auditions, exhaustive research, long benchmarks, physical
-endpoints/windows and shared-load experiments remain intentionally excluded.
-The v2 fixture generator was explicitly run once; unrelated historical generators
-remain opt-in. Actual CPU native rendering passed exact pixel comparisons for
-both Channel and complete protected Review at 1920×1080, 960×540, 540×960 and
-3840×2160, plus zero-size suspension, without opening an operator window.
-
-The new Desk also passed against the old published provider: a failed v2 probe
-shows processing unavailable, and explicit GP03-only reconnect permits normal
-protected controls without replay. Fresh paired observations and original revision
-pinning remain required. A debug driver rendering delay initially prevented a
-review from being marked presented; refreshing the same review after rendering
-fixed the test while preserving production freshness and review guards. Native
-validation also exposed texture-coordinate rounding during resize and unnecessary
-release traffic from local injected field edits. Desk now maps pixels from fragment
-position and viewport dimensions, and local edits match keyboard queue behavior;
-Apply still requires fresh provider state and the complete protected review.
-
-No physical audio, MIDI, display, acoustic or combined-load acceptance is implied.
-Source synchronization is not deployment. Scenes, PFL, routing/channel expansion,
-writable PA/FX and production remote authentication remain separate GP-07 work.
+Normal regressions cover independent EQ frequency/impulse and compressor-law/
+ballistics references, neutral/bypass, channel isolation, transitions/reset,
+partitioning, nonfinite/extreme inputs, allocation-free processing, strict schemas,
+shared IDs/authority/freshness and exact producer-fixture replay. See
+[development](DEVELOPMENT.md) for the opt-in actual-owner/frontend commands.

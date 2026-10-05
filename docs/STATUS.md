@@ -3,7 +3,7 @@
 ## Channel processing — 2026-10-05
 
 The first GP-07 slice adds [FOH channel EQ and dynamics](CHANNEL_PROCESSING.md)
-on all eight mono inputs. Three-band EQ and a compressor reuse the existing
+on all eight mono inputs. Four independent parametric EQ bands and a compressor reuse the existing
 GigPies DSP. Neutral/bypassed defaults preserve the established mixer. Edits
 prepare off the audio path, apply at a strict 48-frame boundary and crossfade for
 240 frames at 48 kHz, with explicit makeup gain and no lookahead.
@@ -16,9 +16,9 @@ A delayed read-only observation can recover without replaying a mutation.
 
 Raw REC and named analysis stay before processing. FOH is EQ → compressor → shared
 mute → fader/pan → sum → fixed FX wet/dry → PA. Monitor sends retain their raw,
-post-mute source. Meters and physical sound quality remain unverified. The actual
-Desk/provider/sample chain and independent review passed; details and reproduction
-are in the owning contract. This slice does not complete GP-07 scenes, PFL,
+post-mute source. Meters and physical sound quality remain unverified. Task0013 actual Desk/provider/sample and CPU native layout validation passed;
+the earlier v1 acceptance is
+preserved in the archived contract. This slice does not complete GP-07 scenes, PFL,
 routing/channel expansion or writable PA/FX.
 
 ## Integrated software milestone — 2026-10-04

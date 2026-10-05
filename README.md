@@ -68,7 +68,7 @@ CPU backend. The PA sample limiter applies to logical main outputs only; meters,
 acoustic protection and writable FX/PA controls remain unavailable. The existing
 offline workflows below remain available.
 
-The [channel-processing increment](docs/CHANNEL_PROCESSING.md) adds three-band
+The [channel-processing increment](docs/CHANNEL_PROCESSING.md) adds four-band fully parametric
 EQ and compression on each of the eight FOH inputs, with neutral defaults,
 explicit makeup gain and provider-confirmed Desk editing. Raw recording/analysis
 and the post-mute monitor sends retain their established samples. The real

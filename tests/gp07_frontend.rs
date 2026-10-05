@@ -101,6 +101,111 @@ impl Client {
         Some(result)
     }
 }
+// Independent direct-form-I evaluation of the RBJ peaking transfer function.
+// Production uses transposed direct form II; no production preparation/filter
+// routines are used here. Identity is explicit to preserve bypass exactly.
+#[derive(Clone, Copy, Default)]
+struct ReferenceBell {
+    b: [f64; 3],
+    a: [f64; 2],
+    x: [f64; 2],
+    y: [f64; 2],
+    identity: bool,
+}
+impl ReferenceBell {
+    fn new(hz: i32, gain: i32, q: i32, bypass: bool) -> Self {
+        if bypass || gain == 0 {
+            return Self {
+                identity: true,
+                ..Self::default()
+            };
+        }
+        let amplitude = 10_f64.powf(f64::from(gain) / 40000.);
+        let angle = std::f64::consts::TAU * f64::from(hz) / 48000.;
+        let bandwidth = angle.sin() * 500. / f64::from(q);
+        let denominator = 1. + bandwidth / amplitude;
+        Self {
+            b: [
+                (1. + bandwidth * amplitude) / denominator,
+                -2. * angle.cos() / denominator,
+                (1. - bandwidth * amplitude) / denominator,
+            ],
+            a: [
+                -2. * angle.cos() / denominator,
+                (1. - bandwidth / amplitude) / denominator,
+            ],
+            ..Self::default()
+        }
+    }
+    fn tick(&mut self, input: f64) -> f64 {
+        if self.identity {
+            return input;
+        }
+        let output = self.b[0] * input + self.b[1] * self.x[0] + self.b[2] * self.x[1]
+            - self.a[0] * self.y[0]
+            - self.a[1] * self.y[1];
+        self.x = [input, self.x[0]];
+        self.y = [output, self.y[0]];
+        output
+    }
+}
+fn bands(c: StripConfig) -> [(i32, i32, i32, bool); 4] {
+    [
+        (
+            c.band1_hz,
+            c.band1_gain_mdb,
+            c.band1_q_milli,
+            c.band1_bypass,
+        ),
+        (
+            c.band2_hz,
+            c.band2_gain_mdb,
+            c.band2_q_milli,
+            c.band2_bypass,
+        ),
+        (
+            c.band3_hz,
+            c.band3_gain_mdb,
+            c.band3_q_milli,
+            c.band3_bypass,
+        ),
+        (
+            c.band4_hz,
+            c.band4_gain_mdb,
+            c.band4_q_milli,
+            c.band4_bypass,
+        ),
+    ]
+}
+#[derive(Clone, Copy)]
+struct ReferenceEq {
+    filters: [ReferenceBell; 4],
+    config: StripConfig,
+}
+impl ReferenceEq {
+    fn new(config: StripConfig) -> Self {
+        Self {
+            filters: bands(config).map(|(hz, gain, q, bypass)| {
+                ReferenceBell::new(hz, gain, q, bypass || config.eq_bypass)
+            }),
+            config,
+        }
+    }
+    fn tick(&mut self, mut input: f64) -> f64 {
+        for filter in &mut self.filters {
+            input = filter.tick(input);
+        }
+        input
+    }
+}
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DriverEdit {
+    label: String,
+    channel: usize,
+    config: StripConfig,
+    effective_frame: String,
+}
 struct Harness {
     server: LocalAudio,
     baseline: Mixer,
@@ -112,6 +217,7 @@ struct Harness {
     phase: usize,
     ticks: u64,
     changed: u64,
+    positive_gr: u64,
     baseline_ticks: u64,
     deadline: Instant,
     captured: Vec<[[f64; 4]; 48]>,
@@ -131,6 +237,9 @@ impl Harness {
         let observation = self.server.processing_snapshot().unwrap();
         assert_eq!(observation.frame.0, frame + 48);
         for (channel, state) in observation.channels.iter().enumerate() {
+            if state.gain_reduction_mdb.is_some_and(|v| v > 0) {
+                self.positive_gr += 1;
+            }
             if state.transition_remaining_frames > 0 {
                 let boundary =
                     observation.frame.0 + u64::from(state.transition_remaining_frames) - 240;
@@ -338,8 +447,9 @@ fn actual_frontend_processing_preserves_raw_and_monitors_and_module_order() {
         phase: 0,
         ticks: 0,
         changed: 0,
+        positive_gr: 0,
         baseline_ticks: 0,
-        deadline: Instant::now() + Duration::from_secs(35),
+        deadline: Instant::now() + Duration::from_secs(90),
         captured: Vec::new(),
         edits: Vec::new(),
     };
@@ -385,7 +495,7 @@ fn actual_frontend_processing_preserves_raw_and_monitors_and_module_order() {
             .spawn()
             .unwrap(),
     );
-    let deadline = Instant::now() + Duration::from_secs(20);
+    let deadline = Instant::now() + Duration::from_secs(60);
     loop {
         h.tick();
         if let Some(status) = driver.0.try_wait().unwrap() {
@@ -491,19 +601,201 @@ fn actual_frontend_processing_preserves_raw_and_monitors_and_module_order() {
     // Each physical input is independently rendered in slot zero. This deliberately
     // avoids repeating the provider's channel-index routing: input-02's config is
     // applied to slot zero of its own mixer, not slot one of a shared mixer.
+    let edits: Vec<DriverEdit> = serde_json::from_value(driver_evidence["edits"].clone())
+        .expect("ordered atomic driver edits with independently observed effective frames");
+    assert!(edits.len() >= 17);
     assert_eq!(
         h.edits.len(),
-        2,
-        "exactly the two confirmed frontend transactions"
+        edits.len(),
+        "no omitted, duplicate or replayed transaction"
     );
-    for (ch, config) in configs.iter().enumerate() {
+    for ((channel, boundary, config), edit) in h.edits.iter().zip(&edits) {
+        assert!(!edit.label.is_empty());
+        assert_eq!(*channel + 1, edit.channel, "{} channel", edit.label);
         assert_eq!(
-            h.edits
-                .iter()
-                .filter(|(index, _, value)| *index == ch && value == config)
-                .count(),
-            1
+            *boundary,
+            edit.effective_frame.parse::<u64>().unwrap(),
+            "{} boundary",
+            edit.label
         );
+        assert_eq!(
+            *config, edit.config,
+            "{} complete atomic config",
+            edit.label
+        );
+    }
+    // Require the actual action sequence to exercise every independent control,
+    // single-band operation, an unsorted cascade and both bypass paths.
+    for band in 0..4 {
+        let singles: Vec<_> = edits
+            .iter()
+            .filter(|e| {
+                let b = bands(e.config);
+                e.channel == 1
+                    && !e.config.eq_bypass
+                    && e.config.compressor_bypass
+                    && b[band].1 != 0
+                    && !b[band].3
+                    && b.iter()
+                        .enumerate()
+                        .all(|(i, v)| i == band || v.1 == 0 || v.3)
+            })
+            .collect();
+        assert!(
+            singles.len() >= 2,
+            "band {} two single-band edits",
+            band + 1
+        );
+        assert!(
+            singles.iter().any(|a| singles.iter().any(|b| {
+                let a = bands(a.config)[band];
+                let b = bands(b.config)[band];
+                a.0 != b.0 && a.1 != b.1 && a.2 != b.2
+            })),
+            "band {} frequency/gain/Q independently exercised",
+            band + 1
+        );
+    }
+    assert!(
+        edits.iter().any(|e| {
+            let b = bands(e.config);
+            !e.config.eq_bypass
+                && e.config.compressor_bypass
+                && b.iter().all(|v| v.1 != 0 && !v.3)
+                && b.windows(2).any(|pair| pair[0].0 > pair[1].0)
+        }),
+        "combined crossed-frequency cascade"
+    );
+    for band in 0..4 {
+        assert!(
+            edits.iter().any(|e| {
+                let b = bands(e.config);
+                !e.config.eq_bypass
+                    && e.config.compressor_bypass
+                    && b.iter().all(|v| v.1 != 0)
+                    && b.iter().enumerate().all(|(i, v)| v.3 == (i == band))
+            }),
+            "band {} individual bypass with other bands active",
+            band + 1
+        );
+    }
+    assert!(
+        edits
+            .iter()
+            .any(|e| e.config.eq_bypass && bands(e.config).iter().any(|b| b.1 != 0)),
+        "global bypass"
+    );
+    assert!(
+        edits
+            .iter()
+            .any(|e| !e.config.eq_bypass && bands(e.config).iter().all(|b| b.1 == 0)),
+        "neutral enabled EQ"
+    );
+    assert!(
+        edits
+            .iter()
+            .any(|e| e.channel == 2 && bands(e.config).iter().any(|b| b.1 != 0 && !b.3)),
+        "second-channel active processing"
+    );
+    assert!(h.positive_gr > 0, "actual provider compressor positive GR");
+
+    // Established default strip level is -6 dB with equal-power centered pan.
+    // Preserve the signal-order multiplications for exact identity checks.
+    let default_foh_gain = 10_f64.powf(-6. / 20.);
+    let mut independent = [ReferenceEq::new(StripConfig::default()); 8];
+    let mut previous = independent;
+    let mut began = [0_u64; 8];
+    let mut independent_samples = 0_u64;
+    let mut independent_max_error = 0_f64;
+    let mut checked_by_edit = vec![0_u64; edits.len()];
+    let mut changed_by_edit = vec![0_u64; edits.len()];
+    for (block, output) in h.captured.iter().enumerate() {
+        for (offset, actual) in output.iter().enumerate() {
+            let frame = block as u64 * 48 + offset as u64;
+            for (ch, boundary, config) in &h.edits {
+                if frame == *boundary {
+                    previous[*ch] = independent[*ch];
+                    independent[*ch] = ReferenceEq::new(*config);
+                    began[*ch] = frame;
+                }
+            }
+            let mut expected = 0.;
+            let mut comparable = true;
+            for ch in 0..8 {
+                let raw = f64::from(pcm(frame, ch)) / 8388608.;
+                let target = independent[ch].tick(raw);
+                let age = frame - began[ch];
+                let value = if age < 240 {
+                    comparable &= previous[ch].config.compressor_bypass;
+                    let old = previous[ch].tick(raw);
+                    old + (target - old) * age as f64 / 240.
+                } else {
+                    target
+                };
+                comparable &= independent[ch].config.compressor_bypass;
+                expected += value * default_foh_gain * std::f64::consts::FRAC_1_SQRT_2;
+            }
+            if comparable {
+                for bus in &actual[..2] {
+                    let error = (bus - expected).abs();
+                    independent_max_error = independent_max_error.max(error);
+                    assert!(
+                        error < 2e-10,
+                        "independent DF-I bell cascade frame {frame}: {bus} != {expected}, error {error}"
+                    );
+                }
+                independent_samples += 1;
+                if let Some((index, (_, at, _))) = h
+                    .edits
+                    .iter()
+                    .enumerate()
+                    .rev()
+                    .find(|(_, (_, at, _))| frame >= *at)
+                    && frame >= *at + 240
+                {
+                    checked_by_edit[index] += 1;
+                    let neutral: f64 = (0..8)
+                        .map(|ch| {
+                            f64::from(pcm(frame, ch)) / 8388608.
+                                * default_foh_gain
+                                * std::f64::consts::FRAC_1_SQRT_2
+                        })
+                        .fold(0., |sum, contribution| sum + contribution);
+                    if (actual[0] - neutral).abs() > 1e-8 {
+                        changed_by_edit[index] += 1;
+                    }
+                    if independent.iter().all(|r| {
+                        r.config.eq_bypass || bands(r.config).iter().all(|b| b.1 == 0 || b.3)
+                    }) {
+                        for bus in &actual[..2] {
+                            assert_eq!(
+                                bus.to_bits(),
+                                neutral.to_bits(),
+                                "neutral/global bypass exact frame {frame}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (i, edit) in edits
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| e.channel == 1 && e.config.compressor_bypass)
+    {
+        assert!(
+            checked_by_edit[i] >= 48,
+            "{} requires observed settled independently referenced samples",
+            edit.label
+        );
+        if !edit.config.eq_bypass && bands(edit.config).iter().any(|b| b.1 != 0 && !b.3) {
+            assert!(
+                changed_by_edit[i] >= 24,
+                "{} must produce nontrivial actual changed samples",
+                edit.label
+            );
+        }
     }
     let mut isolated: [Mixer; 8] = std::array::from_fn(|_| Mixer::default());
     for (block, actual) in h.captured.iter().enumerate() {
@@ -542,7 +834,7 @@ fn actual_frontend_processing_preserves_raw_and_monitors_and_module_order() {
             }
         }
     }
-    let result = serde_json::json!({"driver":driver_evidence,"driver_start_frame":driver_start_frame,"driver_end_frame":driver_end_frame,"processing_boundaries":h.edits.iter().map(|(ch, frame, _)| serde_json::json!({"channel":ch+1,"frame":frame})).collect::<Vec<_>>(),"channel_mapping_comparison":"eight isolated slot-zero mixers, exact full FOH timeline","ticks_checked":h.ticks,"neutral_ticks":h.baseline_ticks,"changed_foh_ticks":h.changed,"analysis_windows":h.windows,"raw_stems":8,"raw_frames_per_stem":count,"first_source_frame":first,"recording":recording,"monitor_comparison":"bit exact every tick","module_comparison":"independent actual FX wet+dry -> PA every tick"});
+    let result = serde_json::json!({"driver":driver_evidence,"driver_start_frame":driver_start_frame,"driver_end_frame":driver_end_frame,"processing_boundaries":h.edits.iter().map(|(ch, frame, _)| serde_json::json!({"channel":ch+1,"frame":frame})).collect::<Vec<_>>(),"channel_mapping_comparison":"eight isolated slot-zero mixers, exact full FOH timeline","independent_reference":"RBJ transfer function, direct form I, full transition timeline when compressor bypassed","independent_samples":independent_samples,"independent_max_error":independent_max_error,"independent_samples_by_edit":checked_by_edit,"changed_samples_by_edit":changed_by_edit,"positive_gr_observations":h.positive_gr,"ticks_checked":h.ticks,"neutral_ticks":h.baseline_ticks,"changed_foh_ticks":h.changed,"analysis_windows":h.windows,"raw_stems":8,"raw_frames_per_stem":count,"first_source_frame":first,"recording":recording,"monitor_comparison":"bit exact every tick","module_comparison":"independent actual FX wet+dry -> PA every tick"});
     if let Ok(path) = std::env::var("GP07_ACCEPTANCE_EVIDENCE") {
         std::fs::write(path, serde_json::to_vec_pretty(&result).unwrap()).unwrap();
     }

@@ -118,7 +118,7 @@ normal tests replay both producer corpora.
 
 ## FOH processing extension
 
-[GP07-processing:1](CHANNEL_PROCESSING.md) adds separate complete channel EQ and
+[GP07-processing:2](CHANNEL_PROCESSING.md) adds separate complete channel EQ and
 compressor configuration, boundary application and detector feedback. GP03 request,
 reply and fixture bytes remain unchanged. Both contracts share writer history,
 revision and pending renderer capacity. GP03 mode changes retain manual processing

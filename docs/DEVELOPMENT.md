@@ -270,7 +270,9 @@ The ignored `gp07_frontend` acceptance test requires an explicitly hash-verified
 Desk test executable (`GP07_DESK_DRIVER`) and actual owner libraries (`GP05_MANIFEST`).
 It runs the actual LocalAudio pump and Desk frontend, checks every monitor block,
 independent actual FX wet+dry→PA output, raw analysis and all eight recorded PCM24
-stems. See the fixture README for the opt-in producer-corpus regeneration command.
+stems. See the v2 fixture README for the opt-in producer-corpus regeneration command.
+The v1 corpus is retained unchanged for explicit unsupported-version checks; its
+historical generator is reproducible at the archived v1 source checkpoint.
 No hardware or operator windows are opened. Private task manifests bind artifacts
 and results; tests cannot substitute fixtures for actual-provider acceptance.
 
@@ -289,7 +291,11 @@ flock -xn /home/shome/p/.gigpies-build.lock \
   actual_frontend_processing_preserves_raw_and_monitors_and_module_order
 ```
 
-The test requires exactly two driver edits, checks their sample-frame boundaries,
+The test requires at least seventeen real frontend edits, checks every actual
+final-reply sample-frame boundary against provider observations,
 and replays each physical input through an independent slot-zero mixer to verify
-channel mapping across the entire captured FOH timeline. It checks recording
+channel mapping across the entire captured FOH timeline. A separate direct-form-I
+bell reference checks the full EQ-only timeline, including crossfades, all four
+band controls, crossed frequencies and bypass; neutral/bypass are bit exact.
+The same source drives independent actual FX wet-plus-dry -> PA comparisons. It checks recording
 coverage and retained settings after the driver exits and the lease expires.

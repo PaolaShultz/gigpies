@@ -81,7 +81,7 @@ impl Client {
 fn read() -> ProcessingRequest {
     ProcessingRequest {
         contract: "GP07-processing".into(),
-        version: 1,
+        version: 2,
         show_id: SHOW.into(),
         module: "audio".into(),
         epoch: Counter(9),
@@ -191,6 +191,158 @@ fn actual_endpoint_freshness_cached_retry_output_and_disconnect() {
         Some("lease")
     );
     drop(c);
+    drop(server);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn unsupported_versions_preserve_connection_shared_history_revision_and_lease() {
+    let dir = std::env::temp_dir().join(format!("gp07-versions-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut server = LocalAudio::bind(&dir, "audio.sock", SHOW, Counter(9)).unwrap();
+    let mut c = Client::new(&dir.join("audio.sock"));
+    let mut now = 0;
+    attach(&mut c, &mut server, &mut now);
+    let legacy: serde_json::Value =
+        serde_json::from_slice(include_bytes!("fixtures/gp07/v1/set-request.json")).unwrap();
+    fn refuse(
+        c: &mut Client,
+        s: &mut LocalAudio,
+        now: &mut u64,
+        mut value: serde_json::Value,
+        version: u32,
+        id: u64,
+        revision: u64,
+    ) {
+        value["version"] = version.into();
+        value["request_id"] = id.to_string().into();
+        c.send(&serde_json::to_vec(&value).unwrap());
+        let reply = c.wait(s, now, |v| {
+            v["contract"] == "GP07-processing" && v["version"] == version
+        });
+        assert_eq!(reply["state"], "final");
+        assert_eq!(reply["reason"], "unsupported_version");
+        assert_eq!(reply["revision"], revision.to_string());
+        assert_eq!(reply["context"]["request_id"], id.to_string());
+        for field in ["snapshot", "ticket", "effective_frame", "ramp_frames"] {
+            assert!(reply[field].is_null());
+        }
+    }
+    // Legacy body has shelves. It is refused before Config parsing and ID admission.
+    for version in [0, 1, 3, u32::MAX] {
+        refuse(&mut c, &mut server, &mut now, legacy.clone(), version, 2, 0);
+    }
+    c.processing(&mut server, &mut now, &read(), "final");
+    let request = set(2, 0);
+    c.processing(&mut server, &mut now, &request, "pending");
+    let final_v = c.wait(&mut server, &mut now, |v| {
+        v["contract"] == "GP07-processing" && v["state"] == "final"
+    });
+    let original = ProcessingReply::decode(&serde_json::to_vec(&final_v).unwrap()).unwrap();
+    // A legacy same-ID request must neither retrieve cached v2 success nor poison retries.
+    refuse(&mut c, &mut server, &mut now, legacy.clone(), 1, 2, 1);
+    assert_eq!(
+        c.processing(&mut server, &mut now, &request, "final"),
+        original
+    );
+    refuse(&mut c, &mut server, &mut now, legacy.clone(), 1, 10000, 1);
+    for _ in 0..6 {
+        now += 1;
+        server.tick(now).unwrap();
+    }
+    c.processing(&mut server, &mut now, &read(), "final");
+    assert_eq!(
+        c.processing(&mut server, &mut now, &set(3, 1), "pending")
+            .state,
+        "pending"
+    );
+    c.wait(&mut server, &mut now, |v| {
+        v["contract"] == "GP07-processing" && v["state"] == "final"
+    });
+    // GP03 continues on exactly the same stream after complete unsupported frames.
+    let audio = Request {
+        contract: "C-AUDIO".into(),
+        version: 1,
+        show_id: SHOW.into(),
+        module: "audio".into(),
+        epoch: Counter(9),
+        writer: None,
+        lease: None,
+        request_id: None,
+        expected_revision: None,
+        command: Command::Snapshot {},
+    };
+    c.send(&audio.encode().unwrap());
+    let snapshot = c.wait(&mut server, &mut now, |v| {
+        v["capability"] == "GP03-rendered"
+    });
+    assert_eq!(snapshot["snapshot"]["authority"]["revision"], "2");
+    now = 1999;
+    refuse(&mut c, &mut server, &mut now, legacy, 1, 10001, 2);
+    now = 2100;
+    let expired = c.processing(&mut server, &mut now, &set(4, 2), "final");
+    assert_eq!(expired.reason.as_deref(), Some("lease"));
+    drop(c);
+    drop(server);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn gp05_and_v2_processing_reuse_refuses_both_directions_without_lifecycle() {
+    use gigpies::module_wire::{ModuleCommand, ModuleRequest};
+    let dir = std::env::temp_dir().join(format!("gp07-module-history-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut server = LocalAudio::bind(&dir, "audio.sock", SHOW, Counter(9)).unwrap();
+    let mut client = Client::new(&dir.join("audio.sock"));
+    let mut now = 0;
+    attach(&mut client, &mut server, &mut now);
+    let mut module = ModuleRequest {
+        contract: "GP05-modules".into(),
+        version: 1,
+        show_id: SHOW.into(),
+        module: "audio".into(),
+        epoch: Counter(9),
+        writer: Some("desk-1".into()),
+        lease: Some(Counter(1)),
+        request_id: Some(Counter(2)),
+        expected_revision: Some(Counter(0)),
+        command: ModuleCommand::RecordStart {
+            take_id: "no-take".into(),
+            operation_id: Counter(1),
+        },
+    };
+    client.send(&module.encode().unwrap());
+    let rejected = client.wait(&mut server, &mut now, |v| v["contract"] == "GP05-modules");
+    assert_eq!(rejected["reason"], "modules unavailable");
+    client.processing(&mut server, &mut now, &read(), "final");
+    assert_eq!(
+        client
+            .processing(&mut server, &mut now, &set(2, 0), "final")
+            .reason
+            .as_deref(),
+        Some("reused_id")
+    );
+    assert_eq!(server.snapshot().unwrap().authority.revision, Counter(0));
+    let request = set(3, 0);
+    client.processing(&mut server, &mut now, &request, "pending");
+    client.wait(&mut server, &mut now, |v| {
+        v["contract"] == "GP07-processing" && v["state"] == "final"
+    });
+    module.request_id = Some(Counter(3));
+    client.send(&module.encode().unwrap());
+    let rejected = client.wait(&mut server, &mut now, |v| v["contract"] == "GP05-modules");
+    assert_eq!(rejected["reason"], "reused_id");
+    assert_eq!(server.snapshot().unwrap().authority.revision, Counter(1));
+    assert!(!dir.join("takes").exists());
+    assert_eq!(
+        client
+            .processing(&mut server, &mut now, &request, "final")
+            .revision,
+        Counter(1)
+    );
+    drop(client);
     drop(server);
     std::fs::remove_dir_all(dir).unwrap();
 }

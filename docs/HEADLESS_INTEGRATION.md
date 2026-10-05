@@ -26,7 +26,7 @@ identity; a reconnected client does not replay uncertain commands as new writes.
 
 ## Channel processing
 
-[GP07-processing:1](CHANNEL_PROCESSING.md) adds atomic three-band EQ and compressor
+[GP07-processing:2](CHANNEL_PROCESSING.md) adds atomic four-band fully parametric EQ and compressor
 configuration on the existing audio socket. It shares the FOH lease, revision and
 request history with GP03; transport delivery is not application. At 48 kHz, a
 prepared edit applies at the next 48-frame boundary and crossfades for 240 frames.
