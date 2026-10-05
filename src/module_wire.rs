@@ -62,7 +62,7 @@ impl ModuleRequest {
         Ok(r)
     }
     pub fn validate(&self) -> Result<()> {
-        if self.contract != "GP05-modules" || self.version != 1 {
+        if self.contract != "GP05-modules" || ![1, 2].contains(&self.version) {
             return Err("module version".into());
         }
         self.authority_request().encode()?;
@@ -83,7 +83,7 @@ impl ModuleRequest {
     pub fn authority_request(&self) -> Request {
         Request {
             contract: "C-AUDIO".into(),
-            version: 1,
+            version: self.version,
             show_id: self.show_id.clone(),
             module: self.module.clone(),
             epoch: self.epoch,
@@ -138,7 +138,7 @@ impl ModuleReply {
         };
         Self {
             contract: r.contract.clone(),
-            version: 1,
+            version: r.version,
             show_id: r.show_id.clone(),
             module: r.module.clone(),
             epoch: r.epoch,

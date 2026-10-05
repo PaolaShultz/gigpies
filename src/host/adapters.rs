@@ -111,10 +111,40 @@ pub struct Recorder {
     push: Push,
     finish: Finish,
     fault: unsafe extern "C" fn(*mut c_void, u32),
+    channels: usize,
+    max_block: usize,
     _library: Arc<Library>,
 }
 impl Recorder {
     pub fn create(path: &Path, directory: &Path, block: u32, epoch: u64) -> Result<Self> {
+        Self::create_configured(path, directory, block, epoch, 8)
+    }
+    /// Prepare the unchanged owner ABI for the admitted raw source count.
+    /// The owner's current 64-track storage bound is explicit; it is not a mixer cap.
+    pub fn create_configured(
+        path: &Path,
+        directory: &Path,
+        block: u32,
+        epoch: u64,
+        channels: usize,
+    ) -> Result<Self> {
+        if !(1..=64).contains(&channels) {
+            return Err("SHR REC v1 admission: channels must be 1..64".into());
+        }
+        if !(1..=8192).contains(&block) || epoch == 0 {
+            return Err("SHR REC v1 admission: block1..8192 and nonzero epoch required".into());
+        }
+        let queue_bytes = channels
+            .checked_mul(block as usize)
+            .and_then(|n| n.checked_mul(256))
+            .and_then(|n| n.checked_mul(8))
+            .ok_or("SHR REC queue size overflow")?;
+        if queue_bytes > 64 * 1024 * 1024 {
+            return Err(
+                "SHR REC v1 admission:256-block queue exceeds64MiB; reduce block size explicitly"
+                    .into(),
+            );
+        }
         let name = CString::new(directory.as_os_str().as_encoded_bytes())?;
         unsafe {
             let library = Library::new(path)?;
@@ -133,7 +163,7 @@ impl Recorder {
             let source_bits = *library.get::<unsafe extern "C" fn(*mut c_void, u32) -> i32>(
                 b"shr_rec_v1_set_source_bits",
             )?;
-            let handle = create(name.as_ptr(), 48000, 8, block, 256, epoch);
+            let handle = create(name.as_ptr(), 48000, channels as u32, block, 256, epoch);
             if handle.is_null() {
                 return Err("recorder refused new take".into());
             }
@@ -147,12 +177,17 @@ impl Recorder {
                 push,
                 finish,
                 fault,
+                channels,
+                max_block: block as usize,
                 _library: Arc::new(library),
             })
         }
     }
     pub fn push(&mut self, frame: u64, samples: &[f64]) -> i32 {
-        if !samples.len().is_multiple_of(8) {
+        if samples.is_empty()
+            || !samples.len().is_multiple_of(self.channels)
+            || samples.len() / self.channels > self.max_block
+        {
             return -1;
         }
         unsafe {
@@ -160,7 +195,7 @@ impl Recorder {
                 self.handle,
                 frame,
                 samples.as_ptr(),
-                (samples.len() / 8) as u32,
+                (samples.len() / self.channels) as u32,
             )
         }
     }

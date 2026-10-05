@@ -279,3 +279,15 @@ pub fn capture_msb24(container: i32) -> f64 {
 pub fn capture_fullscale(container: i32) -> bool {
     matches!(container >> 8, -8_388_608 | 8_388_607)
 }
+
+/// Configurable trusted PA owner ABI, prepared and retired off rendering.
+#[cfg(feature = "hardware-host")]
+pub mod pa_v2;
+
+/// Explicit raw duplex adapter invoking the common configured provider graph.
+#[cfg(all(feature = "hardware-host", target_os = "linux"))]
+pub mod duplex;
+
+/// Brain owner effects follow source frames, independently of network arrival.
+#[cfg(feature = "hardware-host")]
+pub mod brain_fx;

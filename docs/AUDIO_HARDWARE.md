@@ -690,3 +690,19 @@ unmeasured. The absent second interface prevents independent-device clock measur
 acceptance remain separate. Full channel count, 18/64-channel recording, mixer
 automation, live control parameter adapters, UI, analysis fanout, device hotplug
 recovery and full-show reliability are not certified by this stereo bench.
+
+## Multichannel adapter and qualification boundary
+
+`host::duplex::Duplex` is an explicit same-raw-device multichannel adapter for the
+same LocalAudio production composition used by synthetic tests. It does not
+select or activate a device automatically. A SHA-bound manual DeviceAcceptance
+record is required before opening; manufacturer-reference profiles refuse.
+Capture drives frames; ALSA short-transfer/deadline faults quiesce the provider.
+Logical output assignments can change without changing the observed device map;
+physical-map changes require a verified reopen. The controller-side synchronous
+pump is not a qualified realtime callback/deadline implementation.
+
+The UMC1820/ADA8200 16-input/18-output rig is not hardware-qualified by this
+increment. The exact mapping, bidirectional ADAT, soundcard-master relationship,
+physical lock and bounded safe acceptance procedure are documented in
+[Modular processing](MODULAR_PROCESSING.md#mapping-and-physical-acceptance).

@@ -6,6 +6,36 @@ MIDI keyboard controller for each. Automation is an optional mode within them.
 
 ![GigPies system and module map](assets/architecture.svg)
 
+## Configurable processing engine
+
+The existing Mixer and authority now provision logical strips and independent
+monitor buses from validated topology. Explicit `legacy8-2` compatibility retains
+historical fixtures; new16/17/32/48software profiles use the same strip processing,
+prepared boundaries, authority and raw source identity. Each admitted input retains
+four parametric EQ bands and compression. Physical stream width, logical input
+count, PA output count, monitor count and control-writer capacity are separate
+quantities, each with a declared admission bound.
+
+Topology separates logical strip IDs, physical socket names and configurable USB
+slot indices. The UMC1820/ADA8200 manufacturer reference has16logical analog inputs
+and18analog outputs; its expected USB permutation is unverified and its output
+patch initially empty. It never implies an observed Linux map, a fixed PA/monitor
+socket partition, or physical converter synchronization. The attached reference
+rig must be verified independently before activation. Measurement slots cannot
+implicitly enter program paths, and unmapped outputs remain silent.
+
+The common source adapter maps a single interface's capture into logical raw strips,
+runs the same authority/Mixer/module graph as synthetic input, and maps declared
+logical destinations back to playback slots. Recorder and selected raw analysis
+remain independent of channel DSP and Brain availability. Structural changes are
+prepared off render and require reviewed output quiescence; explicit recovery
+retains intent but never grants permission to unmute. Clock health distinguishes
+the source epoch/frame timeline from unknown physical ADAT lock evidence.
+
+This section describes implemented composition and its software-test scope. The
+older stereo hardware record below remains the qualified physical evidence; it
+does not qualify the configurable16/18rig or48-channel realtime throughput.
+
 ## Implemented USB bench boundary
 
 The [hardware host](AUDIO_HARDWARE.md) now opens one explicitly selected stereo

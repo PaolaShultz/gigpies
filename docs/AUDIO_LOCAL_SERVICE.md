@@ -86,3 +86,16 @@ request-ID sequence. Before a new edit it must query a processing snapshot withi
 ages. Separate processing snapshots are queried explicitly; legacy GP03 telemetry
 is unchanged. Final completion follows actual boundary application, with readiness
 and gain reduction observed separately after the 240-frame transition.
+
+## Configurable composition successor
+
+The explicit configurable provider uses C-AUDIO/rendered version2 and
+GP07-processing version3, with capability-derived dimensions and coherent paged
+snapshots. Legacy attachment remains version1/processing2. `GP14-structure:1`
+adds separately scoped PA configuration and signal-to-output patch transactions;
+physical remapping requires a reviewed reopen. See
+[composition](MODULAR_PROCESSING.md) and [remote endpoints](REMOTE_PROCESSING.md).
+Same-UID clients remain connection-bound; disconnect revokes their writer and
+cancels retained prepared changes. Source recovery durably advances the epoch,
+clears clients/grants and remains muted. Provider control/I/O runs outside the
+bounded Mixer/ModuleGraph render functions.

@@ -173,7 +173,7 @@ fn actual_endpoint_freshness_cached_retry_output_and_disconnect() {
         c.processing(&mut server, &mut now, &set(4, 1), "final"),
         stale
     );
-    // Admitted work survives connection loss; reconnect cannot replay its authority.
+    // Revocation cancels admitted work; reconnect cannot replay its authority.
     let p = c.processing(&mut server, &mut now, &set(5, 1), "pending");
     assert!(p.ticket.is_some());
     drop(c);
@@ -181,7 +181,7 @@ fn actual_endpoint_freshness_cached_retry_output_and_disconnect() {
     server.tick(now).unwrap();
     now += 1;
     server.tick(now).unwrap();
-    assert_eq!(server.snapshot().unwrap().authority.revision, Counter(2));
+    assert_eq!(server.snapshot().unwrap().authority.revision, Counter(1));
     let mut c = Client::new(&dir.join("audio.sock"));
     c.processing(&mut server, &mut now, &read(), "final");
     assert_eq!(

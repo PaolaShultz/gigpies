@@ -167,3 +167,12 @@ Each step should produce something we can assess before adding the next layer.
 [MIT code](LICENSE) · [Artwork & third-party notes](THIRD_PARTY.md) · [Report an issue](https://github.com/PaolaShultz/gigpies/issues)
 
 </div>
+
+The configurable modular processing increment is documented in
+[Modular processing](docs/MODULAR_PROCESSING.md), including independent strip,
+USB/socket and output-patch maps, owner-native configurable PA, shared clock
+recovery and [authenticated Brain endpoints](docs/REMOTE_PROCESSING.md).
+[Acceptance](docs/MODULAR_ENGINE_ACCEPTANCE.md) distinguishes software results from
+physical UMC1820/ADA8200 mapping, lock and deadline qualification. The reference
+16-input/18-output patch starts unassigned; 32/48-input software profiles are not
+product limits.

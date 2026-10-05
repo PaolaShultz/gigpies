@@ -124,3 +124,39 @@ reply and fixture bytes remain unchanged. Both contracts share writer history,
 revision and pending renderer capacity. GP03 mode changes retain manual processing
 settings; processing automation is unavailable. Monitor arithmetic continues to
 use raw samples after shared mute, independently of FOH EQ/dynamics.
+
+## Configurable rendered capability — version2
+
+`GP03-rendered:2` uses the same engine and authority with dimension-derived
+coefficient vectors: fader, pan-left/right, mute, then each monitor send in order.
+Its snapshot adds `topology`, `clock` and `resources`; legacy1 omits these fields.
+Topology separates logical strip IDs, physical socket IDs and transport slots.
+The manufacturer-reference UMC/ADA profile is unverified and initially unpatched:
+it does not automatically assign PA or monitor buses to sockets. Arbitrary explicit
+permutations are validated, including duplicate physical writers, out-of-range
+ports and measurement inputs overlapping program. Unassigned outputs are silent.
+
+Clock status is observational: one interface domain, nominal48000Hz, epoch, actual
+next rendered frame, disarmed/running/quiesced state and unknown/locked/lost ADAT
+evidence. Unknown is not healthy. Expanded startup and intent restore are disarmed.
+Explicit output mute/rearm ramps over240frames; source faults quiesce immediately,
+revoke grants and cancel pending work. Recovery requires a fresh epoch and explicit
+rearm. Software fault injection does not establish physical converter lock.
+
+Resources disclose estimated render memory/work, the deployment budget, conservative
+snapshot size, oneMiB assembly capacity, four live writers and64 cached outcomes per
+writer. Admission checks arithmetic before provisioning; capacity errors never
+reduce the requested topology. The default render budget is64MiB and16Mi sample
+operations per maximum block, accounting for strip/send work rather than promising
+a hardware deadline. Native control uses48-frame blocks. Expanded Mixer calls
+respect the configured maximum block size. Prepared change storage moves to one
+retirement slot; the control owner destroys it after completion, never in render.
+
+Frames remain at most65536bytes. Larger immutable replies are segmented as
+`GP14-snapshot-pages:1`: `identity` (SHA256 of the complete serialized reply),
+`index`, `count`, `total_bytes`, and `payload` (UTF8 JSON substring). Segments carry
+at most8192 payload bytes, ordered from index0. Assembly is bounded to oneMiB and
+2000ms, rejects mixed/reordered/oversized pages, verifies the digest, and then runs
+the normal duplicate-key/depth/type validator on the complete reply. This is
+segmentation of one observation, not independently sampled pages. Large periodic
+local telemetry is withheld; explicit snapshot requests provide the complete state.

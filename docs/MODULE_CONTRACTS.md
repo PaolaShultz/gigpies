@@ -535,3 +535,22 @@ must validate. Durable checkpoint capability remains separately validated.
 Legacy LX03/LX04 required fields stay exact. `--durable` already enables timing
 and must not be combined with `--timed`. The owner corpus includes the actual
 [untimed inventory](https://github.com/PaolaShultz/shr-lux/blob/main/tests/fixtures/lx05/v1/untimed-absent.json).
+
+## Configurable composition contracts (2026-10-05)
+
+C-AUDIO/rendered2 and GP07-processing3 explicitly advertise admitted topology;
+legacy versions preserve their fixed inventory and refuse incompatible shapes.
+GP05-modules2 reports dynamic raw tracks and actual PA v2 dimensions/configuration;
+a legacy module query cannot silently consume a dynamic module shape.
+GP14-structure1 carries separately scoped PA/patch transactions on the same
+revision/lease/request history. GP-REMOTE1 carries these actual contracts and
+negotiated GPA1 media inside mutually authenticated QUIC. Its pairing permission
+ceiling never substitutes for a live authority lease.
+
+The additive SHR PA C ABI v2 is owned by SHR PA and preserves v1 semantics. The
+host retains its loaded library for every prepared/active/retired handle. It
+validates native f64 dimensions, sample rate, block bound, ABI version/size and
+owner limits before preparing the composition. Raw REC and stereo FX interfaces
+remain unchanged; host adapters provide admitted REC tracks and explicit FX pairs.
+See [composition](MODULAR_PROCESSING.md), [remote](REMOTE_PROCESSING.md) and
+[owner ABI](../../shr-pa/docs/EMBEDDING_V2.md) for precise boundaries and limitations.

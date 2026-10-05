@@ -207,3 +207,21 @@ Apply still requires fresh provider state and the complete protected review.
 No physical audio, MIDI, display, acoustic or combined-load acceptance is implied.
 Source synchronization is not deployment. Scenes, PFL, routing/channel expansion,
 writable PA/FX and production remote authentication remain separate GP-07 work.
+
+## Configurable engine extension — GP07-processing:3
+
+The production `Mixer` now provisions a strip for every admitted logical input.
+Each retains exactly the four parametric bands, individual/global bypass and
+compressor described above. Config, smoothing and raw/monitor tap semantics are
+unchanged. Version3 uses the same request/reply fields and a capability-derived,
+ordered channel vector. IDs remain contiguous `input-01` through the configured
+count; they never expose USB gaps. Versions1 (historical three-band) and2 are not
+silently reinterpreted. The explicit legacy8/2 engine retains processing2; an
+expanded provider refuses processing2 with `unsupported_version`.
+
+Software regressions exercise each strip in 16, 17, 32 and48 input profiles,
+including high-index fourth-band processing and independent monitor sends.
+Allocation/deallocation guards cover prepared application and retained retirement
+in the same configurable Mixer. This is software correctness, not a measured
+48-channel device deadline or listening acceptance. Producer fixture generation
+remains opt-in and must be repeated after the final provider source is frozen.

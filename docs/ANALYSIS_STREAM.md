@@ -76,3 +76,20 @@ python3 -m unittest discover -s scripts -p 'test_*.py'
 
 Historical media/audition/exhaustive, UDP/load and hardware tests are intentionally
 skipped for this software scope.
+
+## Configurable raw analysis tap
+
+The original Lux four-name descriptor/window bytes remain unchanged. Its tap now
+accepts a wider raw-input stride without substituting processed samples. A separate
+`RawDescriptor:2` binds an explicit ordered selection of logical input IDs, source
+epoch, first frame and map revision to `raw-pre-fader`. `RawTap` emits real GPA1
+PCM24 groups of four channels, with a smaller final group when needed. It preserves
+every selected sample at16,17,32 and48inputs in synthetic regressions.
+
+A preallocated two-source-block queue admits all groups of a48-frame block or drops
+the whole block and increments its loss counter. Queue pressure never blocks the
+mixer or recorder. The producer performs no allocation/deallocation, I/O or locks.
+The current GPA1 stream channel domain is256; this is a transport-descriptor bound,
+not an engine capacity limit. Larger selections require multiple negotiated streams.
+This tap alone does not establish authenticated network delivery; the remote owner
+binds actual packets and descriptors to its authenticated session and source epoch.

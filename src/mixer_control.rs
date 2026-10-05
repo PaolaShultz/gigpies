@@ -16,9 +16,9 @@ pub struct Observation {
     pub input: String,
     /// Unit: linear amplitude gain * 1e9 (rounded), order fader, pan L/R,
     /// shared mute, send1/2. Not millidecibels.
-    pub current_nanogain: [u64; 6],
-    pub ramp_target_nanogain: [u64; 6],
-    pub held_nanogain: [Option<u64>; 6],
+    pub current_nanogain: Vec<u64>,
+    pub ramp_target_nanogain: Vec<u64>,
+    pub held_nanogain: Vec<Option<u64>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -34,6 +34,21 @@ pub struct RenderedSnapshot {
     /// Unchanged GP02 target metadata. Its unavailable actual values are deliberate.
     pub authority: Snapshot,
     pub coefficients: Vec<Observation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub topology: Option<crate::topology::EngineTopology>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock: Option<crate::clock_domain::ClockDomain>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resources: Option<EngineResources>,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineResources {
+    pub admission: crate::topology::Admission,
+    pub render_budget: crate::topology::ResourceBudget,
+    pub snapshot_assembly_bytes: usize,
+    pub live_writer_capacity: usize,
+    pub reply_history_per_writer: usize,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -111,20 +126,57 @@ impl RenderedSnapshot {
     pub fn validate(&self) -> Result<()> {
         self.authority.validate()?;
         if self.capability != "GP03-rendered"
-            || self.capability_version != 1
+            || ![1, 2].contains(&self.capability_version)
             || !self.rendered_application
             || !self.release_commit
             || self.protection != "offline-unprotected"
             || self.meters.is_some()
-            || self.coefficients.len() != 8
+            || self.coefficients.len() != self.authority.inputs.len()
+            || (self.capability_version == 1
+                && (self.authority.inputs.len() != 8 || self.authority.monitors.len() != 2))
         {
             return Err("rendered snapshot capability".into());
+        }
+        if self.capability_version == 1
+            && (self.topology.is_some() || self.clock.is_some() || self.resources.is_some())
+        {
+            return Err("legacy capabilities".into());
+        }
+        if self.capability_version == 2 {
+            let topology = self.topology.as_ref().ok_or("topology missing")?;
+            let resources = self.resources.as_ref().ok_or("resources missing")?;
+            if resources.render_budget != crate::topology::ResourceBudget::default()
+                || resources.admission != topology.validate(resources.render_budget)?
+                || resources.snapshot_assembly_bytes != crate::snapshot_pages::ASSEMBLY_BYTES
+                || resources.live_writer_capacity != 4
+                || resources.reply_history_per_writer != 64
+            {
+                return Err("resource capabilities".into());
+            }
+            topology.validate(crate::topology::ResourceBudget::default())?;
+            if topology.inputs.len() != self.authority.inputs.len()
+                || topology.monitors != self.authority.monitors.len()
+                || self.clock.as_ref().is_none_or(|c| {
+                    c.epoch != self.authority.epoch.0
+                        || c.sample_rate != 48000
+                        || c.next_frame != self.frame.0
+                })
+            {
+                return Err("topology/clock coherence".into());
+            }
         }
         for (i, observation) in self.coefficients.iter().enumerate() {
             if observation.input != format!("input-{:02}", i + 1) {
                 return Err("rendered inventory".into());
             }
-            for j in 0..6 {
+            let width = 4 + self.authority.monitors.len();
+            if observation.current_nanogain.len() != width
+                || observation.ramp_target_nanogain.len() != width
+                || observation.held_nanogain.len() != width
+            {
+                return Err("coefficient shape".into());
+            }
+            for j in 0..width {
                 let max = if j == 0 || j >= 4 {
                     3_981_071_706
                 } else {
@@ -143,12 +195,16 @@ impl RenderedSnapshot {
 }
 impl RenderedReply {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let reply: Self = crate::show::decode(bytes)?;
+        Self::decode_assembled(bytes)
+    }
+    pub fn decode_assembled(bytes: &[u8]) -> Result<Self> {
+        let reply: Self =
+            crate::show::decode_bounded(bytes, crate::snapshot_pages::ASSEMBLY_BYTES)?;
         reply.validate()?;
         Ok(reply)
     }
     pub fn validate(&self) -> Result<()> {
-        if self.capability != "GP03-rendered" || self.capability_version != 1 {
+        if self.capability != "GP03-rendered" || ![1, 2].contains(&self.capability_version) {
             return Err("rendered capability".into());
         }
         self.context.validate()?;
@@ -172,6 +228,9 @@ impl RenderedReply {
                     return Err("reply correlation".into());
                 }
                 outcome.validate()?;
+                if outcome.version != self.capability_version {
+                    return Err("version coherence".into());
+                }
                 if self.ticket.is_some() {
                     if self.ticket.is_some_and(|v| v.0 == 0)
                         || self.effective_frame.is_none_or(|v| v.0 % 48 != 0)
@@ -186,6 +245,9 @@ impl RenderedReply {
                 }
                 if let Some(snapshot) = &self.snapshot {
                     snapshot.validate()?;
+                    if snapshot.capability_version != self.capability_version {
+                        return Err("version coherence".into());
+                    }
                     if outcome.kind != "applied"
                         || snapshot.authority.revision != outcome.body.revision
                         || snapshot.authority.show_id != outcome.show_id
@@ -238,28 +300,359 @@ pub struct OfflineEngine {
     pending: Option<Pending>,
     next_ticket: u64,
     outcomes: BTreeMap<String, VecDeque<(Request, RenderedReply)>>,
-    holds: [[Option<u64>; 6]; INPUTS],
+    holds: Vec<Vec<Option<u64>>>,
     processing_pending: Option<ProcessingPending>,
     processing_outcomes: BTreeMap<String, VecDeque<(ProcessingRequest, ProcessingReply)>>,
     processing_completions: Vec<ProcessingReply>,
+    external_pending: Option<(Request, Scope, u64)>,
+    clock: crate::clock_domain::ClockDomain,
     module_ids: BTreeMap<String, VecDeque<(Request, String, Option<String>)>>,
 }
 impl OfflineEngine {
     pub fn new(show: &str, epoch: Counter, revision: Counter, frame: u64) -> Result<Self> {
-        let mut authority = Authority::new(show, epoch, revision)?;
+        Self::with_topology(
+            show,
+            epoch,
+            revision,
+            frame,
+            crate::topology::EngineTopology::legacy(),
+        )
+    }
+    pub fn with_topology(
+        show: &str,
+        epoch: Counter,
+        revision: Counter,
+        frame: u64,
+        topology: crate::topology::EngineTopology,
+    ) -> Result<Self> {
+        topology.validate(crate::topology::ResourceBudget::default())?;
+        let inputs = topology.inputs.len();
+        let monitors = topology.monitors;
+        let mut authority = Authority::with_dimensions(show, epoch, revision, inputs, monitors)?;
+        authority.set_wire_version(if topology.is_legacy() { 1 } else { 2 });
         authority.enable_rendered_release();
         Ok(Self {
+            external_pending: None,
+            clock: {
+                let mut c = crate::clock_domain::ClockDomain::new(epoch.0, frame);
+                if topology.is_legacy() {
+                    c.rearm().map_err(String::from)?;
+                }
+                c
+            },
             authority,
-            mixer: Mixer::new(frame),
+            mixer: {
+                let legacy = topology.is_legacy();
+                let mut m = Mixer::from_topology(frame, topology)?;
+                if !legacy {
+                    m.quiesce();
+                }
+                m
+            },
             pending: None,
             next_ticket: 1,
             outcomes: BTreeMap::new(),
-            holds: [[None; 6]; INPUTS],
+            holds: vec![vec![None; 4 + monitors]; inputs],
             module_ids: BTreeMap::new(),
             processing_pending: None,
             processing_outcomes: BTreeMap::new(),
             processing_completions: Vec::new(),
         })
+    }
+    /// Reserve one shared authority transaction. Fingerprint must bind the exact
+    /// contract and complete body. The caller retains prepared owned state offRT.
+    pub fn begin_external(
+        &mut self,
+        r: &Request,
+        fingerprint: &str,
+        scope: Scope,
+        now: u64,
+    ) -> Result<(u64, Option<Reply>)> {
+        r.encode()?;
+        if r.version != self.wire_version()
+            || !matches!(scope, Scope::PaConfiguration | Scope::OutputRoutes)
+            || fingerprint.is_empty()
+            || fingerprint.len() > 128
+        {
+            return Err("external contract".into());
+        }
+        let mut history = r.clone();
+        history.contract = format!("external:{fingerprint}");
+        if let Some(reason) = self.authority.processing_identity(&history, now) {
+            return Err(reason.into());
+        }
+        if let Some(reply) = self.authority.cached(&history, now) {
+            return Ok((0, Some(reply)));
+        }
+        if let Some((old, old_scope, frame)) = &self.external_pending {
+            return if old == &history && *old_scope == scope {
+                Ok((*frame, None))
+            } else {
+                Err("backpressure".into())
+            };
+        }
+        if self.pending.is_some() || self.processing_pending.is_some() {
+            return Err("backpressure".into());
+        }
+        let checked = self
+            .authority
+            .clone()
+            .scoped_transaction(&history, now, None, scope);
+        if checked.kind != "applied" {
+            return Ok((
+                0,
+                Some(
+                    self.authority
+                        .scoped_transaction(&history, now, None, scope),
+                ),
+            ));
+        }
+        let frame = self.mixer.next_boundary()?;
+        self.external_pending = Some((history, scope, frame));
+        Ok((frame, None))
+    }
+    pub fn external_matches(&self, request: &Request, fingerprint: &str) -> bool {
+        let mut history = request.clone();
+        history.contract = format!("external:{fingerprint}");
+        self.external_pending
+            .as_ref()
+            .is_some_and(|(pending, _, _)| pending == &history)
+    }
+    pub fn external_boundary(&self) -> Option<u64> {
+        self.external_pending.as_ref().map(|p| p.2)
+    }
+    /// Invoke before the boundary sample. Validation precedes the supplied atomic
+    /// prepared commit; revision changes once only after successful application.
+    pub fn commit_external(
+        &mut self,
+        now: u64,
+        apply: impl FnOnce() -> Result<()>,
+    ) -> Result<Reply> {
+        self.commit_external_with_engine(now, |_| apply())
+    }
+    /// Trusted composition callback may only apply its already prepared engine or
+    /// module mutation; it must leave authority/epoch/session state untouched.
+    pub fn commit_external_with_engine(
+        &mut self,
+        now: u64,
+        apply: impl FnOnce(&mut Self) -> Result<()>,
+    ) -> Result<Reply> {
+        let (request, scope, frame) = self.external_pending.as_ref().ok_or("external missing")?;
+        if self.frame() != *frame {
+            return Err("external boundary".into());
+        }
+        let mut staged = self.authority.clone();
+        let checked = staged.scoped_transaction(request, now, None, *scope);
+        let (request, scope, _) = self.external_pending.take().unwrap();
+        if checked.kind != "applied" {
+            self.authority = staged;
+            return Ok(checked);
+        }
+        if apply(self).is_err() {
+            return Ok(self.authority.scoped_transaction(
+                &request,
+                now,
+                Some("configuration_failed"),
+                scope,
+            ));
+        }
+        self.authority = staged;
+        Ok(checked)
+    }
+    pub fn admit_source(&mut self, epoch: u64, frame: u64, frames: usize) -> Result<()> {
+        if self.clock.state == crate::clock_domain::ClockState::Disarmed {
+            if epoch != self.clock.epoch || frame != self.frame() {
+                self.quiesce("source_discontinuity");
+                return Err("source timeline".into());
+            }
+            self.clock.next_frame = frame.checked_add(frames as u64).ok_or("clock exhausted")?;
+            return Ok(());
+        }
+        if let Err(e) = self.clock.admit(epoch, frame, frames) {
+            self.quiesce(e);
+            return Err(e.into());
+        }
+        Ok(())
+    }
+    pub fn clock_status(&self) -> &crate::clock_domain::ClockDomain {
+        &self.clock
+    }
+    #[cfg(feature = "hardware-host")]
+    pub(crate) fn mark_verified_mapping(&mut self) -> Result<()> {
+        if self.topology().mapping_evidence != "operator-verified" {
+            return Err("mapping evidence is not operator verified".into());
+        }
+        self.clock.mapping_verified = true;
+        Ok(())
+    }
+    pub fn topology(&self) -> &crate::topology::EngineTopology {
+        self.mixer.topology()
+    }
+    pub fn writer_scope(&self, r: &Request, now: u64) -> Option<Scope> {
+        self.authority.live_scope(r, now)
+    }
+    pub fn quiesce(&mut self, reason: &str) {
+        self.clock.quiesce(reason);
+        self.mixer.quiesce();
+        self.pending = None;
+        self.processing_pending = None;
+        self.external_pending = None;
+        self.authority.revoke_all();
+    }
+    pub fn recover(&mut self, epoch: Counter, frame: u64) -> Result<()> {
+        let mut clock = self.clock.clone();
+        clock.recover(epoch.0, frame).map_err(String::from)?;
+        let mut intent = self.persisted_intent()?;
+        intent.topology.map_revision = intent
+            .topology
+            .map_revision
+            .checked_add(1)
+            .ok_or("map exhausted")?;
+        let mut next = Self::restore_intent(&intent, epoch, frame)?;
+        next.clock = clock;
+        *self = next;
+        Ok(())
+    }
+    pub fn persisted_intent(&mut self) -> Result<EngineIntent> {
+        let snapshot = self.authority.snapshot()?;
+        Ok(EngineIntent {
+            version: 1,
+            show_id: snapshot.show_id,
+            topology: self.topology().clone(),
+            parameters: snapshot
+                .parameters
+                .into_iter()
+                .map(|p| Edit {
+                    target: p.target,
+                    value: p.target_value,
+                })
+                .collect(),
+            processing: self
+                .mixer
+                .processing_observations()
+                .into_iter()
+                .map(|o| o.1)
+                .collect(),
+        })
+    }
+    pub fn restore_intent_for(
+        intent: &EngineIntent,
+        expected: &crate::topology::EngineTopology,
+        epoch: Counter,
+        frame: u64,
+    ) -> Result<Self> {
+        if &intent.topology != expected {
+            return Err("persisted topology/capability mismatch; explicit remap required".into());
+        }
+        Self::restore_intent(intent, epoch, frame)
+    }
+    pub fn restore_intent(intent: &EngineIntent, epoch: Counter, frame: u64) -> Result<Self> {
+        if intent.version != 1 || intent.processing.len() != intent.topology.inputs.len() {
+            return Err("intent version/shape".into());
+        }
+        intent
+            .topology
+            .validate(crate::topology::ResourceBudget::default())?;
+        let mut e = Self::with_topology(
+            &intent.show_id,
+            epoch,
+            Counter(0),
+            frame,
+            intent.topology.clone(),
+        )?;
+        e.mixer
+            .restore_intent(&intent.parameters, &intent.processing)?;
+        e.authority.restore_parameters(&intent.parameters)?;
+        e.clock.state = crate::clock_domain::ClockState::Disarmed;
+        e.mixer.quiesce();
+        Ok(e)
+    }
+    pub fn mute_outputs(&mut self) -> Result<()> {
+        self.mixer.mute_outputs().map_err(|e| format!("{e:?}"))
+    }
+    pub fn outputs_quiesced(&self) -> bool {
+        self.mixer.outputs_quiesced()
+    }
+    pub fn rearm_outputs(&mut self) -> Result<()> {
+        if self.mixer.faulted()
+            || self
+                .frame()
+                .checked_add(crate::mixer::RAMP_FRAMES)
+                .is_none()
+        {
+            return Err("fault/clock recovery required".into());
+        }
+        if self.clock.state == crate::clock_domain::ClockState::Disarmed {
+            self.clock.rearm().map_err(String::from)?;
+        }
+        if self.clock.state != crate::clock_domain::ClockState::Running {
+            return Err("clock recovery required".into());
+        }
+        self.mixer.rearm().map_err(|e| format!("{e:?}"))
+    }
+    pub fn prepare_output_patch(
+        &self,
+        outputs: Vec<crate::topology::OutputPort>,
+    ) -> Result<crate::mixer::PreparedOutputPatch> {
+        self.mixer.prepare_output_patch(outputs)
+    }
+    pub fn apply_output_patch(
+        &mut self,
+        prepared: &mut crate::mixer::PreparedOutputPatch,
+    ) -> Result<()> {
+        self.mixer
+            .apply_output_patch(prepared)
+            .map_err(String::from)
+    }
+    pub fn replace_output_patch(
+        &mut self,
+        outputs: Vec<crate::topology::OutputPort>,
+    ) -> Result<()> {
+        self.mixer.replace_output_patch(outputs)
+    }
+    pub fn rearm(&mut self) -> Result<()> {
+        if self.mixer.faulted()
+            || self
+                .frame()
+                .checked_add(crate::mixer::RAMP_FRAMES)
+                .is_none()
+        {
+            return Err("fault/clock recovery required".into());
+        }
+        self.clock.rearm().map_err(String::from)?;
+        self.mixer.rearm().map_err(|e| format!("{e:?}"))
+    }
+    pub fn revoke_writer(&mut self, writer: &str) {
+        self.authority.revoke_writer(writer);
+        if self
+            .external_pending
+            .as_ref()
+            .is_some_and(|p| p.0.writer.as_deref() == Some(writer))
+        {
+            self.external_pending = None;
+        }
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer.as_deref() == Some(writer))
+        {
+            let p = self.pending.take().unwrap();
+            self.mixer.cancel(p.ticket);
+        }
+        if self
+            .processing_pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer.as_deref() == Some(writer))
+        {
+            let p = self.processing_pending.take().unwrap();
+            self.mixer.cancel(p.ticket);
+        }
+        self.outcomes.remove(writer);
+        self.processing_outcomes.remove(writer);
+        self.module_ids.remove(writer);
+    }
+    pub fn wire_version(&self) -> u32 {
+        self.authority.version()
     }
     pub fn frame(&self) -> u64 {
         self.mixer.frame()
@@ -274,7 +667,7 @@ impl OfflineEngine {
         RenderedReply {
             context: RequestContext::reply(&reply),
             capability: "GP03-rendered".into(),
-            capability_version: 1,
+            capability_version: reply.version,
             state: "final".into(),
             ticket: None,
             effective_frame: None,
@@ -287,7 +680,7 @@ impl OfflineEngine {
         RenderedReply {
             context: RequestContext::request(r),
             capability: "GP03-rendered".into(),
-            capability_version: 1,
+            capability_version: r.version,
             state: "backpressure".into(),
             ticket: None,
             effective_frame: None,
@@ -307,7 +700,7 @@ impl OfflineEngine {
         RenderedReply {
             context: RequestContext::request(&p.request),
             capability: "GP03-rendered".into(),
-            capability_version: 1,
+            capability_version: p.request.version,
             state: "pending".into(),
             ticket: Some(Counter(p.ticket)),
             effective_frame: Some(Counter(p.frame)),
@@ -321,20 +714,39 @@ impl OfflineEngine {
         let target = self.mixer.targets();
         Ok(RenderedSnapshot {
             capability: "GP03-rendered".into(),
-            capability_version: 1,
+            capability_version: self.authority.version(),
             rendered_application: true,
             release_commit: true,
             frame: Counter(self.frame()),
             faulted: self.mixer.faulted(),
             protection: "offline-unprotected".into(),
             meters: None,
+            resources: if self.authority.version() == 2 {
+                Some(EngineResources {
+                    admission: self
+                        .topology()
+                        .validate(crate::topology::ResourceBudget::default())?,
+                    render_budget: crate::topology::ResourceBudget::default(),
+                    snapshot_assembly_bytes: crate::snapshot_pages::ASSEMBLY_BYTES,
+                    live_writer_capacity: 4,
+                    reply_history_per_writer: 64,
+                })
+            } else {
+                None
+            },
+            topology: (self.authority.version() == 2).then(|| self.topology().clone()),
+            clock: (self.authority.version() == 2).then(|| {
+                let mut c = self.clock.clone();
+                c.next_frame = self.frame();
+                c
+            }),
             authority: self.authority.snapshot()?,
-            coefficients: (0..INPUTS)
+            coefficients: (0..self.mixer.input_count())
                 .map(|i| Observation {
                     input: format!("input-{:02}", i + 1),
-                    current_nanogain: current[i].map(nano),
-                    ramp_target_nanogain: target[i].map(nano),
-                    held_nanogain: self.holds[i],
+                    current_nanogain: current[i].iter().copied().map(nano).collect(),
+                    ramp_target_nanogain: target[i].iter().copied().map(nano).collect(),
+                    held_nanogain: self.holds[i].clone(),
                 })
                 .collect(),
         })
@@ -399,6 +811,24 @@ impl OfflineEngine {
         fresh: bool,
     ) -> Result<ProcessingReply> {
         r.validate()?;
+        if r.version != if self.authority.version() == 1 { 2 } else { 3 } {
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                Some("unsupported_version".into()),
+                self.revision(),
+            ));
+        }
+        if let ProcessingCommand::ProcessingSet { input, .. } = &r.command
+            && crate::processing_wire::input_index(input)? >= self.mixer.input_count()
+        {
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                Some("target".into()),
+                self.revision(),
+            ));
+        }
         if matches!(r.command, ProcessingCommand::ProcessingSnapshot {}) {
             let reply = self.authority.handle(&r.authority_request(), now);
             let mut p = ProcessingReply::new(r, "final", reply.body.reason, self.revision());
@@ -481,7 +911,8 @@ impl OfflineEngine {
                 self.revision(),
             ));
         }
-        if self.pending.is_some()
+        if self.external_pending.is_some()
+            || self.pending.is_some()
             || self.processing_pending.is_some()
             || !self.mixer.processing_ready()
             || !self.processing_completions.is_empty()
@@ -506,7 +937,9 @@ impl OfflineEngine {
         let ProcessingCommand::ProcessingSet { input, config } = r.command.clone() else {
             unreachable!()
         };
-        let prepared = Prepared::processing(
+        let prepared = Prepared::processing_for(
+            self.mixer.input_count(),
+            self.mixer.monitor_count(),
             crate::processing_wire::input_index(&input)?,
             crate::channel_processing::Prepared::new(config)?,
         )?;
@@ -580,6 +1013,9 @@ impl OfflineEngine {
         if self.authority.cached(r, now).is_some() {
             return Err("reused_id".into());
         }
+        if self.external_pending.is_some() {
+            return Err("backpressure".into());
+        }
         if let Some(p) = &self.processing_pending
             && p.request.writer == r.writer
             && p.request.request_id == r.request_id
@@ -613,6 +1049,9 @@ impl OfflineEngine {
     pub fn handle(&mut self, r: &Request, now: u64) -> Result<RenderedReply> {
         // Decode validation also protects callers using the typed public entry.
         r.encode()?;
+        if self.external_pending.is_some() && !matches!(r.command, Command::Snapshot {}) {
+            return Ok(Self::backpressure(r));
+        }
         self.module_ids
             .retain(|w, _| self.authority.writer_live(w, now));
         if self.authority.live_scope(r, now).is_some()
@@ -737,8 +1176,14 @@ impl OfflineEngine {
         }
         let scope = self.authority.live_scope(r, now).ok_or("lease")?;
         let prepared = match &r.command {
-            Command::Set { targets } => Prepared::edits(targets)?,
-            Command::SetMode { .. } => Prepared::freeze(scope),
+            Command::Set { targets } => Prepared::edits_for(
+                self.mixer.input_count(),
+                self.mixer.monitor_count(),
+                targets,
+            )?,
+            Command::SetMode { .. } => {
+                Prepared::freeze_for(self.mixer.input_count(), self.mixer.monitor_count(), scope)
+            }
             Command::ReleasePreview { .. } => {
                 let (old, _) = self.authority.state();
                 let (new, _) = staged.state();
@@ -751,7 +1196,7 @@ impl OfflineEngine {
                         value: n.target_value.clone(),
                     })
                     .collect();
-                Prepared::edits(&edits)?
+                Prepared::edits_for(self.mixer.input_count(), self.mixer.monitor_count(), &edits)?
             }
             _ => unreachable!(),
         };
@@ -784,14 +1229,33 @@ impl OfflineEngine {
         output: &mut [[f64; 4]],
         now_ms: u64,
     ) -> Result<Vec<RenderedReply>> {
-        if input.len() != output.len() {
+        if !self.mixer.topology().is_legacy() {
+            return Err("legacy shape".into());
+        }
+        self.process_interleaved(input.as_flattened(), output.as_flattened_mut(), now_ms)
+    }
+    pub fn process_interleaved(
+        &mut self,
+        input: &[f64],
+        output: &mut [f64],
+        now_ms: u64,
+    ) -> Result<Vec<RenderedReply>> {
+        let ni = self.mixer.input_count();
+        let no = self.mixer.monitor_count() + 2;
+        if !input.len().is_multiple_of(ni) || output.len() != input.len() / ni * no {
             return Err("buffer length".into());
         }
         self.authority.observe_control_time(now_ms)?;
         let end = self
             .frame()
-            .checked_add(input.len() as u64)
+            .checked_add((input.len() / ni) as u64)
             .ok_or("clock exhausted")?;
+        if self
+            .external_boundary()
+            .is_some_and(|boundary| end > boundary)
+        {
+            return Err("external boundary requires commit before render".into());
+        }
         let mut replies = Vec::new();
         if let Some(split) = self
             .processing_pending
@@ -800,7 +1264,7 @@ impl OfflineEngine {
             .map(|p| (p.frame - self.frame()) as usize)
         {
             self.mixer
-                .process(&input[..split], &mut output[..split])
+                .process_interleaved(&input[..split * ni], &mut output[..split * no])
                 .map_err(|e| format!("{e:?}"))?;
             let p = self.processing_pending.take().expect("pending");
             let mut staged = self.authority.clone();
@@ -817,11 +1281,14 @@ impl OfflineEngine {
                 self.remember_processing(p.request, reply.clone());
                 self.processing_completions.push(reply);
                 self.mixer
-                    .process(&input[split..], &mut output[split..])
+                    .process_interleaved(&input[split * ni..], &mut output[split * no..])
                     .map_err(|e| format!("{e:?}"))?;
             } else {
                 self.mixer
-                    .process(&input[split..split + 1], &mut output[split..split + 1])
+                    .process_interleaved(
+                        &input[split * ni..(split + 1) * ni],
+                        &mut output[split * no..(split + 1) * no],
+                    )
                     .map_err(|e| format!("{e:?}"))?;
                 let done = self.mixer.take_completion().ok_or("completion missing")?;
                 if done.ticket != p.ticket || done.frame != p.frame {
@@ -836,9 +1303,13 @@ impl OfflineEngine {
                 self.remember_processing(p.request, reply.clone());
                 self.processing_completions.push(reply);
                 self.mixer
-                    .process(&input[split + 1..], &mut output[split + 1..])
+                    .process_interleaved(
+                        &input[(split + 1) * ni..],
+                        &mut output[(split + 1) * no..],
+                    )
                     .map_err(|e| format!("{e:?}"))?;
             }
+            self.clock.next_frame = self.frame();
             return Ok(replies);
         }
         let split = self
@@ -848,7 +1319,7 @@ impl OfflineEngine {
             .map(|p| (p.frame - self.frame()) as usize);
         if let Some(split) = split {
             self.mixer
-                .process(&input[..split], &mut output[..split])
+                .process_interleaved(&input[..split * ni], &mut output[..split * no])
                 .map_err(|e| format!("{e:?}"))?;
             if let Some(p) = &mut self.pending {
                 // Re-run authority validation at commit, before any DSP application.
@@ -870,7 +1341,10 @@ impl OfflineEngine {
             }
             // Render exactly the boundary sample, then drain primitive completion.
             self.mixer
-                .process(&input[split..split + 1], &mut output[split..split + 1])
+                .process_interleaved(
+                    &input[split * ni..(split + 1) * ni],
+                    &mut output[split * no..(split + 1) * no],
+                )
                 .map_err(|e| format!("{e:?}"))?;
             if let Some(done) = self.mixer.take_completion() {
                 let mut p = self.pending.take().ok_or("completion without pending")?;
@@ -891,13 +1365,14 @@ impl OfflineEngine {
                 replies.push(reply);
             }
             self.mixer
-                .process(&input[split + 1..], &mut output[split + 1..])
+                .process_interleaved(&input[(split + 1) * ni..], &mut output[(split + 1) * no..])
                 .map_err(|e| format!("{e:?}"))?;
         } else {
             self.mixer
-                .process(input, output)
+                .process_interleaved(input, output)
                 .map_err(|e| format!("{e:?}"))?;
         }
+        self.clock.next_frame = self.frame();
         Ok(replies)
     }
     fn update_holds(&mut self, p: &Pending) {
@@ -910,6 +1385,8 @@ impl OfflineEngine {
                     Scope::Foh => &[0, 1, 2, 3],
                     Scope::Monitor1 => &[4],
                     Scope::Monitor2 => &[5],
+                    Scope::Monitor(n) => &[usize::from(n) + 3],
+                    _ => &[],
                 };
                 for &j in indices {
                     row[j] = Some(nano(c[i][j]));
@@ -932,7 +1409,12 @@ impl OfflineEngine {
                         {
                             &[4]
                         }
-                        _ => &[5],
+                        crate::control_model::Target::Send { monitor, .. } => &[monitor
+                            .strip_prefix("monitor-")
+                            .unwrap()
+                            .parse::<usize>()
+                            .unwrap()
+                            + 3],
                     };
                     for &j in indices {
                         if parameter.hold.is_none() {
@@ -950,4 +1432,30 @@ impl OfflineEngine {
 }
 fn nano(gain: f64) -> u64 {
     (gain * 1_000_000_000.0).round() as u64
+}
+
+/// Show intent only: leases, pending requests, mode grants and armed state are
+/// deliberately unrepresentable. Restoring always requires explicit rearm.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineIntent {
+    pub version: u32,
+    pub show_id: String,
+    pub topology: crate::topology::EngineTopology,
+    pub parameters: Vec<Edit>,
+    pub processing: Vec<crate::channel_processing::Config>,
+}
+
+impl EngineIntent {
+    pub fn decode(bytes: &[u8]) -> Result<Self> {
+        let intent: Self =
+            crate::show::decode_bounded(bytes, crate::snapshot_pages::ASSEMBLY_BYTES)?;
+        // Reuse the actual off-render preparation and complete inventory validation.
+        OfflineEngine::restore_intent(&intent, Counter(1), 0)?;
+        Ok(intent)
+    }
+    pub fn save(&self, directory: &std::path::Path, name: &str) -> Result<()> {
+        OfflineEngine::restore_intent(self, Counter(1), 0)?;
+        crate::show::persist_bounded(directory, name, self, crate::snapshot_pages::ASSEMBLY_BYTES)
+    }
 }

@@ -128,3 +128,15 @@ physical acceptance limits. PA DSP, FX, recorder and lighting
 algorithms retain their owners. The Stagebox/PA node's mixer graph is distinct
 from the `shr-pa` speaker processor; a future mixer-core extraction is a separate
 task. No algorithms or source files were moved in this surface checkpoint.
+
+## Configurable processing ownership
+
+The modular composition includes PA: GigPies owns channel/bus topology, physical
+patching, the shared source clock/authority and authenticated endpoints; SHR PA
+owns configurable speaker DSP and prepared C-PA v2; SHR Desk owns dynamic operator
+presentation; unchanged SHR REC/FX own raw recording and effects. Six/eight-output
+and 4×8 PA profiles are examples rather than capacity ceilings. See
+[composition](MODULAR_PROCESSING.md), [remote contract](REMOTE_PROCESSING.md) and
+[acceptance matrix](MODULAR_ENGINE_ACCEPTANCE.md). A source boundary is not a reason
+to omit required PA behavior, and software synchronization is not physical ADAT
+lock evidence.

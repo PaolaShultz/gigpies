@@ -44,6 +44,20 @@ struct Packet {
     offset: usize,
 }
 impl Packet {
+    fn paged(bytes: Vec<u8>) -> Result<Self> {
+        let pages = crate::snapshot_pages::encode(bytes)?;
+        let size = pages
+            .iter()
+            .try_fold(0usize, |sum, p| sum.checked_add(p.len() + 4))
+            .ok_or("paged reply overflow")?;
+        let mut bytes = Vec::with_capacity(size);
+        for page in pages {
+            bytes.extend_from_slice(&(page.len() as u32).to_be_bytes());
+            bytes.extend_from_slice(&page);
+        }
+        Ok(Self { bytes, offset: 0 })
+    }
+
     fn new(bytes: Vec<u8>) -> Result<Self> {
         if bytes.is_empty() || bytes.len() > MAX_FRAME {
             return Err("frame capacity".into());
@@ -59,6 +73,7 @@ impl Packet {
 }
 enum Incoming {
     Audio(Request),
+    Structural(crate::structural_control::Request),
     Modules(crate::module_wire::ModuleRequest),
     Processing(crate::processing_wire::ProcessingRequest),
     UnsupportedProcessing(crate::processing_wire::UnsupportedRequest),
@@ -74,6 +89,7 @@ struct Client {
     last_write: u64,
     snapshot: bool,
     processing_snapshot_ms: Option<u64>,
+    structural_snapshot_ms: Option<u64>,
     writer: Option<String>,
     lease: Option<Counter>,
 }
@@ -85,10 +101,13 @@ impl Client {
         if self.replies.is_empty() && self.telemetry.is_none() {
             self.last_write = now;
         }
-        self.replies.push_back(Packet::new(reply.encode()?)?);
+        reply.validate()?;
+        self.replies.push_back(Packet::paged(
+            serde_json::to_vec(reply).map_err(|e| e.to_string())?,
+        )?);
         Ok(())
     }
-    fn receive(&mut self, now: u64) -> Result<Option<Incoming>> {
+    fn receive(&mut self, now: u64, processing_version: u32) -> Result<Option<Incoming>> {
         if self
             .started
             .is_some_and(|t| now.saturating_sub(t) >= TIMEOUT_MS)
@@ -125,10 +144,14 @@ impl Client {
         }
         let bytes = &self.buffer[4..length + 4];
         let value: serde_json::Value = crate::show::decode(bytes)?;
-        let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
+        let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure") {
+            Incoming::Structural(crate::structural_control::Request::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
             Incoming::Modules(crate::module_wire::ModuleRequest::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP07-processing") {
-            if let Some(request) = crate::processing_wire::UnsupportedRequest::decode(bytes)? {
+            if let Some(request) =
+                crate::processing_wire::UnsupportedRequest::decode_for(bytes, processing_version)?
+            {
                 Incoming::UnsupportedProcessing(request)
             } else {
                 Incoming::Processing(crate::processing_wire::ProcessingRequest::decode(bytes)?)
@@ -150,7 +173,7 @@ impl Client {
         if self.replies.is_empty() && self.telemetry.is_none() {
             self.last_write = now;
         }
-        self.replies.push_back(Packet::new(
+        self.replies.push_back(Packet::paged(
             serde_json::to_vec(value).map_err(|e| e.to_string())?,
         )?);
         Ok(())
@@ -222,8 +245,49 @@ struct EpochRecord {
 }
 struct EpochOwner {
     _file: fs::File,
+    directory: PathBuf,
+    show: String,
+    epoch: Counter,
 }
 impl EpochOwner {
+    fn advance(&mut self, epoch: Counter) -> Result<()> {
+        use std::os::unix::fs::OpenOptionsExt;
+        if epoch.0 <= self.epoch.0 {
+            return Err("fresh durable epoch required".into());
+        }
+        let bytes = serde_json::to_vec(&EpochRecord {
+            version: 1,
+            show: self.show.clone(),
+            high_epoch: epoch,
+        })
+        .map_err(|e| e.to_string())?;
+        let path = self.directory.join("audio.identity");
+        let temp = self
+            .directory
+            .join(format!("audio.identity.recovery-{}", std::process::id()));
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&temp)
+            .map_err(|e| e.to_string())?;
+        let result = (|| {
+            file.write_all(&bytes).map_err(|e| e.to_string())?;
+            file.sync_all().map_err(|e| e.to_string())?;
+            fs::rename(&temp, &path).map_err(|e| e.to_string())?;
+            fs::File::open(&self.directory)
+                .and_then(|d| d.sync_all())
+                .map_err(|e| e.to_string())?;
+            Ok(())
+        })();
+        if result.is_err() {
+            let _ = fs::remove_file(&temp);
+        } else {
+            self.epoch = epoch;
+        }
+        result
+    }
     fn reserve(directory: &Path, show: &str, epoch: Counter) -> Result<Self> {
         use std::os::unix::fs::OpenOptionsExt;
         let lockpath = directory.join("audio.owner");
@@ -331,8 +395,24 @@ impl EpochOwner {
             let _ = fs::remove_file(&temp);
         }
         saved?;
-        Ok(Self { _file: lock })
+        Ok(Self {
+            _file: lock,
+            directory: directory.into(),
+            show: show.into(),
+            epoch,
+        })
     }
+}
+// One bounded pending slot retains prepared state through the render boundary.
+// Keep it inline so commit does not introduce an additional heap owner to retire.
+#[allow(clippy::large_enum_variant)]
+enum StructuralAction {
+    #[cfg(feature = "hardware-host")]
+    Pa(crate::module_graph::GraphPaPrepared),
+    Patch(crate::mixer::PreparedOutputPatch),
+    Mute,
+    Rearm,
+    Failed(String),
 }
 pub struct LocalAudio {
     listener: UnixListener,
@@ -349,6 +429,22 @@ pub struct LocalAudio {
     show: String,
     epoch: Counter,
     synthetic_fouraux: bool,
+    raw_scratch: Vec<f64>,
+    bus_scratch: Vec<f64>,
+    pa_silence: Vec<f64>,
+    capture_scratch: Vec<f64>,
+    playback_scratch: Vec<f64>,
+    pcm_scratch: Vec<i32>,
+    remote_completions: VecDeque<serde_json::Value>,
+    structural_pending: Option<(
+        crate::structural_control::Request,
+        StructuralAction,
+        Option<u64>,
+    )>,
+    structural_cache: VecDeque<(
+        crate::structural_control::Request,
+        crate::structural_control::Reply,
+    )>,
     #[cfg(feature = "hardware-host")]
     private_directory: PathBuf,
     module_cache: VecDeque<(
@@ -366,6 +462,21 @@ pub struct LocalAudio {
 }
 impl LocalAudio {
     pub fn bind(directory: &Path, name: &str, show: &str, epoch: Counter) -> Result<Self> {
+        Self::bind_configured(
+            directory,
+            name,
+            show,
+            epoch,
+            crate::topology::EngineTopology::legacy(),
+        )
+    }
+    pub fn bind_configured(
+        directory: &Path,
+        name: &str,
+        show: &str,
+        epoch: Counter,
+        topology: crate::topology::EngineTopology,
+    ) -> Result<Self> {
         if name.is_empty()
             || name.len() > 40
             || !name
@@ -389,7 +500,12 @@ impl LocalAudio {
             Err(e) if e.kind() == ErrorKind::NotFound => (),
             _ => return Err("preexisting endpoint".into()),
         }
-        let engine = OfflineEngine::new(show, epoch, Counter(0), 0)?;
+        let ni = topology.inputs.len();
+        let nb = topology.monitors + 2;
+        let np = topology.pa_outputs;
+        let nc = topology.capture_channels;
+        let no = topology.playback_channels;
+        let engine = OfflineEngine::with_topology(show, epoch, Counter(0), 0, topology)?;
         let epoch_owner = EpochOwner::reserve(directory, show, epoch)?;
         let listener = UnixListener::bind(&path).map_err(|e| e.to_string())?;
         let m = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
@@ -417,6 +533,15 @@ impl LocalAudio {
             epoch,
             analysis: None,
             synthetic_fouraux: false,
+            remote_completions: VecDeque::with_capacity(64),
+            structural_pending: None,
+            structural_cache: VecDeque::with_capacity(256),
+            raw_scratch: vec![0.; 48 * ni],
+            bus_scratch: vec![0.; 48 * nb],
+            pa_silence: vec![0.; 48 * np],
+            capture_scratch: vec![0.; 48 * nc],
+            playback_scratch: vec![0.; 48 * no],
+            pcm_scratch: vec![0; 48 * ni],
             #[cfg(feature = "hardware-host")]
             private_directory: directory.into(),
             module_cache: VecDeque::with_capacity(256),
@@ -425,6 +550,453 @@ impl LocalAudio {
             #[cfg(feature = "hardware-host")]
             module_pending: Vec::with_capacity(2),
         })
+    }
+    pub fn persisted_intent(&mut self) -> Result<crate::structural_control::Intent> {
+        let snapshot = self.structural_snapshot()?;
+        Ok(crate::structural_control::Intent {
+            version: 1,
+            engine: self.engine.persisted_intent()?,
+            pa_configuration_json: snapshot.pa_configuration_json,
+            pa_program_buses: snapshot.pa_program_buses,
+        })
+    }
+    /// Restore only on a newly bound, unprocessed authority. Libraries have been
+    /// explicitly loaded by the caller; all owner validation precedes replacement.
+    pub fn restore_composed_intent(
+        &mut self,
+        intent: &crate::structural_control::Intent,
+    ) -> Result<()> {
+        intent.validate()?;
+        if self.frame() != 0
+            || !self.clients.is_empty()
+            || self.engine.revision() != Counter(0)
+            || self.show != intent.engine.show_id
+        {
+            return Err("fresh unattached provider required".into());
+        }
+        let restored =
+            OfflineEngine::restore_intent_for(&intent.engine, self.topology(), self.epoch, 0)?;
+        #[cfg(feature = "hardware-host")]
+        if let Some(json) = &intent.pa_configuration_json {
+            let capacity = self.topology().pa_outputs;
+            let total = self.topology().monitors + 2;
+            let g = self
+                .modules
+                .as_mut()
+                .ok_or("persisted PA requires explicit owner library")?;
+            let mut prepared =
+                g.prepare_pa_change(json.as_bytes(), intent.pa_program_buses.clone(), total)?;
+            if prepared.output_channels() != capacity {
+                return Err("persisted PA capability mismatch".into());
+            }
+            let result = g.commit_pa_change(&mut prepared, self.epoch.0, 0);
+            if result != 0 {
+                return Err(format!("persisted PA commit {result}"));
+            }
+            g.retire_pa_changes();
+        }
+        #[cfg(not(feature = "hardware-host"))]
+        if intent.pa_configuration_json.is_some() {
+            return Err("persisted PA unavailable".into());
+        }
+        self.engine = restored;
+        Ok(())
+    }
+    pub fn structural_snapshot(&self) -> Result<crate::structural_control::Snapshot> {
+        #[cfg(feature = "hardware-host")]
+        let (configuration, buses, status, capabilities) = if let Some(g) = &self.modules {
+            (
+                g.pa_configuration_json().map(str::to_owned),
+                g.pa_program_buses().to_vec(),
+                g.pa_v2_status()
+                    .transpose()
+                    .map_err(|e| format!("PA status {e}"))?
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+                g.pa_v2_capabilities()
+                    .map(serde_json::to_value)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+            )
+        } else {
+            (None, Vec::new(), None, None)
+        };
+        #[cfg(not(feature = "hardware-host"))]
+        let (configuration, buses, status, capabilities) = (None, Vec::new(), None, None);
+        Ok(crate::structural_control::Snapshot {
+            show_id: self.show.clone(),
+            epoch: self.epoch,
+            revision: self.engine.revision(),
+            frame: Counter(self.frame()),
+            topology: self.topology().clone(),
+            clock: self.engine.clock_status().clone(),
+            outputs_quiesced: self.engine.outputs_quiesced(),
+            pa_configuration_json: configuration,
+            pa_program_buses: buses,
+            pa_status: status,
+            pa_capabilities: capabilities,
+        })
+    }
+    /// Control-side preparation; exact identity, scopes, retry history and final
+    /// revision remain owned by the same engine authority as channel controls.
+    pub fn structural_request(
+        &mut self,
+        r: crate::structural_control::Request,
+        now: u64,
+        fresh: bool,
+        owner: Option<u64>,
+    ) -> Result<crate::structural_control::Reply> {
+        use crate::structural_control::{Command as S, Reply};
+        r.validate()?;
+        if r.show_id != self.show || r.epoch != self.epoch {
+            return Err("structural attachment identity".into());
+        }
+        if matches!(r.command, S::StructuralSnapshot {}) {
+            return Ok(Reply::new(
+                &r,
+                "snapshot",
+                None,
+                None,
+                self.engine.revision(),
+                Some(self.structural_snapshot()?),
+            ));
+        }
+        if self.engine.external_boundary().is_none() {
+            self.structural_pending = None;
+        }
+        let auth = r.authority_request();
+        let (frame, cached) =
+            match self
+                .engine
+                .begin_external(&auth, &r.fingerprint()?, r.scope().unwrap(), now)
+            {
+                Ok(v) => v,
+                Err(reason) => {
+                    return Ok(Reply::new(
+                        &r,
+                        "final",
+                        Some(reason),
+                        None,
+                        self.engine.revision(),
+                        None,
+                    ));
+                }
+            };
+        if let Some(cached) = cached {
+            return Ok(self
+                .structural_cache
+                .iter()
+                .find(|(old, _)| old == &r)
+                .map(|(_, v)| v.clone())
+                .unwrap_or_else(|| {
+                    Reply::new(
+                        &r,
+                        "final",
+                        cached
+                            .body
+                            .reason
+                            .clone()
+                            .or_else(|| Some("expired_outcome".into())),
+                        cached.body.effective_frame.map(|f| f.0),
+                        cached.body.revision,
+                        None,
+                    )
+                }));
+        }
+        if let Some((old, _, _)) = &self.structural_pending {
+            if old == &r {
+                return Ok(Reply::new(
+                    &r,
+                    "pending",
+                    None,
+                    Some(frame),
+                    self.engine.revision(),
+                    None,
+                ));
+            }
+            return Err("structural pending ownership".into());
+        }
+        let prepared = (|| -> Result<StructuralAction> {
+            if !fresh {
+                return Err("fresh_structural_snapshot_required".into());
+            }
+            match &r.command {
+                S::OutputMute {} => Ok(StructuralAction::Mute),
+                S::OutputRearm {} => Ok(StructuralAction::Rearm),
+                S::OutputPatch { outputs } => {
+                    if !self.engine.outputs_quiesced() {
+                        return Err("outputs_must_be_quiesced".into());
+                    }
+                    if self.topology().mapping_evidence == "operator-verified"
+                        && self.topology().pa_outputs > 0
+                        && outputs.iter().any(|p| {
+                            matches!(p.source, Some(crate::topology::OutputSource::Main { .. }))
+                        })
+                    {
+                        return Err("physical main route must pass through PA protection".into());
+                    }
+                    let current = &self.topology().outputs;
+                    if outputs.len() != current.len()
+                        || outputs.iter().zip(current).any(|(a, b)| {
+                            a.id != b.id
+                                || a.playback_slot != b.playback_slot
+                                || a.physical_port != b.physical_port
+                        })
+                    {
+                        return Err("physical remap requires reviewed topology reopen".into());
+                    }
+                    Ok(StructuralAction::Patch(
+                        self.engine.prepare_output_patch(outputs.clone())?,
+                    ))
+                }
+                S::PaSet {
+                    configuration_json,
+                    program_buses,
+                } => {
+                    if !self.engine.outputs_quiesced() {
+                        return Err("outputs_must_be_quiesced".into());
+                    }
+                    #[cfg(feature = "hardware-host")]
+                    {
+                        let total = self.topology().monitors + 2;
+                        let capacity = self.topology().pa_outputs;
+                        let g = self.modules.as_mut().ok_or("modules unavailable")?;
+                        let prepared = g.prepare_pa_change(
+                            configuration_json.as_bytes(),
+                            program_buses.clone(),
+                            total,
+                        )?;
+                        if prepared.output_channels() != capacity {
+                            return Err("PA outputs must match admitted module ports".into());
+                        }
+                        Ok(StructuralAction::Pa(prepared))
+                    }
+                    #[cfg(not(feature = "hardware-host"))]
+                    {
+                        let _ = (configuration_json, program_buses);
+                        Err("modules unavailable".into())
+                    }
+                }
+                S::StructuralSnapshot {} => unreachable!(),
+            }
+        })();
+        self.structural_pending = Some((
+            r.clone(),
+            prepared.unwrap_or_else(StructuralAction::Failed),
+            owner,
+        ));
+        Ok(Reply::new(
+            &r,
+            "pending",
+            None,
+            Some(frame),
+            self.engine.revision(),
+            None,
+        ))
+    }
+    fn commit_structure(&mut self, now: u64) -> Result<()> {
+        if self.engine.external_boundary() != Some(self.frame()) {
+            return Ok(());
+        }
+        let (r, mut action, owner) = self
+            .structural_pending
+            .take()
+            .ok_or("missing structural prepared state")?;
+        if !self
+            .engine
+            .external_matches(&r.authority_request(), &r.fingerprint()?)
+        {
+            self.quiesce_source("structural_identity_mismatch")?;
+            return Err("structural prepared identity mismatch".into());
+        }
+        let frame = self.frame();
+        let epoch = self.epoch.0;
+        #[cfg(feature = "hardware-host")]
+        let modules = &mut self.modules;
+        let mut failure = None;
+        let result = self.engine.commit_external_with_engine(now, |engine| {
+            let applied = match &mut action {
+                StructuralAction::Failed(reason) => Err(reason.clone()),
+                StructuralAction::Patch(prepared) => engine.apply_output_patch(prepared),
+                StructuralAction::Mute => {
+                    engine.mute_outputs()?;
+                    #[cfg(feature = "hardware-host")]
+                    if let Some(g) = modules {
+                        g.mute_pa()?;
+                    }
+                    Ok(())
+                }
+                StructuralAction::Rearm => {
+                    if !matches!(
+                        engine.clock_status().state,
+                        crate::clock_domain::ClockState::Running
+                            | crate::clock_domain::ClockState::Disarmed
+                    ) {
+                        return Err("clock recovery required".into());
+                    }
+                    #[cfg(feature = "hardware-host")]
+                    if let Some(g) = modules {
+                        g.rearm_pa()?;
+                    }
+                    engine.rearm_outputs()
+                }
+                #[cfg(feature = "hardware-host")]
+                StructuralAction::Pa(prepared) => {
+                    let g = modules.as_mut().ok_or("modules unavailable")?;
+                    let code = g.commit_pa_change(prepared, epoch, frame);
+                    if code == 0 {
+                        Ok(())
+                    } else {
+                        Err(format!("PA commit {code}"))
+                    }
+                }
+            };
+            if let Err(e) = &applied {
+                failure = Some(e.clone());
+            }
+            applied
+        })?;
+        #[cfg(not(feature = "hardware-host"))]
+        let _ = epoch;
+        #[cfg(feature = "hardware-host")]
+        if let Some(g) = &mut self.modules {
+            g.retire_pa_changes();
+        }
+        let applied_frame = if result.kind == "applied" {
+            Some(frame)
+        } else {
+            None
+        };
+        let reply = crate::structural_control::Reply::new(
+            &r,
+            "final",
+            failure.or(result.body.reason),
+            applied_frame,
+            result.body.revision,
+            None,
+        );
+        let writer = r.writer.clone();
+        self.structural_cache.push_back((r, reply.clone()));
+        if self
+            .structural_cache
+            .iter()
+            .filter(|(r, _)| r.writer == writer)
+            .count()
+            > 64
+            && let Some(index) = self
+                .structural_cache
+                .iter()
+                .position(|(r, _)| r.writer == writer)
+        {
+            self.structural_cache.remove(index);
+        }
+        if self.structural_cache.len() > 256 {
+            self.structural_cache.pop_front();
+        }
+        if let Some(id) = owner {
+            if let Some(c) = self.clients.iter_mut().find(|c| c.id == id) {
+                let _ = c.queue_module(&reply, now);
+            }
+        } else if self.remote_completions.len() < 64 {
+            self.remote_completions
+                .push_back(serde_json::to_value(reply).map_err(|e| e.to_string())?);
+        }
+        Ok(())
+    }
+    pub fn take_remote_completions(&mut self) -> Vec<serde_json::Value> {
+        self.remote_completions.drain(..).collect()
+    }
+    pub fn source_epoch(&self) -> u64 {
+        self.epoch.0
+    }
+    pub fn quiesce_source(&mut self, reason: &str) -> Result<()> {
+        self.engine.quiesce(reason);
+        #[cfg(feature = "hardware-host")]
+        if let Some(g) = &mut self.modules {
+            g.quiesce_source()?;
+        }
+        self.structural_pending = None;
+        self.structural_cache.clear();
+        self.clients.clear();
+        self.writer_connections.clear();
+        self.pending_owner = None;
+        self.processing_owner = None;
+        Ok(())
+    }
+    pub fn recover_source(&mut self, epoch: Counter, frame: u64) -> Result<()> {
+        if epoch.0 <= self.epoch.0 {
+            return Err("fresh epoch required".into());
+        }
+        self.quiesce_source("source_reopen")?;
+        self._epoch_owner.advance(epoch)?;
+        self.engine.recover(epoch, frame)?;
+        #[cfg(feature = "hardware-host")]
+        if let Some(g) = &mut self.modules {
+            g.discontinuity(epoch.0, frame)?;
+        }
+        self.epoch = epoch;
+        self.analysis = None;
+        self.remote_completions.clear();
+        Ok(())
+    }
+    pub fn rearm(&mut self) -> Result<()> {
+        #[cfg(feature = "hardware-host")]
+        if let Some(g) = &mut self.modules {
+            g.rearm_pa()?;
+        }
+        self.engine.rearm()
+    }
+    #[cfg(feature = "hardware-host")]
+    pub fn configure_pa(&mut self, json: &[u8]) -> Result<()> {
+        if self.frame() != 0 {
+            return Err("initial PA setup requires unprocessed provider".into());
+        }
+        let capacity = self.topology().pa_outputs;
+        let total = self.topology().monitors + 2;
+        let g = self.modules.as_mut().ok_or("modules unavailable")?;
+        if g.pa_configuration_json().is_some() {
+            return Err("PA already configured; use structural transaction".into());
+        }
+        let mut prepared = g.prepare_pa_change(json, vec![0, 1], total)?;
+        if prepared.output_channels() != capacity {
+            return Err("initial PA output capability mismatch".into());
+        }
+        let code = g.commit_pa_change(&mut prepared, self.epoch.0, 0);
+        if code != 0 {
+            return Err(format!("initial PA commit {code}"));
+        }
+        g.retire_pa_changes();
+        Ok(())
+    }
+    pub fn last_bus_samples(&self) -> &[f64] {
+        &self.bus_scratch
+    }
+    pub fn revoke_writer(&mut self, writer: &str) {
+        self.engine.revoke_writer(writer);
+        if self
+            .structural_pending
+            .as_ref()
+            .is_some_and(|(r, _, _)| r.writer.as_deref() == Some(writer))
+        {
+            self.structural_pending = None;
+        }
+        self.structural_cache
+            .retain(|(r, _)| r.writer.as_deref() != Some(writer));
+        // Keep the connection tombstone for this epoch: reconnect must use a
+        // fresh writer identity, even after its old lease is revoked.
+        self.remote_completions.retain(|r| {
+            r.get("context")
+                .and_then(|c| c.get("writer"))
+                .and_then(|w| w.as_str())
+                != Some(writer)
+        });
+    }
+    pub fn engine_mut(&mut self) -> &mut OfflineEngine {
+        &mut self.engine
+    }
+    pub fn topology(&self) -> &crate::topology::EngineTopology {
+        self.engine.topology()
     }
     pub fn enable_synthetic_fouraux(&mut self) -> Result<()> {
         if self.frame() != 0 || self.analysis.is_some() {
@@ -481,16 +1053,18 @@ impl LocalAudio {
             return Err("owned recording root".into());
         }
         let manifest = crate::module_graph::Manifest::load(manifest)?;
-        self.modules = Some(crate::module_graph::ModuleGraph::load(
+        self.modules = Some(crate::module_graph::ModuleGraph::load_configured(
             manifest,
             self.epoch.0,
             self.frame(),
+            self.topology().inputs.len(),
         )?);
         Ok(())
     }
     pub fn module_status(&mut self, now: u64) -> Result<serde_json::Value> {
         #[cfg(feature = "hardware-host")]
         if let Some(graph) = &mut self.modules {
+            graph.poll_lifecycle()?;
             return serde_json::to_value(graph.status(&self.show, now)?).map_err(|e| e.to_string());
         }
         let _ = now;
@@ -506,17 +1080,36 @@ impl LocalAudio {
         r: crate::module_wire::ModuleRequest,
         now: u64,
     ) -> Result<()> {
+        if !matches!(
+            r.command,
+            crate::module_wire::ModuleCommand::ModuleStatus {}
+        ) {
+            let c = &self.clients[index];
+            if !c.snapshot || c.writer != r.writer || c.lease != r.lease {
+                return Err("module connection authority".into());
+            }
+        }
+        let result = self.dispatch_module(r, now, Some(self.clients[index].id))?;
+        self.clients[index].queue_module(&result, now)
+    }
+    pub fn dispatch_module(
+        &mut self,
+        r: crate::module_wire::ModuleRequest,
+        now: u64,
+        owner: Option<u64>,
+    ) -> Result<serde_json::Value> {
         use crate::module_wire::{ModuleCommand, ModuleReply};
+        #[cfg(not(feature = "hardware-host"))]
+        let _ = owner;
+        if r.version != self.engine.wire_version() {
+            return Err("module wire version mismatch".into());
+        }
         if r.show_id != self.show || r.epoch != self.epoch {
             return Err("module attachment identity".into());
         }
         if matches!(r.command, ModuleCommand::ModuleStatus {}) {
             let status = self.module_status(now)?;
-            return self.clients[index].queue_module(&status, now);
-        }
-        let client = &self.clients[index];
-        if !client.snapshot || client.writer != r.writer || client.lease != r.lease {
-            return Err("module connection authority".into());
+            return Ok(status);
         }
         let auth = self
             .engine
@@ -569,8 +1162,7 @@ impl LocalAudio {
                 let reply = match result {
                     Ok(()) => {
                         #[cfg(feature = "hardware-host")]
-                        self.module_pending
-                            .push((r.clone(), self.clients[index].id));
+                        self.module_pending.push((r.clone(), owner.unwrap_or(0)));
                         ModuleReply::new(&r, "accepted_pending", None)
                     }
                     Err(reason) => ModuleReply::new(&r, "rejected", Some(reason)),
@@ -582,7 +1174,7 @@ impl LocalAudio {
                 reply
             }
         };
-        self.clients[index].queue_module(&reply, now)
+        serde_json::to_value(reply).map_err(|e| e.to_string())
     }
     fn processing_request(
         &mut self,
@@ -659,6 +1251,10 @@ impl LocalAudio {
             if let Some((_, cached)) = self.module_cache.iter_mut().find(|(old, _)| old == r) {
                 *cached = reply.clone();
             }
+            if *owner == 0 && self.remote_completions.len() < 64 {
+                self.remote_completions
+                    .push_back(serde_json::to_value(&reply).map_err(|e| e.to_string())?);
+            }
             if let Some(c) = self.clients.iter_mut().find(|c| c.id == *owner) {
                 let _ = c.queue_module(&reply, now);
             }
@@ -682,11 +1278,132 @@ impl LocalAudio {
     /// Bounded synthetic work: <=4 accepts, one frame/client,8KiB read/write/client,
     ///48 render frames. All parsing/IPC/heap work is outside Mixer::process.
     pub fn tick(&mut self, now: u64) -> Result<()> {
-        self.tick_with_output(now, &mut [[0.; 4]; 48])
+        let mut capture = std::mem::take(&mut self.capture_scratch);
+        capture.fill(0.);
+        let topology = self.topology();
+        for f in 0..48 {
+            for (i, p) in topology.inputs.iter().enumerate() {
+                capture[f * topology.capture_channels + p.capture_slot] = if self.synthetic_fouraux
+                {
+                    synthetic_sample(self.frame() + f as u64, i)
+                } else if i == 0 {
+                    0.125
+                } else {
+                    0.
+                };
+            }
+        }
+        let mut playback = std::mem::take(&mut self.playback_scratch);
+        let result =
+            self.tick_with_capture(now, self.epoch.0, self.frame(), &capture, &mut playback);
+        self.capture_scratch = capture;
+        self.playback_scratch = playback;
+        result
     }
     /// Same provider pump, with caller-owned observation of the FOH/monitor block.
     /// This is software evidence; it does not open a hardware endpoint.
     pub fn tick_with_output(&mut self, now: u64, output: &mut [[f64; 4]; 48]) -> Result<()> {
+        if !self.topology().is_legacy() {
+            return Err("legacy output shape".into());
+        }
+        let mut inputs = [[0.; 8]; 48];
+        for (f, row) in inputs.iter_mut().enumerate() {
+            for (i, v) in row.iter_mut().enumerate() {
+                *v = if self.synthetic_fouraux {
+                    synthetic_sample(self.frame() + f as u64, i)
+                } else if i == 0 {
+                    0.125
+                } else {
+                    0.
+                };
+            }
+        }
+        self.tick_raw(now, inputs.as_flattened(), output.as_flattened_mut())
+    }
+    /// Capture and playback use configured transport slots. Logical strip ordering
+    /// is independent of that permutation. This control pump is outside render.
+    pub fn tick_with_capture(
+        &mut self,
+        now: u64,
+        epoch: u64,
+        first_frame: u64,
+        capture: &[f64],
+        playback: &mut [f64],
+    ) -> Result<()> {
+        self.tick_with_capture_and_wet(now, epoch, first_frame, capture, playback, None)
+    }
+    pub fn tick_with_capture_and_wet(
+        &mut self,
+        now: u64,
+        epoch: u64,
+        first_frame: u64,
+        capture: &[f64],
+        playback: &mut [f64],
+        wet: Option<&[f64]>,
+    ) -> Result<()> {
+        let topology = self.topology();
+        if capture.len() != 48 * topology.capture_channels
+            || playback.len() != 48 * topology.playback_channels
+        {
+            return Err("device block shape".into());
+        }
+        playback.fill(0.);
+        if epoch != self.epoch.0 || first_frame != self.frame() {
+            self.quiesce_source("source_discontinuity")?;
+            return Err("source timeline".into());
+        }
+        if let Err(e) = self.engine.admit_source(epoch, first_frame, 48) {
+            self.quiesce_source("source_discontinuity")?;
+            return Err(e);
+        }
+        let mut raw = std::mem::take(&mut self.raw_scratch);
+        let topology = self.topology();
+        for f in 0..48 {
+            for (i, p) in topology.inputs.iter().enumerate() {
+                raw[f * topology.inputs.len() + i] =
+                    capture[f * topology.capture_channels + p.capture_slot];
+            }
+        }
+        let mut buses = std::mem::take(&mut self.bus_scratch);
+        let result = self.tick_raw_with_wet(now, &raw, &mut buses, wet);
+        if result.is_ok() {
+            let topology = self.topology();
+            #[cfg(feature = "hardware-host")]
+            let pa = self
+                .modules
+                .as_ref()
+                .map(|m| m.output_interleaved())
+                .filter(|p| p.len() == self.pa_silence.len())
+                .unwrap_or(&self.pa_silence);
+            #[cfg(not(feature = "hardware-host"))]
+            let pa = &self.pa_silence;
+            for f in 0..48 {
+                topology.patch_outputs(
+                    &buses[f * (topology.monitors + 2)..(f + 1) * (topology.monitors + 2)],
+                    &pa[f * topology.pa_outputs..(f + 1) * topology.pa_outputs],
+                    &mut playback
+                        [f * topology.playback_channels..(f + 1) * topology.playback_channels],
+                )?;
+            }
+        }
+        self.raw_scratch = raw;
+        self.bus_scratch = buses;
+        if result.is_err() {
+            self.quiesce_source("processing_failure")?;
+        }
+        result
+    }
+
+    fn tick_raw(&mut self, now: u64, inputs: &[f64], output: &mut [f64]) -> Result<()> {
+        self.tick_raw_with_wet(now, inputs, output, None)
+    }
+    fn tick_raw_with_wet(
+        &mut self,
+        now: u64,
+        inputs: &[f64],
+        output: &mut [f64],
+        wet: Option<&[f64]>,
+    ) -> Result<()> {
         if now < self.last_now {
             return Err("clock".into());
         }
@@ -712,6 +1429,7 @@ impl LocalAudio {
                         last_write: now,
                         snapshot: false,
                         processing_snapshot_ms: None,
+                        structural_snapshot_ms: None,
                         writer: None,
                         lease: None,
                     });
@@ -723,7 +1441,7 @@ impl LocalAudio {
         }
         let mut index = 0;
         while index < self.clients.len() {
-            let result = self.clients[index].receive(now);
+            let result = self.clients[index].receive(now, self.engine.wire_version() + 1);
             let mut keep = true;
             match result {
                 Err(_) => keep = false,
@@ -732,6 +1450,30 @@ impl LocalAudio {
                     let reply = request.refusal(self.engine.revision());
                     if self.clients[index].queue_module(&reply, now).is_err() {
                         keep = false;
+                    }
+                }
+                Ok(Some(Incoming::Structural(request))) => {
+                    let read = matches!(
+                        request.command,
+                        crate::structural_control::Command::StructuralSnapshot {}
+                    );
+                    let c = &self.clients[index];
+                    let authorized = read
+                        || (c.snapshot && c.writer == request.writer && c.lease == request.lease);
+                    let fresh = c
+                        .structural_snapshot_ms
+                        .is_some_and(|t| now.saturating_sub(t) <= 250);
+                    if !authorized {
+                        keep = false;
+                    } else {
+                        let owner = Some(c.id);
+                        let reply = self.structural_request(request, now, fresh, owner)?;
+                        if read && reply.snapshot.is_some() {
+                            self.clients[index].structural_snapshot_ms = Some(now);
+                        }
+                        if self.clients[index].queue_module(&reply, now).is_err() {
+                            keep = false;
+                        }
                     }
                 }
                 Ok(Some(Incoming::Processing(request))) => {
@@ -787,30 +1529,48 @@ impl LocalAudio {
             if keep {
                 index += 1;
             } else {
-                self.clients.remove(index);
+                let removed = self.clients.remove(index);
+                if let Some(writer) = removed.writer {
+                    self.revoke_writer(&writer);
+                }
             }
         }
         #[cfg(feature = "hardware-host")]
         self.module_completions(now)?;
-        output.fill([0.; 4]);
-        let mut inputs = [[0.125, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; 48];
+        self.commit_structure(now)?;
+        output.fill(0.);
         let source_frame = self.frame();
-        if self.synthetic_fouraux {
-            let raw = crate::analysis_stream::synthetic_inputs(source_frame);
-            if let Some((tap, worker)) = &mut self.analysis
-                && let Ok(mono) = crate::analysis_stream::local::monotonic_ms()
-            {
-                let _ = tap.offer(source_frame, &raw, mono);
-                worker.update_losses(tap.dropped_windows);
+        let ni = self.topology().inputs.len();
+        let buses = self.topology().monitors + 2;
+        if let Some((tap, worker)) = &mut self.analysis
+            && let Ok(mono) = crate::analysis_stream::local::monotonic_ms()
+        {
+            for (out, v) in self.pcm_scratch.iter_mut().zip(inputs) {
+                *out = (v * 8_388_608.).round() as i32;
             }
-            inputs = raw.map(|f| f.map(|v| f64::from(v) / 8_388_608.0));
+            let _ = tap.offer_interleaved(source_frame, &self.pcm_scratch, ni, mono);
+            worker.update_losses(tap.dropped_windows);
         }
-        let completions = self.engine.process(&inputs, output, now)?;
+        let completions = self.engine.process_interleaved(inputs, output, now)?;
         #[cfg(feature = "hardware-host")]
         if let Some(graph) = &mut self.modules {
-            let _ = graph.process(self.epoch.0, source_frame, &inputs, output);
+            match graph.process_interleaved(self.epoch.0, source_frame, inputs, output, buses, wet)
+            {
+                Ok(()) | Err(crate::module_graph::ProcessError::Fx(_)) => (),
+                Err(error) => {
+                    output.fill(0.);
+                    self.quiesce_source("module_processing_failure")?;
+                    return Err(format!("module processing {error:?}"));
+                }
+            }
         }
+        #[cfg(not(feature = "hardware-host"))]
+        let _ = (buses, wet);
         for reply in completions {
+            if self.pending_owner.is_none() && self.remote_completions.len() < 64 {
+                self.remote_completions
+                    .push_back(serde_json::to_value(&reply).map_err(|e| e.to_string())?);
+            }
             if let Some((ticket, owner)) = self.pending_owner.take()
                 && reply.ticket.is_none_or(|t| t.0 == ticket)
                 && let Some(index) = self.clients.iter().position(|c| c.id == owner)
@@ -820,6 +1580,10 @@ impl LocalAudio {
             }
         }
         for reply in self.engine.take_processing_completions() {
+            if self.processing_owner.is_none() && self.remote_completions.len() < 64 {
+                self.remote_completions
+                    .push_back(serde_json::to_value(&reply).map_err(|e| e.to_string())?);
+            }
             if let Some((ticket, owner)) = self.processing_owner.take()
                 && reply.ticket.is_none_or(|t| t.0 == ticket)
                 && let Some(index) = self.clients.iter().position(|c| c.id == owner)
@@ -834,7 +1598,7 @@ impl LocalAudio {
                 if client.snapshot && !client.telemetry.as_ref().is_some_and(|p| p.offset > 0) {
                     let request = Request {
                         contract: "C-AUDIO".into(),
-                        version: 1,
+                        version: self.engine.wire_version(),
                         show_id: self.show.clone(),
                         module: "audio".into(),
                         epoch: self.epoch,
@@ -848,11 +1612,35 @@ impl LocalAudio {
                     if client.replies.is_empty() && client.telemetry.is_none() {
                         client.last_write = now;
                     }
-                    client.telemetry = Some(Packet::new(reply.encode()?)?);
+                    let bytes = serde_json::to_vec(&reply).map_err(|e| e.to_string())?;
+                    if bytes.len() <= MAX_FRAME {
+                        client.telemetry = Some(Packet::new(bytes)?);
+                    } // expanded clients request coherent pages; never partial periodic snapshots
                 }
             }
         }
-        self.clients.retain_mut(|c| c.flush(now).is_ok());
+        let mut index = 0;
+        while index < self.clients.len() {
+            if self.clients[index].flush(now).is_ok() {
+                index += 1;
+            } else {
+                let c = self.clients.remove(index);
+                if let Some(writer) = c.writer {
+                    self.revoke_writer(&writer);
+                }
+            }
+        }
         Ok(())
+    }
+}
+
+fn synthetic_sample(frame: u64, input: usize) -> f64 {
+    // Legacy fouraux samples are exact; additional channels have distinct PCM24
+    // identity and all pass through the same raw tap and channel processor.
+    let block = crate::analysis_stream::synthetic_inputs(frame - frame % 48);
+    if input < 8 {
+        f64::from(block[(frame % 48) as usize][input]) / 8_388_608.
+    } else {
+        (((frame as i64 * 17 + input as i64 * 7919) % 65537) - 32768) as f64 / 8_388_608.
     }
 }

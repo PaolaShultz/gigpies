@@ -11,6 +11,26 @@ pub enum Scope {
     Foh,
     Monitor1,
     Monitor2,
+    Monitor(u16),
+    PaConfiguration,
+    OutputRoutes,
+}
+impl Scope {
+    pub fn monitor(n: usize) -> Self {
+        match n {
+            1 => Self::Monitor1,
+            2 => Self::Monitor2,
+            _ => Self::Monitor(n as u16),
+        }
+    }
+    pub fn monitor_index(self) -> Option<usize> {
+        match self {
+            Self::Monitor1 => Some(0),
+            Self::Monitor2 => Some(1),
+            Self::Monitor(n) if n >= 3 => Some(n as usize - 1),
+            _ => None,
+        }
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -112,7 +132,7 @@ impl Request {
         Ok(b)
     }
     fn validate(&self) -> Result<()> {
-        if self.contract != "C-AUDIO" || self.version != 1 {
+        if self.contract != "C-AUDIO" || ![1, 2].contains(&self.version) {
             return Err("version".into());
         }
         if !canonical_show(&self.show_id)
@@ -245,8 +265,17 @@ pub struct Reply {
     pub body: ReplyBody,
 }
 impl Reply {
+    pub fn decode_versioned(bytes: &[u8]) -> Result<Self> {
+        let r: Self = crate::show::decode_bounded(bytes, crate::snapshot_pages::ASSEMBLY_BYTES)?;
+        r.validate()?;
+        Ok(r)
+    }
+    /// Historical C-AUDIO1 decoder; expanded clients use decode_versioned.
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         let r: Self = decode(bytes)?;
+        if r.version != 1 {
+            return Err("legacy reply version".into());
+        }
         r.validate()?;
         Ok(r)
     }
@@ -292,6 +321,9 @@ pub struct Authority {
     modes: BTreeMap<Scope, Mode>,
     automation_bounds: BTreeMap<Scope, Vec<AutoBound>>,
     rendered_release: bool,
+    inputs: usize,
+    monitors: usize,
+    version: u32,
 }
 impl Target {
     fn validate_identity(&self) -> Result<()> {
@@ -310,7 +342,17 @@ impl Target {
             Self::Send { monitor, .. } => match monitor.as_str() {
                 "monitor-1" => Ok(Scope::Monitor1),
                 "monitor-2" => Ok(Scope::Monitor2),
-                _ => Err("target".into()),
+                _ => {
+                    let n = monitor
+                        .strip_prefix("monitor-")
+                        .and_then(|s| s.parse::<u16>().ok())
+                        .filter(|&n| n >= 3)
+                        .ok_or("target")?;
+                    if monitor != &format!("monitor-{n}") {
+                        return Err("target".into());
+                    }
+                    Ok(Scope::Monitor(n))
+                }
             },
             _ => Ok(Scope::Foh),
         }
@@ -336,13 +378,23 @@ impl Target {
 }
 impl Authority {
     pub fn new(show_id: &str, epoch: Counter, revision: Counter) -> Result<Self> {
+        Self::with_dimensions(show_id, epoch, revision, 8, 2)
+    }
+    pub fn with_dimensions(
+        show_id: &str,
+        epoch: Counter,
+        revision: Counter,
+        inputs: usize,
+        monitors: usize,
+    ) -> Result<Self> {
+        crate::topology::EngineTopology::software(inputs, monitors, 0)?;
         if !canonical_show(show_id) || epoch.0 == 0 {
             return Err("identity".into());
         }
         let mut parameters = Vec::new();
-        for i in 1..=8 {
+        for i in 1..=inputs {
             let input = format!("input-{i:02}");
-            for (target, value) in [
+            let mut values = vec![
                 (
                     Target::Fader {
                         input: input.clone(),
@@ -361,21 +413,17 @@ impl Authority {
                     },
                     Value::Boolean(false),
                 ),
+            ];
+            values.extend((1..=monitors).map(|n| {
                 (
                     Target::Send {
                         input: input.clone(),
-                        monitor: "monitor-1".into(),
+                        monitor: format!("monitor-{n}"),
                     },
-                    Value::Integer(0),
-                ),
-                (
-                    Target::Send {
-                        input,
-                        monitor: "monitor-2".into(),
-                    },
-                    Value::Integer(-60000),
-                ),
-            ] {
+                    Value::Integer(if n == 1 { 0 } else { -60000 }),
+                )
+            }));
+            for (target, value) in values {
                 parameters.push(Parameter {
                     target,
                     actual: None,
@@ -400,12 +448,12 @@ impl Authority {
             parameters,
             automation_bounds: BTreeMap::new(),
             rendered_release: false,
-            modes: [
-                (Scope::Foh, Mode::Manual),
-                (Scope::Monitor1, Mode::Manual),
-                (Scope::Monitor2, Mode::Manual),
-            ]
-            .into(),
+            inputs,
+            monitors,
+            version: if inputs == 8 && monitors == 2 { 1 } else { 2 },
+            modes: std::iter::once((Scope::Foh, Mode::Manual))
+                .chain((1..=monitors).map(|n| (Scope::monitor(n), Mode::Manual)))
+                .collect(),
         })
     }
     pub(crate) fn observe_control_time(&mut self, now: u64) -> Result<()> {
@@ -470,6 +518,15 @@ impl Authority {
         now: u64,
         refusal: Option<&str>,
     ) -> Reply {
+        self.scoped_transaction(r, now, refusal, Scope::Foh)
+    }
+    pub(crate) fn scoped_transaction(
+        &mut self,
+        r: &Request,
+        now: u64,
+        refusal: Option<&str>,
+        scope: Scope,
+    ) -> Reply {
         if let Some(reason) = self.processing_identity(r, now) {
             return self.reply(r, "rejected", Some(reason));
         }
@@ -491,7 +548,7 @@ impl Authority {
         if number <= session.high {
             return self.reply(r, "rejected", Some("expired_id"));
         }
-        let reason = if session.scope != Scope::Foh {
+        let reason = if session.scope != scope {
             Some("scope")
         } else if r.expected_revision != Some(self.revision) {
             Some("stale_revision")
@@ -520,13 +577,59 @@ impl Authority {
         }
         reply
     }
+    pub(crate) fn set_wire_version(&mut self, version: u32) {
+        self.version = version;
+    }
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.inputs, self.monitors)
+    }
+    pub(crate) fn restore_parameters(&mut self, edits: &[Edit]) -> Result<()> {
+        let required = required_targets_for(self.inputs, self.monitors);
+        if edits.len() != required.len()
+            || edits
+                .iter()
+                .map(|e| e.target.clone())
+                .collect::<BTreeSet<_>>()
+                != required
+            || edits.iter().any(|e| !e.target.value_valid(&e.value))
+        {
+            return Err("intent parameter inventory".into());
+        }
+        for p in &mut self.parameters {
+            p.target_value = edits
+                .iter()
+                .find(|e| e.target == p.target)
+                .unwrap()
+                .value
+                .clone();
+            p.hold = None;
+            p.owner = None;
+            p.proposal = None;
+        }
+        Ok(())
+    }
+    pub fn revoke_all(&mut self) {
+        let writers: Vec<_> = self.sessions.keys().cloned().collect();
+        for w in writers {
+            self.revoke_writer(&w);
+        }
+    }
+    pub fn revoke_writer(&mut self, writer: &str) {
+        if self.sessions.remove(writer).is_some() {
+            self.retired.insert(writer.into());
+        }
+        self.previews.retain(|_, p| p.writer != writer);
+    }
     pub fn state(&self) -> (&[Parameter], &BTreeMap<Scope, Mode>) {
         (&self.parameters, &self.modes)
     }
     pub(crate) fn reply(&self, r: &Request, kind: &str, reason: Option<&str>) -> Reply {
         Reply {
             contract: "C-AUDIO".into(),
-            version: 1,
+            version: self.version,
             show_id: self.show.clone(),
             module: "audio".into(),
             epoch: self.epoch,
@@ -569,15 +672,17 @@ impl Authority {
             rendered_application: false,
             release_commit: false,
             session_history_capacity: SESSION_HISTORY_CAPACITY as u32,
-            inputs: (1..=8).map(|i| format!("input-{i:02}")).collect(),
-            monitors: vec!["monitor-1".into(), "monitor-2".into()],
+            inputs: (1..=self.inputs).map(|i| format!("input-{i:02}")).collect(),
+            monitors: (1..=self.monitors)
+                .map(|n| format!("monitor-{n}"))
+                .collect(),
             modes: self.modes.iter().map(|(s, m)| (*s, *m)).collect(),
             automation_bounds: self.automation_bounds.values().flatten().cloned().collect(),
             parameters: self.parameters.clone(),
         })
     }
     pub fn handle(&mut self, r: &Request, now_ms: u64) -> Reply {
-        if r.validate().is_err() {
+        if r.validate().is_err() || r.version != self.version {
             return self.reply(r, "rejected", Some("version"));
         }
         if r.show_id != self.show {
@@ -599,6 +704,12 @@ impl Authority {
                 }
                 Err(_) => self.reply(r, "rejected", Some("capacity")),
             };
+        }
+        if let Command::Grant { scope } = r.command
+            && !self.modes.contains_key(&scope)
+            && !(self.version == 2 && matches!(scope, Scope::PaConfiguration | Scope::OutputRoutes))
+        {
+            return self.reply(r, "rejected", Some("scope"));
         }
         let writer = r.writer.as_ref().expect("validated");
         if matches!(r.command, Command::Grant { .. }) && !self.sessions.contains_key(writer) {
@@ -725,6 +836,11 @@ impl Authority {
         Ok(())
     }
     fn execute(&mut self, r: &Request, scope: Scope, now: u64) -> Reply {
+        if matches!(scope, Scope::PaConfiguration | Scope::OutputRoutes)
+            && !matches!(r.command, Command::Renew {} | Command::Release {})
+        {
+            return self.reply(r, "rejected", Some("scope"));
+        }
         let writer = r.writer.as_ref().unwrap();
         match &r.command {
             Command::Renew {} => {
@@ -775,7 +891,7 @@ impl Authority {
                 p
             }
             Command::SetMode { mode, bounds } => {
-                if let Err(e) = validate_bounds(bounds) {
+                if let Err(e) = validate_bounds(bounds, self.inputs, self.monitors) {
                     return self.reply(r, "rejected", Some(&e));
                 }
                 if (*mode == Mode::Auto && bounds.is_empty())
@@ -939,16 +1055,20 @@ impl SnapshotPages {
         let count = p.page_count;
         self.pages.insert(p.page, p);
         if self.pages.len() == count as usize {
-            validate_inventory(self.pages.values().flat_map(|p| p.parameters.iter()))?;
+            validate_inventory(
+                self.pages.values().flat_map(|p| p.parameters.iter()),
+                self.pages.values().next().unwrap().inputs.len(),
+                self.pages.values().next().unwrap().monitors.len(),
+            )?;
             Ok(Some(self.pages.values().cloned().collect()))
         } else {
             Ok(None)
         }
     }
 }
-fn required_targets() -> BTreeSet<Target> {
+fn required_targets_for(inputs: usize, monitors: usize) -> BTreeSet<Target> {
     let mut targets = BTreeSet::new();
-    for i in 1..=8 {
+    for i in 1..=inputs {
         let input = format!("input-{i:02}");
         targets.insert(Target::Fader {
             input: input.clone(),
@@ -959,23 +1079,28 @@ fn required_targets() -> BTreeSet<Target> {
         targets.insert(Target::Mute {
             input: input.clone(),
         });
-        for monitor in ["monitor-1", "monitor-2"] {
+        for n in 1..=monitors {
+            let monitor = format!("monitor-{n}");
             targets.insert(Target::Send {
                 input: input.clone(),
-                monitor: monitor.into(),
+                monitor,
             });
         }
     }
     targets
 }
-fn validate_inventory<'a>(parameters: impl Iterator<Item = &'a Parameter>) -> Result<()> {
+fn validate_inventory<'a>(
+    parameters: impl Iterator<Item = &'a Parameter>,
+    inputs: usize,
+    monitors: usize,
+) -> Result<()> {
     let mut seen = BTreeSet::new();
     for p in parameters {
         if !seen.insert(p.target.clone()) {
             return Err("duplicate parameter".into());
         }
     }
-    if seen != required_targets() {
+    if seen != required_targets_for(inputs, monitors) {
         return Err("parameter inventory".into());
     }
     Ok(())
@@ -1008,20 +1133,33 @@ impl Snapshot {
         }
         let inputs: BTreeSet<_> = self.inputs.iter().cloned().collect();
         let monitors: BTreeSet<_> = self.monitors.iter().cloned().collect();
-        if self.inputs.len() != 8
-            || inputs != (1..=8).map(|i| format!("input-{i:02}")).collect()
-            || self.monitors.len() != 2
-            || monitors != ["monitor-1".to_owned(), "monitor-2".to_owned()].into()
+        if self.inputs.is_empty()
+            || self.inputs.len() > u16::MAX as usize
+            || inputs
+                != (1..=self.inputs.len())
+                    .map(|i| format!("input-{i:02}"))
+                    .collect()
+            || monitors
+                != (1..=self.monitors.len())
+                    .map(|i| format!("monitor-{i}"))
+                    .collect()
+            || monitors.len() != self.monitors.len()
         {
             return Err("channel inventory".into());
         }
-        if self.modes.len() != 3
-            || self.modes.iter().map(|(s, _)| *s).collect::<BTreeSet<_>>()
-                != [Scope::Foh, Scope::Monitor1, Scope::Monitor2].into()
+        let scopes: BTreeSet<_> = std::iter::once(Scope::Foh)
+            .chain((1..=self.monitors.len()).map(Scope::monitor))
+            .collect();
+        if self.modes.len() != scopes.len()
+            || self.modes.iter().map(|(s, _)| *s).collect::<BTreeSet<_>>() != scopes
         {
             return Err("modes".into());
         }
-        validate_bounds(&self.automation_bounds)?;
+        validate_bounds(
+            &self.automation_bounds,
+            self.inputs.len(),
+            self.monitors.len(),
+        )?;
         for (scope, mode) in &self.modes {
             let has_bounds = self
                 .automation_bounds
@@ -1031,10 +1169,10 @@ impl Snapshot {
                 return Err("automation bounds".into());
             }
         }
-        if self.parameters.len() > 40 {
+        if self.parameters.len() > self.inputs.len() * (3 + self.monitors.len()) {
             return Err("capacity".into());
         }
-        let allowed = required_targets();
+        let allowed = required_targets_for(self.inputs.len(), self.monitors.len());
         let mut seen = BTreeSet::new();
         for p in &self.parameters {
             if !allowed.contains(&p.target)
@@ -1052,7 +1190,11 @@ impl Snapshot {
             }
         }
         if self.page_count == 1 {
-            validate_inventory(self.parameters.iter())?;
+            validate_inventory(
+                self.parameters.iter(),
+                self.inputs.len(),
+                self.monitors.len(),
+            )?;
         }
         Ok(())
     }
@@ -1060,7 +1202,7 @@ impl Snapshot {
 impl Reply {
     pub fn validate(&self) -> Result<()> {
         if self.contract != "C-AUDIO"
-            || self.version != 1
+            || ![1, 2].contains(&self.version)
             || self.module != "audio"
             || !canonical_show(&self.show_id)
             || self.epoch.0 == 0
@@ -1109,6 +1251,7 @@ impl Reply {
             "unavailable",
             "capacity",
             "clock",
+            "configuration_failed",
         ];
         match self.kind.as_str() {
             "applied" if b.reason.is_none() => (),
@@ -1139,6 +1282,9 @@ impl Reply {
         }
         if let Some(s) = &b.snapshot {
             s.validate()?;
+            if self.version == 1 && (s.inputs.len() != 8 || s.monitors.len() != 2) {
+                return Err("legacy snapshot inventory".into());
+            }
             if s.show_id != self.show_id
                 || s.epoch != self.epoch
                 || s.revision != b.revision
@@ -1185,10 +1331,12 @@ impl Reply {
             {
                 return Err("preview".into());
             }
-            let allowed = required_targets();
             let mut seen = BTreeSet::new();
             for e in &p.destinations {
-                if !allowed.contains(&e.target)
+                if crate::processing_wire::input_index(e.target.input()).is_err()
+                    || (self.version == 1
+                        && crate::processing_wire::input_index(e.target.input())
+                            .is_ok_and(|i| i >= 8))
                     || !seen.insert(&e.target)
                     || e.target.scope() != Ok(p.scope)
                     || !e.target.value_valid(&e.value)
@@ -1201,11 +1349,11 @@ impl Reply {
         Ok(())
     }
 }
-fn validate_bounds(bounds: &[AutoBound]) -> Result<()> {
+fn validate_bounds(bounds: &[AutoBound], inputs: usize, monitors: usize) -> Result<()> {
     if bounds.len() > 64 {
         return Err("capacity".into());
     }
-    let allowed = required_targets();
+    let allowed = required_targets_for(inputs, monitors);
     let mut seen = BTreeSet::new();
     for b in bounds {
         if !allowed.contains(&b.target)

@@ -377,3 +377,14 @@ whole 48-frame packets and a wet budget at least as long as its capture period.
 This is a configurable admission allowance, separate from device buffering and
 any intentional delay in the effect. Previous measured budgets retain their
 original conditions and results.
+
+## Authenticated composed-engine successor
+
+The GP-REMOTE1 QUIC endpoint now binds actual C-AUDIO/processing/structural
+commands and GPA1 grouped media to paired peers and source/capability/map identity.
+The old GPC1 scalar test authority remains historical evidence, not this mixer
+endpoint. Real Brain SHR FX returns feed the same composed PA path. Fixed MTU,
+packet-group and queue limits remain transport resources rather than mixer caps.
+See [REMOTE_PROCESSING](REMOTE_PROCESSING.md) for trust, bounded framing,
+negotiation and failure semantics, and [acceptance](MODULAR_ENGINE_ACCEPTANCE.md)
+for software versus physical validation.

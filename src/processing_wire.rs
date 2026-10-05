@@ -45,7 +45,7 @@ impl ProcessingRequest {
     pub fn authority_request(&self) -> Request {
         Request {
             contract: "C-AUDIO".into(),
-            version: 1,
+            version: if self.version == 3 { 2 } else { 1 },
             show_id: self.show_id.clone(),
             module: self.module.clone(),
             epoch: self.epoch,
@@ -63,18 +63,21 @@ impl ProcessingRequest {
     pub(crate) fn history_request(&self) -> Request {
         let mut r = self.authority_request();
         r.contract = CONTRACT.into();
-        r.version = 2;
+        r.version = self.version;
         r
     }
     pub fn context(&self) -> RequestContext {
         RequestContext::request(&self.authority_request())
     }
     pub fn validate(&self) -> Result<()> {
-        if self.contract != CONTRACT || self.version != 2 {
+        if self.contract != CONTRACT || ![2, 3].contains(&self.version) {
             return Err("version".into());
         }
         self.authority_request().encode()?;
         if let ProcessingCommand::ProcessingSet { input, config } = &self.command {
+            if self.version == 2 && input_index(input)? >= 8 {
+                return Err("target".into());
+            }
             input_index(input)?;
             config.validate()?;
         }
@@ -98,7 +101,7 @@ impl ProcessingRequest {
                 "body",
             ],
         )?;
-        if v["contract"] != CONTRACT || v["version"].as_u64() != Some(2) {
+        if v["contract"] != CONTRACT || !matches!(v["version"].as_u64(), Some(2 | 3)) {
             return Err("version".into());
         }
         let r: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;
@@ -119,6 +122,12 @@ pub struct UnsupportedRequest {
 }
 impl UnsupportedRequest {
     pub fn decode(bytes: &[u8]) -> Result<Option<Self>> {
+        Self::decode_for(bytes, 2)
+    }
+    pub fn decode_for(bytes: &[u8], supported_version: u32) -> Result<Option<Self>> {
+        if ![2, 3].contains(&supported_version) {
+            return Err("provider version".into());
+        }
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
         struct Outer {
@@ -176,7 +185,7 @@ impl UnsupportedRequest {
             command,
         };
         authority.encode()?;
-        if o.version == 2 {
+        if o.version == supported_version {
             return Ok(None);
         }
         Ok(Some(Self {
@@ -193,17 +202,15 @@ impl UnsupportedRequest {
     }
 }
 pub fn input_index(input: &str) -> Result<usize> {
-    match input {
-        "input-01" => Ok(0),
-        "input-02" => Ok(1),
-        "input-03" => Ok(2),
-        "input-04" => Ok(3),
-        "input-05" => Ok(4),
-        "input-06" => Ok(5),
-        "input-07" => Ok(6),
-        "input-08" => Ok(7),
-        _ => Err("target".into()),
+    let n = input
+        .strip_prefix("input-")
+        .and_then(|s| s.parse::<u16>().ok())
+        .filter(|&n| n > 0)
+        .ok_or("target")?;
+    if input != format!("input-{n:02}") {
+        return Err("target".into());
     }
+    Ok(usize::from(n) - 1)
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -248,7 +255,8 @@ impl ProcessingSnapshot {
             || self.sample_rate != 48000
             || self.foh_tap != FOH_TAP
             || self.monitor_tap != MONITOR_TAP
-            || self.channels.len() != 8
+            || self.channels.is_empty()
+            || self.channels.len() > u16::MAX as usize
         {
             return Err("processing snapshot".into());
         }
@@ -298,7 +306,7 @@ impl ProcessingReply {
     ) -> Self {
         Self {
             contract: CONTRACT.into(),
-            version: 2,
+            version: r.version,
             context: r.context(),
             state: state.into(),
             reason,
@@ -310,7 +318,7 @@ impl ProcessingReply {
         }
     }
     pub fn validate(&self) -> Result<()> {
-        if self.contract != CONTRACT || self.version != 2 {
+        if self.contract != CONTRACT || ![2, 3].contains(&self.version) {
             return Err("version".into());
         }
         self.context.validate()?;
@@ -350,6 +358,9 @@ impl ProcessingReply {
             "final" if self.reason.is_none() => {
                 let s = self.snapshot.as_ref().ok_or("snapshot")?;
                 s.validate()?;
+                if self.version == 2 && s.channels.len() != 8 {
+                    return Err("legacy inventory".into());
+                }
                 if s.show_id != self.context.show_id
                     || s.epoch != self.context.epoch
                     || s.revision != self.revision
@@ -376,7 +387,11 @@ impl ProcessingReply {
         Ok(())
     }
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let v: serde_json::Value = crate::show::decode(bytes)?;
+        Self::decode_assembled(bytes)
+    }
+    pub fn decode_assembled(bytes: &[u8]) -> Result<Self> {
+        let v: serde_json::Value =
+            crate::show::decode_bounded(bytes, crate::snapshot_pages::ASSEMBLY_BYTES)?;
         keys(
             &v,
             &[

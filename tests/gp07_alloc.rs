@@ -74,3 +74,103 @@ fn process_error_and_fault_paths_do_not_allocate_or_deallocate() {
         assert_eq!(result.is_err(), kind != 2);
     }
 }
+
+#[test]
+fn configurable_profiles_have_no_render_allocation_or_retirement() {
+    for n in [16, 17, 32, 48] {
+        let mut m = Mixer::from_topology(
+            0,
+            gigpies::topology::EngineTopology::software(n, 5, 0).unwrap(),
+        )
+        .unwrap();
+        let config = gigpies::channel_processing::Config {
+            eq_bypass: false,
+            band4_gain_mdb: 6000,
+            compressor_bypass: false,
+            ratio_milli: 4000,
+            ..Default::default()
+        };
+        m.schedule(
+            gigpies::mixer::Prepared::processing_for(
+                n,
+                5,
+                n - 1,
+                gigpies::channel_processing::Prepared::new(config).unwrap(),
+            )
+            .unwrap(),
+            1,
+        )
+        .unwrap();
+        let input = vec![0.5; 1024 * n];
+        let mut output = vec![0.; 1024 * 7];
+        EVENTS.with(|n| n.set(0));
+        ACTIVE.with(|a| a.set(true));
+        let result = m.process_interleaved(&input, &mut output);
+        ACTIVE.with(|a| a.set(false));
+        assert!(result.is_ok());
+        assert_eq!(EVENTS.with(Cell::get), 0);
+        m.take_completion();
+    }
+}
+
+#[test]
+fn expanded_raw_analysis_queue_is_bounded_and_allocation_free() {
+    use gigpies::analysis_stream::{RawDescriptor, RawTap};
+    let descriptor = RawDescriptor::new(
+        14,
+        0,
+        1,
+        (1..=48).map(|i| format!("input-{i:02}")).collect(),
+    )
+    .unwrap();
+    let (mut tap, _consumer) = RawTap::new(&descriptor, 48).unwrap();
+    let raw = vec![123; 48 * 48];
+    EVENTS.with(|n| n.set(0));
+    ACTIVE.with(|a| a.set(true));
+    let a = tap.offer(14, 0, &raw, 48);
+    let b = tap.offer(14, 48, &raw, 48);
+    let c = tap.offer(14, 96, &raw, 48);
+    ACTIVE.with(|a| a.set(false));
+    assert!(a.is_ok() && b.is_ok() && c.is_ok());
+    assert_eq!(tap.dropped_blocks, 1);
+    assert_eq!(EVENTS.with(Cell::get), 0);
+}
+
+#[test]
+fn output_patch_swap_and_pending_fault_retirement_do_not_allocate() {
+    let topology = gigpies::topology::EngineTopology::software(16, 3, 0).unwrap();
+    let mut mixer = Mixer::from_topology(0, topology.clone()).unwrap();
+    let mut outputs = topology.outputs.clone();
+    outputs[0].source = None;
+    let mut prepared = mixer.prepare_output_patch(outputs).unwrap();
+    mixer.quiesce();
+    EVENTS.with(|n| n.set(0));
+    ACTIVE.with(|a| a.set(true));
+    let applied = mixer.apply_output_patch(&mut prepared);
+    ACTIVE.with(|a| a.set(false));
+    assert!(applied.is_ok());
+    assert_eq!(EVENTS.with(Cell::get), 0);
+    mixer.rearm().unwrap();
+    mixer
+        .schedule(
+            gigpies::mixer::Prepared::edits_for(
+                16,
+                3,
+                &[gigpies::control_model::Edit {
+                    target: gigpies::control_model::Target::Mute {
+                        input: "input-16".into(),
+                    },
+                    value: gigpies::control_model::Value::Boolean(true),
+                }],
+            )
+            .unwrap(),
+            1,
+        )
+        .unwrap();
+    EVENTS.with(|n| n.set(0));
+    ACTIVE.with(|a| a.set(true));
+    mixer.quiesce();
+    ACTIVE.with(|a| a.set(false));
+    assert_eq!(EVENTS.with(Cell::get), 0);
+    mixer.take_completion();
+}

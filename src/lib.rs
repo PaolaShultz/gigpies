@@ -43,3 +43,14 @@ pub mod module_wire;
 pub mod channel_processing;
 /// Strict GP07 processing extension.
 pub mod processing_wire;
+
+pub mod topology;
+
+pub mod clock_domain;
+
+pub mod remote;
+
+pub mod snapshot_pages;
+
+/// Explicit PA/physical patch controls using the same authority and boundary.
+pub mod structural_control;

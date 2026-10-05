@@ -103,3 +103,18 @@ take. These are runtime corrections; the accepted status envelope stays unchange
 Cancellation during preparation publishes `finalizing` before handing the ready
 raw recorder to its finish worker. A concurrent progress observation cannot turn
 that cancelled operation into host recording readiness or a completed start reply.
+
+## Configurable owner composition
+
+The graph now admits configured raw track dimensions, retaining unchanged REC v1
+limits explicitly. Actual raw strips feed REC before processing. Prepared SHR PA
+v2 supplies independent output ports, stereo3-way/stereo4-way and weighted routing
+nodes. Program-bus indices are explicit: FOH0/1 include actual dry+wet summation;
+2+ are monitors. Owner JSON, capabilities, status and bus mapping are read back.
+No speaker DSP is duplicated in GigPies. v1 remains available for legacy callers.
+
+Runtime PA changes prepare owner state and host buffers off render, commit at the
+shared source boundary while quiesced, retain both old allocations, and retire on
+the controller. Fresh-epoch recovery restores configuration intent muted. Actual
+remote wet blocks (including absent-peer silence) suppress local FX fallback.
+See [composition](MODULAR_PROCESSING.md) and its acceptance matrix.

@@ -154,7 +154,13 @@ impl Manifest {
 
 /// Reject duplicate keys (including nested ones) before typed deserialization.
 pub(crate) fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T> {
-    if bytes.len() > 65536 {
+    decode_bounded(bytes, 65536)
+}
+pub(crate) fn decode_bounded<T: serde::de::DeserializeOwned>(
+    bytes: &[u8],
+    max_bytes: usize,
+) -> Result<T> {
+    if bytes.len() > max_bytes {
         return Err("capacity".into());
     }
     struct Checked;
@@ -245,6 +251,14 @@ pub(crate) fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T> 
 /// Trusted caller supplies an owned private directory and simple filename.
 /// Failure after rename reports uncertain durability; it never claims rollback.
 pub(crate) fn persist<T: Serialize>(directory: &Path, name: &str, value: &T) -> Result<()> {
+    persist_bounded(directory, name, value, 65536)
+}
+pub(crate) fn persist_bounded<T: Serialize>(
+    directory: &Path,
+    name: &str,
+    value: &T,
+    max_bytes: usize,
+) -> Result<()> {
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
     if !id(name) {
         return Err("filename".into());
@@ -257,7 +271,7 @@ pub(crate) fn persist<T: Serialize>(directory: &Path, name: &str, value: &T) -> 
         return Err("owned 0700 directory required".into());
     }
     let bytes = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
-    if bytes.len() > 65536 {
+    if bytes.len() > max_bytes {
         return Err("capacity".into());
     }
     let mut temp = None;

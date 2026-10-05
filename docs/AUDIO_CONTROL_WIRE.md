@@ -143,3 +143,32 @@ are wrong_show, version, epoch, lease, scope, target, range, stale_revision,
 reused_id, expired_id, unavailable, capacity and clock. Conflict is specifically
 stale_revision; busy is scope or capacity. Strict typed provider decoding checks
 these combinations; clients also enforce request-specific correlation.
+
+## Configurable authority — C-AUDIO:2
+
+The same authority now derives input/monitor inventories from validated topology.
+C-AUDIO2 preserves request correlation, global revision, exact retry history,
+writer/lease fencing, shared processing IDs and boundary revalidation. C-AUDIO1
+is restricted to the explicitly selected `legacy8-2` profile; an 8/2 dimension
+alone does not imply legacy compatibility. Unsupported versions never truncate
+an expanded inventory. Historical v1 fixture bytes remain unchanged.
+
+FOH and `monitor1`/`monitor2` scopes retain their encoding. Additional scopes use
+`{"monitor":N}` for N>=3; their send target is `monitor-N`. `pa_configuration`
+and `output_routes` are separate permissions. Their grants permit lease lifecycle
+commands but do not permit ordinary strip parameters, automation modes or holds.
+Structural commands use the same authority through a prepared external
+transaction, with exact body fingerprints, shared request-ID history, one pending
+transaction, strict next48-frame boundary and revision increment only on success.
+A disconnected/revoked remote writer cannot retain queued work. Four simultaneous
+writers is a declared control-resource policy, separate from monitor capacity;
+64 outcomes per live writer and1024 session identities remain bounded.
+
+Persisted `EngineIntent:1` stores topology/map identity, semantic parameter targets
+and complete channel processing. It cannot store grants, pending requests or armed
+state. Restore validates the whole inventory and resource budget before returning
+an engine, always disarmed. Restore against a different advertised topology refuses
+with an explicit remap requirement. New source epochs increment map revision and
+retain intent while discarding sessions and pending requests. Atomic private-file
+persistence reuses the existing owned0700-directory/temporary-file/rename path with
+a oneMiB intent bound. PA intent is composed separately by the module owner.

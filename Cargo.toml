@@ -19,6 +19,13 @@ socket2 = "=0.6.5"
 alsa = { version = "=0.11.0", optional = true }
 libloading = { version = "=0.7.4", optional = true }
 libc = "=0.2.189"
+quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "=0.23.45", default-features = false, features = ["std", "ring"] }
+tokio = { version = "=1.53.2", features = ["rt", "macros", "time", "sync", "io-util"] }
+bytes = "=1.12.1"
+
+[dev-dependencies]
+rcgen = { version = "=0.14.10", default-features = false, features = ["crypto", "ring"] }
 
 [features]
 hardware-host = ["dep:alsa", "dep:libloading"]
@@ -26,6 +33,11 @@ hardware-host = ["dep:alsa", "dep:libloading"]
 [[bin]]
 name = "gigpies-hardware"
 path = "src/bin/hardware.rs"
+required-features = ["hardware-host"]
+
+[[bin]]
+name = "gigpies-remote"
+path = "src/bin/remote.rs"
 required-features = ["hardware-host"]
 
 [profile.release]

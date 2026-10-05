@@ -327,7 +327,9 @@ fn independent_scope_client_cannot_modify_foh_and_lease_expiry_keeps_graph() {
             .as_deref(),
         Some("scope")
     );
-    let before = s.snapshot().unwrap().coefficients[0].ramp_target_nanogain;
+    let before = s.snapshot().unwrap().coefficients[0]
+        .ramp_target_nanogain
+        .clone();
     let expired = request("monitor", Command::Renew {}, 3, 0, Some(l));
     assert_eq!(
         monitor

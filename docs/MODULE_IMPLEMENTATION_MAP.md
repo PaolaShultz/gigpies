@@ -275,3 +275,13 @@ Actual CPU native channel/review rendering passes exact pixel comparisons at
 1920×1080, 960×540, 540×960 and 3840×2160, plus zero-size suspension.
 These checks establish software acceptance only; physical and combined-load gates
 remain separate.
+
+## Configurable composition successor
+
+The current implementation seams are `topology`/`clock_domain`, the evolved
+`mixer`/`mixer_control`, `structural_control`/`local_audio`, actual owner loading in
+`module_graph`/`host::pa_v2`/`host::brain_fx`, and authenticated `remote` workers.
+`host::duplex` feeds this same graph from an explicitly accepted raw device;
+`gigpies-remote` provides a finite synthetic host. SHR Desk consumes explicit
+successor schemas, including paged snapshots, and owns operator presentation.
+See [composition](MODULAR_PROCESSING.md) and [acceptance](MODULAR_ENGINE_ACCEPTANCE.md).

@@ -161,6 +161,18 @@ impl Tap {
         raw: &[[i32; 8]; 48],
         produced_mono_ms: u64,
     ) -> Result<(), &'static str> {
+        self.offer_interleaved(frame, raw.as_flattened(), 8, produced_mono_ms)
+    }
+    pub fn offer_interleaved(
+        &mut self,
+        frame: u64,
+        raw: &[i32],
+        inputs: usize,
+        produced_mono_ms: u64,
+    ) -> Result<(), &'static str> {
+        if inputs == 0 || raw.len() != inputs * 48 || self.mapping.iter().any(|&i| i >= inputs) {
+            return Err("tap shape");
+        }
         if frame != self.frame {
             self.count = 0;
             return Err("tap timeline");
@@ -175,7 +187,7 @@ impl Tap {
         let next_frame = frame.checked_add(48).ok_or("frame exhausted")?;
         let next_sequence = self.sequence.checked_add(1).ok_or("sequence exhausted")?;
         let mut samples = [0; 192];
-        for (f, inputs) in raw.iter().enumerate() {
+        for (f, inputs) in raw.chunks_exact(inputs).enumerate() {
             for (c, &input) in self.mapping.iter().enumerate() {
                 samples[f * 4 + c] = inputs[input];
             }
@@ -302,5 +314,175 @@ impl WindowCursor {
         self.last_now = Some(now);
         self.last_produced = Some(produced);
         Ok(w)
+    }
+}
+
+/// Raw selected-input stream separate from the unchanged four-name Lux adapter.
+/// Four PCM24 channels per GPA1 packet, including a smaller final group. Each
+/// whole 48-frame source block enters a two-block queue atomically or is dropped.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawDescriptor {
+    pub version: u32,
+    pub source_epoch: crate::show::Counter,
+    pub first_frame: crate::show::Counter,
+    pub map_revision: crate::show::Counter,
+    pub inputs: Vec<String>,
+    pub tap: String,
+}
+impl RawDescriptor {
+    pub fn new(
+        epoch: u64,
+        frame: u64,
+        map: u64,
+        inputs: Vec<String>,
+    ) -> Result<Self, &'static str> {
+        let d = Self {
+            version: 2,
+            source_epoch: crate::show::Counter(epoch),
+            first_frame: crate::show::Counter(frame),
+            map_revision: crate::show::Counter(map),
+            inputs,
+            tap: "raw-pre-fader".into(),
+        };
+        d.validate()?;
+        Ok(d)
+    }
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.version != 2
+            || self.source_epoch.0 == 0
+            || self.map_revision.0 == 0
+            || !self.first_frame.0.is_multiple_of(48)
+            || self.tap != "raw-pre-fader"
+            || self.inputs.is_empty()
+            || self.inputs.len() > 256
+        {
+            return Err("raw descriptor exceeds GPA1 stream channel domain (256)");
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for id in &self.inputs {
+            if crate::processing_wire::input_index(id).is_err() || !seen.insert(id) {
+                return Err("raw input identity");
+            }
+        }
+        Ok(())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct RawPacket {
+    pub bytes: [u8; PACKET_BYTES],
+    pub length: u16,
+    pub map_revision: u64,
+}
+pub struct RawTap {
+    mapping: Vec<usize>,
+    specs: Vec<StreamSpec>,
+    frame: u64,
+    sequence: u32,
+    map_revision: u64,
+    output: Producer<RawPacket>,
+    pub dropped_blocks: u64,
+}
+impl RawTap {
+    pub fn new(
+        descriptor: &RawDescriptor,
+        source_inputs: usize,
+    ) -> Result<(Self, Consumer<RawPacket>), &'static str> {
+        descriptor.validate()?;
+        let mapping: Vec<_> = descriptor
+            .inputs
+            .iter()
+            .map(|s| crate::processing_wire::input_index(s).unwrap())
+            .collect();
+        if mapping.iter().any(|&i| i >= source_inputs) {
+            return Err("raw map outside topology");
+        }
+        let mut specs = Vec::new();
+        for first in (0..mapping.len()).step_by(4) {
+            let spec = StreamSpec {
+                session: descriptor.source_epoch.0,
+                stream: 4,
+                first_channel: first as u16,
+                channels: (mapping.len() - first).min(4) as u16,
+                frames: 48,
+                encoding: Encoding::Pcm24,
+                role: Role::Analysis,
+                delay_frames: 0,
+            };
+            spec.validate().map_err(|_| "raw stream admission")?;
+            specs.push(spec);
+        }
+        let (output, input) = RingBuffer::new(specs.len() * 2);
+        Ok((
+            Self {
+                mapping,
+                specs,
+                frame: descriptor.first_frame.0,
+                sequence: 0,
+                map_revision: descriptor.map_revision.0,
+                output,
+                dropped_blocks: 0,
+            },
+            input,
+        ))
+    }
+    pub fn offer(
+        &mut self,
+        epoch: u64,
+        frame: u64,
+        raw: &[i32],
+        source_inputs: usize,
+    ) -> Result<(), &'static str> {
+        if source_inputs == 0
+            || raw.len() != source_inputs * 48
+            || self.mapping.iter().any(|&i| i >= source_inputs)
+            || epoch != self.specs[0].session
+            || frame != self.frame
+        {
+            return Err("raw source identity/shape");
+        }
+        if raw.iter().any(|v| !(-8_388_608..=8_388_607).contains(v)) {
+            return Err("raw PCM24");
+        }
+        let next = frame.checked_add(48).ok_or("raw frame exhausted")?;
+        let seq = self
+            .sequence
+            .checked_add(1)
+            .ok_or("raw sequence exhausted")?;
+        if self.output.slots() < self.specs.len() {
+            self.dropped_blocks = self.dropped_blocks.saturating_add(1);
+            self.frame = next;
+            self.sequence = seq;
+            return Ok(());
+        }
+        for spec in &self.specs {
+            let mut samples = [0; 192];
+            let count = usize::from(spec.channels);
+            for f in 0..48 {
+                for c in 0..count {
+                    samples[f * count + c] =
+                        raw[f * source_inputs + self.mapping[usize::from(spec.first_channel) + c]];
+                }
+            }
+            let mut packet = RawPacket {
+                bytes: [0; PACKET_BYTES],
+                length: 0,
+                map_revision: self.map_revision,
+            };
+            packet.length = spec
+                .encode_pcm(
+                    frame,
+                    self.sequence,
+                    &samples[..48 * count],
+                    &mut packet.bytes,
+                )
+                .map_err(|_| "raw packet")? as u16;
+            if self.output.push(packet).is_err() {
+                return Err("raw queue invariant");
+            }
+        }
+        self.frame = next;
+        self.sequence = seq;
+        Ok(())
     }
 }

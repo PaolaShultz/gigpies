@@ -468,3 +468,13 @@ counts, reproduction and remaining physical/remote gates are in
 [execution checkpoint](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04).
 The complete Python suite now passes 39 checks, including the publication-guard
 Rust-attribute regression; runtime source and accepted release hashes are unchanged.
+
+## Configurable increment superseding GP-03's shape
+
+The original eight-strip GP-03 milestone is preserved as compatibility evidence.
+It is not a product ceiling. The 2026-10-05 modular composition includes configurable
+strips/monitors/output maps, actual SHR PA v2, shared authority/clock recovery,
+authenticated Brain control/media and dynamic Desk. Its requirement-to-code/test
+acceptance is maintained in [MODULAR_ENGINE_ACCEPTANCE](MODULAR_ENGINE_ACCEPTANCE.md).
+Physical UMC1820/ADA8200 socket/clock and graph deadline qualification are distinct
+next acceptance work, not implied by 16/32/48-input software tests.

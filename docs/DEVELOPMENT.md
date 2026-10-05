@@ -299,3 +299,30 @@ bell reference checks the full EQ-only timeline, including crossfades, all four
 band controls, crossed frequencies and bypass; neutral/bypass are bit exact.
 The same source drives independent actual FX wet-plus-dry -> PA comparisons. It checks recording
 coverage and retained settings after the driver exits and the lease expires.
+
+## Configurable processing and remote integration
+
+The `hardware-host` feature also exposes the shared multichannel `host::duplex`
+adapter and explicitly configured synthetic `gigpies-remote` provider/Brain runner.
+Neither starts by default or qualifies a physical device. See
+[composition and mapping](MODULAR_PROCESSING.md), [remote transport](REMOTE_TRANSPORT.md)
+and the [acceptance matrix](MODULAR_ENGINE_ACCEPTANCE.md).
+
+Serialize all local Rust validation through the parent-held nonblocking lock:
+
+```sh
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --all-targets
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --all-targets --features hardware-host
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.97.1 clippy --locked -j1 --all-targets --features hardware-host -- -D warnings
+```
+
+A busy lock means defer the command. `modular_engine`, `structural_control`,
+`gp07_alloc` and remote unit regressions belong in the normal production suite.
+`modular_owners`, `module_graph_pa_v2` and `structural_producer` explicitly require
+trusted independently built owner artifacts: set `GP05_MANIFEST`,
+`GP_PA_V2_FIXTURES` and `GP14_PA_FIXTURES`, plus a private `GP14_PRODUCER_DIR`
+for producer output, then run the selected test with `--features hardware-host`
+and `-- --ignored` under the same lock. Do not make untrusted library loading
+or generated acceptance artifacts implicit in CI. Tests document their exact
+required inputs. Actual cross-node checks require a bounded reservation on both
+hosts; physical PCM remains a separate authorization and acceptance step.

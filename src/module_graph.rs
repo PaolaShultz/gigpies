@@ -117,7 +117,7 @@ pub struct RecordingStatus {
     pub operation_id: Counter,
     pub source_epoch: Counter,
     pub first_source_frame: Option<Counter>,
-    pub mapping: [String; 8],
+    pub mapping: Vec<String>,
     pub state: String,
     pub outcome: String,
     pub accepted_frames: Counter,
@@ -136,7 +136,7 @@ pub struct RecordingStatus {
 pub struct Configuration {
     pub sample_rate: u32,
     pub block_frames: u32,
-    pub raw_inputs: [String; 8],
+    pub raw_inputs: Vec<String>,
     pub fx_mix: String,
     pub pa_inputs: u32,
     pub pa_outputs: u32,
@@ -152,6 +152,14 @@ pub struct FxHealth {
 pub struct PaHealth {
     pub descriptor: PaDescriptor,
     pub status: PaStatus,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaHealthV2 {
+    pub capabilities: crate::host::pa_v2::Capabilities,
+    pub status: crate::host::pa_v2::Status,
+    pub configuration_json: String,
+    pub program_buses: Vec<usize>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -178,6 +186,8 @@ pub struct ModuleStatus {
     pub libraries: BTreeMap<String, LibraryIdentity>,
     pub fx: Option<FxHealth>,
     pub pa: Option<PaHealth>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pa_v2: Option<PaHealthV2>,
     pub recording: Option<RecordingStatus>,
 }
 impl ModuleStatus {
@@ -199,6 +209,7 @@ impl ModuleStatus {
             libraries: BTreeMap::new(),
             fx: None,
             pa: None,
+            pa_v2: None,
             recording: None,
         }
     }
@@ -225,6 +236,28 @@ pub enum ProcessError {
     Fx(i32),
     Pa(i32),
 }
+struct PaStorage {
+    input: Vec<f64>,
+    output: Vec<f64>,
+    configuration_json: String,
+    program_buses: Vec<usize>,
+    total_buses: usize,
+}
+/// Controller-owned transaction; retain this wrapper until outside rendering,
+/// including on refusal. The owner allocation and buffers are prepared offRT.
+pub struct GraphPaPrepared {
+    owner: crate::host::pa_v2::Prepared,
+    initial: Option<crate::host::pa_v2::Pa>,
+    storage: Option<PaStorage>,
+    expected_generation: u64,
+    expected_epoch: u64,
+    expected_library_sha256: String,
+}
+impl GraphPaPrepared {
+    pub fn output_channels(&self) -> usize {
+        self.storage.as_ref().map_or(0, |s| s.output.len() / FRAMES)
+    }
+}
 pub struct ModuleGraph {
     manifest: Manifest,
     fx: Dsp,
@@ -237,12 +270,28 @@ pub struct ModuleGraph {
     next: u64,
     wet: [f64; FRAMES * 2],
     sum: [f64; FRAMES * 2],
-    raw: [f64; FRAMES * 8],
+    raw: Vec<f64>,
     output: [f64; FRAMES * 6],
     last_poll: Option<u64>,
+    inputs: usize,
+    pa_v2: Option<crate::host::pa_v2::Pa>,
+    pa_storage: Option<PaStorage>,
+    pa_retired_storage: Option<PaStorage>,
+    pa_hold: bool,
 }
 impl ModuleGraph {
     pub fn load(manifest: Manifest, epoch: u64, frame: u64) -> Result<Self> {
+        Self::load_configured(manifest, epoch, frame, 8)
+    }
+    pub fn load_configured(
+        manifest: Manifest,
+        epoch: u64,
+        frame: u64,
+        inputs: usize,
+    ) -> Result<Self> {
+        if inputs == 0 || inputs > 64 {
+            return Err("REC owner ABI admits 1..64 raw tracks".into());
+        }
         manifest.verify()?;
         if epoch == 0 || !frame.is_multiple_of(FRAMES as u64) {
             return Err("graph timeline".into());
@@ -271,20 +320,49 @@ impl ModuleGraph {
             next: frame,
             wet: [0.; FRAMES * 2],
             sum: [0.; FRAMES * 2],
-            raw: [0.; FRAMES * 8],
+            raw: vec![0.; FRAMES * inputs],
             output: [0.; FRAMES * 6],
             last_poll: None,
+            inputs,
+            pa_v2: None,
+            pa_storage: None,
+            pa_retired_storage: None,
+            pa_hold: false,
         })
     }
     /// Off callback, whole-boundary quiescence. Recreates PA and resets FX. An
     /// active take remains under its original epoch and is marked incomplete.
     pub fn discontinuity(&mut self, epoch: u64, frame: u64) -> Result<()> {
+        if (self.pa_v2.is_some() || self.inputs != 8) && epoch <= self.epoch {
+            return Err("fresh module source epoch required".into());
+        }
         if epoch == 0 || !frame.is_multiple_of(48) {
             return Err("graph timeline".into());
         }
         let pa = Dsp::load(&self.manifest.pa.library, "pa", 48).map_err(|e| e.to_string())?;
+        // Controller-side recovery prepares first; a refusal preserves old state.
+        let recovered_v2 = if let Some(storage) = &self.pa_storage {
+            Some(
+                crate::host::pa_v2::Pa::load(
+                    &self.manifest.pa.library,
+                    storage.configuration_json.as_bytes(),
+                    epoch,
+                    frame,
+                )
+                .map_err(|e| e.to_string())?,
+            )
+        } else {
+            None
+        };
         self.fx.reset();
         self.pa = pa;
+        self.retire_pa_changes();
+        self.pa_v2 = recovered_v2;
+        self.pa_hold = self.pa_hold || self.pa_v2.is_some() || self.inputs != 8;
+        if let Some(storage) = &mut self.pa_storage {
+            storage.input.fill(0.);
+            storage.output.fill(0.);
+        }
         if let Some(t) = &mut self.take
             && (self.lifecycle.is_some() || t.recorder.is_some())
         {
@@ -313,12 +391,45 @@ impl ModuleGraph {
         raw: &[[f64; 8]; FRAMES],
         mixed: &[[f64; 4]; FRAMES],
     ) -> std::result::Result<(), ProcessError> {
+        self.process_interleaved(
+            epoch,
+            frame,
+            raw.as_flattened(),
+            mixed.as_flattened(),
+            4,
+            None,
+        )
+    }
+    pub fn process_interleaved(
+        &mut self,
+        epoch: u64,
+        frame: u64,
+        raw: &[f64],
+        mixed: &[f64],
+        buses: usize,
+        external_wet: Option<&[f64]>,
+    ) -> std::result::Result<(), ProcessError> {
         self.output.fill(0.);
+        if let Some(storage) = &mut self.pa_storage {
+            storage.output.fill(0.);
+        }
+        if raw.len() != FRAMES * self.inputs
+            || buses < 2
+            || buses.checked_mul(FRAMES) != Some(mixed.len())
+            || external_wet.is_some_and(|w| w.len() != FRAMES * 2)
+            || self
+                .pa_storage
+                .as_ref()
+                .is_some_and(|s| buses < s.total_buses)
+        {
+            self.mark_source_fault(7);
+            return Err(ProcessError::Source);
+        }
         if epoch != self.epoch || frame != self.next || frame.checked_add(48).is_none() {
             self.mark_source_fault(6);
             return Err(ProcessError::Timeline);
         }
-        if raw.iter().flatten().any(|v| {
+        if raw.iter().any(|v| {
             !v.is_finite()
                 || *v < -1.
                 || *v > 8_388_607. / 8_388_608.
@@ -328,8 +439,9 @@ impl ModuleGraph {
             return Err(ProcessError::Source);
         }
         for i in 0..FRAMES {
-            self.raw[i * 8..i * 8 + 8].copy_from_slice(&raw[i]);
-            self.sum[i * 2..i * 2 + 2].copy_from_slice(&mixed[i][..2]);
+            self.raw[i * self.inputs..(i + 1) * self.inputs]
+                .copy_from_slice(&raw[i * self.inputs..(i + 1) * self.inputs]);
+            self.sum[i * 2..i * 2 + 2].copy_from_slice(&mixed[i * buses..i * buses + 2]);
         }
         if let Some(t) = &mut self.take
             && t.status.state == "recording"
@@ -337,16 +449,44 @@ impl ModuleGraph {
         {
             let _ = r.push(frame, &self.raw);
         }
-        let fx = self.fx.process_result(&self.sum, &mut self.wet, 2);
+        let fx = if let Some(wet) = external_wet {
+            self.wet.copy_from_slice(wet);
+            0
+        } else {
+            self.fx.process_result(&self.sum, &mut self.wet, 2)
+        };
         if fx != 0 {
             self.wet.fill(0.);
         }
         for i in 0..FRAMES * 2 {
             self.sum[i] += self.wet[i];
         }
-        let pa = self.pa.process_result(&self.sum, &mut self.output, 6);
+        let pa = if let (Some(pa), Some(storage)) = (&mut self.pa_v2, &mut self.pa_storage) {
+            let count = storage.program_buses.len();
+            for i in 0..FRAMES {
+                for (channel, &bus) in storage.program_buses.iter().enumerate() {
+                    // Main buses include the actual wet return before owner
+                    // summing/crossover/protection; monitor buses remain explicit.
+                    storage.input[i * count + channel] = if bus < 2 {
+                        self.sum[i * 2 + bus]
+                    } else {
+                        mixed[i * buses + bus]
+                    };
+                }
+            }
+            pa.process(&storage.input, &mut storage.output, epoch, frame)
+        } else {
+            let result = self.pa.process_result(&self.sum, &mut self.output, 6);
+            if self.pa_hold {
+                self.output.fill(0.);
+            }
+            result
+        };
         if pa != 0 {
             self.output.fill(0.);
+            if let Some(storage) = &mut self.pa_storage {
+                storage.output.fill(0.);
+            }
         }
         self.next += 48;
         self.processed = self.processed.saturating_add(1);
@@ -373,6 +513,212 @@ impl ModuleGraph {
             worker.cancel_code = code;
         }
     }
+    pub fn quiesce_source(&mut self) -> Result<()> {
+        self.mark_source_fault(6);
+        self.mute_pa()?;
+        if let Some(t) = &mut self.take {
+            if let Some(worker) = &mut self.lifecycle {
+                worker.cancel_code = 6;
+            } else if let Some(mut recorder) = t.recorder.take() {
+                t.status.state = "finalizing".into();
+                recorder.fault(6);
+                self.finish_worker(recorder)?;
+            }
+        }
+        Ok(())
+    }
+    /// Initial convenience only: before processing, prepare stereo program
+    /// buses. Runtime changes must use the retained boundary transaction below.
+    pub fn configure_pa_v2(&mut self, json: &[u8]) -> Result<()> {
+        if self.processed != 0 || self.pa_v2.is_some() {
+            return Err("initial PA configuration requires an unprocessed legacy graph".into());
+        }
+        let mut prepared = self.prepare_pa_change(json, vec![0, 1], 2)?;
+        let result = self.commit_pa_change(&mut prepared, self.epoch, self.next);
+        if result != 0 {
+            return Err(format!("initial PA commit {result}"));
+        }
+        self.retire_pa_changes();
+        Ok(())
+    }
+    /// OffRT preparation; validates real owner shape and allocates every new
+    /// interleaved buffer before a structural change reaches the worker.
+    pub fn prepare_pa_change(
+        &self,
+        json: &[u8],
+        program_buses: Vec<usize>,
+        total_buses: usize,
+    ) -> Result<GraphPaPrepared> {
+        if self.pa_retired_storage.is_some() {
+            return Err("PA retirement reservation occupied".into());
+        }
+        if total_buses < 2
+            || program_buses.is_empty()
+            || program_buses.iter().any(|&b| b >= total_buses)
+        {
+            return Err("PA program bus reference".into());
+        }
+        let initial = if self.pa_v2.is_none() {
+            Some(
+                crate::host::pa_v2::Pa::open(&self.manifest.pa.library)
+                    .map_err(|e| e.to_string())?,
+            )
+        } else {
+            None
+        };
+        let pa = self
+            .pa_v2
+            .as_ref()
+            .or(initial.as_ref())
+            .ok_or("PA unavailable")?;
+        let owner = pa.prepare(json).map_err(|e| e.to_string())?;
+        let status = owner
+            .status()
+            .map_err(|e| format!("prepared PA status {e}"))?;
+        if status.version != 2
+            || status.size != 80
+            || status.committed != 0
+            || status.sample_rate != 48000
+            || status.max_block < FRAMES as u32
+            || status.input_channels as usize != program_buses.len()
+            || status.output_channels == 0
+        {
+            return Err("prepared PA dimensions/rate/block mismatch".into());
+        }
+        let input_samples = program_buses
+            .len()
+            .checked_mul(FRAMES)
+            .ok_or("PA input buffer overflow")?;
+        let output_samples = (status.output_channels as usize)
+            .checked_mul(FRAMES)
+            .ok_or("PA output buffer overflow")?;
+        let configuration_json = std::str::from_utf8(json)
+            .map_err(|e| e.to_string())?
+            .to_owned();
+        let generation = self
+            .pa_v2
+            .as_ref()
+            .map(|p| p.status().map(|s| s.generation))
+            .transpose()
+            .map_err(|e| format!("active PA status {e}"))?
+            .unwrap_or(0);
+        Ok(GraphPaPrepared {
+            owner,
+            initial,
+            storage: Some(PaStorage {
+                input: vec![0.; input_samples],
+                output: vec![0.; output_samples],
+                configuration_json,
+                program_buses,
+                total_buses,
+            }),
+            expected_generation: generation,
+            expected_epoch: self.epoch,
+            expected_library_sha256: self.manifest.pa.library_sha256.clone(),
+        })
+    }
+    /// Actual boundary: no allocation/free/Arc change. Retires both old owner
+    /// state and host buffers; the caller retains `prepared` off the RT path.
+    pub fn commit_pa_change(
+        &mut self,
+        prepared: &mut GraphPaPrepared,
+        epoch: u64,
+        frame: u64,
+    ) -> i32 {
+        if prepared.storage.is_none()
+            || prepared.expected_library_sha256 != self.manifest.pa.library_sha256
+        {
+            return -1;
+        }
+        if self.pa_retired_storage.is_some() {
+            return -3;
+        }
+        if epoch != self.epoch || epoch != prepared.expected_epoch || frame != self.next {
+            return -4;
+        }
+        if self.source_fault != 0 {
+            return -2;
+        }
+        if let Some(pa) = &self.pa_v2 {
+            let status = match pa.status() {
+                Ok(s) => s,
+                Err(e) => return e,
+            };
+            if status.generation != prepared.expected_generation {
+                return -4;
+            }
+        } else if self.processed != 0 && !self.pa_hold {
+            return -3;
+        }
+        let result = if let Some(pa) = &mut self.pa_v2 {
+            pa.commit(&mut prepared.owner, epoch, frame)
+        } else if let Some(pa) = &mut prepared.initial {
+            pa.commit(&mut prepared.owner, epoch, frame)
+        } else {
+            return -1;
+        };
+        if result != 0 {
+            return result;
+        }
+        if self.pa_v2.is_none() {
+            self.pa_v2 = prepared.initial.take();
+        }
+        self.pa_retired_storage = self.pa_storage.take();
+        self.pa_storage = prepared.storage.take();
+        self.pa_hold = true;
+        0
+    }
+    /// Controller-only retirement, including old host vectors/configuration.
+    pub fn retire_pa_changes(&mut self) {
+        if let Some(pa) = &mut self.pa_v2 {
+            pa.retire();
+        }
+        self.pa_retired_storage = None;
+    }
+    pub fn mute_pa(&mut self) -> Result<()> {
+        if let Some(pa) = &mut self.pa_v2 {
+            let result = pa.mute();
+            if result != 0 {
+                return Err(format!("PA mute {result}"));
+            }
+        }
+        self.pa_hold = true;
+        Ok(())
+    }
+    pub fn pa_configuration_json(&self) -> Option<&str> {
+        self.pa_storage
+            .as_ref()
+            .map(|s| s.configuration_json.as_str())
+    }
+    pub fn pa_program_buses(&self) -> &[usize] {
+        self.pa_storage
+            .as_ref()
+            .map_or(&[], |s| s.program_buses.as_slice())
+    }
+    pub fn pa_v2_capabilities(&self) -> Option<crate::host::pa_v2::Capabilities> {
+        self.pa_v2.as_ref().map(|p| p.capabilities())
+    }
+    pub fn pa_v2_status(&self) -> Option<std::result::Result<crate::host::pa_v2::Status, i32>> {
+        self.pa_v2.as_ref().map(|p| p.status())
+    }
+    pub fn rearm_pa(&mut self) -> Result<()> {
+        if self.source_fault != 0 {
+            return Err("source fault requires fresh epoch before PA rearm".into());
+        }
+        if let Some(pa) = &mut self.pa_v2 {
+            let r = pa.rearm(self.epoch, self.next);
+            if r != 0 {
+                return Err(format!("PA rearm {r}"));
+            }
+        }
+        self.pa_hold = false;
+        Ok(())
+    }
+    pub fn output_interleaved(&self) -> &[f64] {
+        self.pa_storage
+            .as_ref()
+            .map_or(&self.output, |s| s.output.as_slice())
+    }
     pub fn output(&self) -> &[f64; FRAMES * 6] {
         &self.output
     }
@@ -391,13 +737,14 @@ impl ModuleGraph {
         let path = root.join(take_id);
         let library = self.manifest.rec.library.clone();
         let epoch = self.epoch;
+        let channels = self.inputs;
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
         let thread = std::thread::Builder::new()
             .name("gp05-rec-prepare".into())
             .spawn(move || {
                 let prepared = (|| {
-                    let mut r =
-                        Recorder::create(&library, &path, 48, epoch).map_err(|e| e.to_string())?;
+                    let mut r = Recorder::create_configured(&library, &path, 48, epoch, channels)
+                        .map_err(|e| e.to_string())?;
                     let observer = r.observer().map_err(|e| e.to_string())?;
                     Ok((r, observer))
                 })();
@@ -409,7 +756,9 @@ impl ModuleGraph {
             operation_id,
             source_epoch: Counter(self.epoch),
             first_source_frame: None,
-            mapping: std::array::from_fn(|i| format!("input-{:02}/raw", i + 1)),
+            mapping: (0..self.inputs)
+                .map(|i| format!("input-{:02}/raw", i + 1))
+                .collect(),
             state: "preparing".into(),
             outcome: "pending".into(),
             accepted_frames: Counter(0),
@@ -598,10 +947,15 @@ impl ModuleGraph {
         status.configuration = Some(Configuration {
             sample_rate: 48000,
             block_frames: 48,
-            raw_inputs: std::array::from_fn(|i| format!("input-{:02}/raw", i + 1)),
+            raw_inputs: (0..self.inputs)
+                .map(|i| format!("input-{:02}/raw", i + 1))
+                .collect(),
             fx_mix: "dry-plus-fixed-wet".into(),
-            pa_inputs: 2,
-            pa_outputs: 6,
+            pa_inputs: self.pa_v2.as_ref().map_or(2, |p| p.input_channels() as u32),
+            pa_outputs: self
+                .pa_v2
+                .as_ref()
+                .map_or(6, |p| p.output_channels() as u32),
         });
         for (owner, a) in [
             ("rec", &self.manifest.rec),
@@ -627,15 +981,32 @@ impl ModuleGraph {
             capabilities: self.fx.fx_capabilities().map_err(|e| e.to_string())?,
             status: self.fx.fx_status().map_err(|e| e.to_string())?,
         });
-        status.pa = Some(PaHealth {
-            descriptor: self.pa.pa_descriptor().map_err(|e| e.to_string())?,
-            status: self.pa.pa_status().map_err(|e| e.to_string())?,
-        });
+        if let (Some(pa), Some(storage)) = (&self.pa_v2, &self.pa_storage) {
+            status.version = 2;
+            status.pa_v2 = Some(PaHealthV2 {
+                capabilities: pa.capabilities(),
+                status: pa.status().map_err(|e| format!("PA status {e}"))?,
+                configuration_json: storage.configuration_json.clone(),
+                program_buses: storage.program_buses.clone(),
+            });
+        } else {
+            status.pa = Some(PaHealth {
+                descriptor: self.pa.pa_descriptor().map_err(|e| e.to_string())?,
+                status: self.pa.pa_status().map_err(|e| e.to_string())?,
+            });
+        }
+        if self.inputs != 8 {
+            status.version = 2;
+        }
         status.source_fault = self.source_fault;
         status.readiness = if status
             .pa
             .as_ref()
             .is_some_and(|p| p.status.fault_latched != 0)
+            || status
+                .pa_v2
+                .as_ref()
+                .is_some_and(|p| p.status.fault_latched != 0)
         {
             "faulted"
         } else if self.source_fault != 0
@@ -645,6 +1016,8 @@ impl ModuleGraph {
                 .is_some_and(|f| f.status.last_process_result != 0)
         {
             "degraded"
+        } else if self.pa_hold || status.pa_v2.as_ref().is_some_and(|p| p.status.muted != 0) {
+            "muted"
         } else {
             "ready"
         }
