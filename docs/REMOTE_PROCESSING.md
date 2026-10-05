@@ -36,3 +36,11 @@ The provider begins muted; operator authority controls patch/PA/rearm. Both node
 must reserve any functional network run. Tests and qualification are recorded in
 [acceptance](MODULAR_ENGINE_ACCEPTANCE.md); no network test proves physical-clock
 lock or full-show realtime capacity.
+
+The 16/32/48 software profiles have passed actual two-Pi operator, grouped analysis,
+owner FX, REC and Brain loss/restart acceptance. Use an optimized Desk build for
+the measured larger profiles; debug decode cost can exceed the unchanged250 ms
+freshness fence and is refused safely. The finite Brain runner queues close but
+does not await transport drain before process exit, so its peer may retain media
+ownership until the 2 s idle timeout. Reconnect never steals an occupied media role;
+accepted recovery requires a fresh session and observed old-owner retirement.

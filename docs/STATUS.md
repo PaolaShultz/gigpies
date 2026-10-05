@@ -1,5 +1,29 @@
 # Status and next steps
 
+## Configurable modular processing — 2026-10-05
+
+The shared Mixer/Authority now admits configured strip and monitor counts, explicit
+transport/socket/signal maps, larger versioned readback, durable source recovery
+and separately scoped prepared PA/output transactions. Actual owner-native PA v2,
+raw REC, Brain FX and authenticated QUIC media use the same LocalAudio source path.
+
+Software and actual two-Pi acceptance passed for 16, 32 and 48 inputs, plus a 17-input
+nonfixture regression. Desk performed real PA configuration/weighted routing,
+physical-model patch changes and all 24 EQ/compressor controls on inputs 16, 17, 32,
+33 and 48. Independent sample checks covered every REC/analysis input, PA gain/phase
+relationships, silent unassigned outputs and dry/protected output through Brain
+loss/restart. CPU-headless native presentation and complete production suites pass.
+The [acceptance matrix](MODULAR_ENGINE_ACCEPTANCE.md) records exact scope, failures,
+validation classes and measured resource observations.
+
+The 16-input/18-output reference starts unpatched and models the noncontiguous
+manufacturer USB layout. No UMC1820/ADA8200 was attached or activated. Actual socket
+mapping, hardware monitoring, shared ADAT clock/lock and hardware deadlines remain
+separate physical acceptance. Neither profile size nor the UI bank is a product cap.
+See [composition](MODULAR_PROCESSING.md) and [authenticated protocol](REMOTE_TRANSPORT.md).
+
+The dated milestones below retain their original narrower scopes and evidence.
+
 ## Channel processing — 2026-10-05
 
 The first GP-07 slice adds [FOH channel EQ and dynamics](CHANNEL_PROCESSING.md)
@@ -621,22 +645,3 @@ and exact full exports/clips at 24–36 and 90–102 seconds. Five other example
 their settings. New listener acceptance remains pending; no playback or publication.
 See [audit, settings, decisions and limits](COMPLAINIACS_REASSESSMENT.md). Private
 listening index: `artifacts/automix/complainiacs-reassessment-v1/LISTEN.md`.
-
-## 2026-10-05 configurable modular processing increment
-
-Implementation evolves the same Mixer/Authority to admitted strip and monitor
-counts, explicit transport/socket/signal mappings, versioned larger readback,
-durable source recovery and separately scoped prepared PA/output transactions.
-Actual owner-native PA v2, dynamic raw REC, Brain FX and authenticated QUIC media
-are composed by the same LocalAudio source path. No UMC1820/ADA8200 was attached
-or activated; manufacturer mapping remains unverified and reference outputs start
-unpatched. Physical lock and hardware deadlines remain separate acceptance.
-
-Focused actual-owner checks and executed producer fixtures cover 16/32/48 inputs;
-17 is an additional software shape. Every admitted strip, high-channel four-band
-EQ/compression, six/eight PA allocation examples, weighted4×8 owner routing,
-prepared ownership, failed changes, source recovery and remote revocation have
-focused regression evidence. Full integration/publication and actual Desk/two-Pi
-acceptance are tracked in [the requirement matrix](MODULAR_ENGINE_ACCEPTANCE.md);
-do not treat these focused results as a completed hardware or deployment claim.
-See [composition](MODULAR_PROCESSING.md) and [authenticated protocol](REMOTE_TRANSPORT.md).
