@@ -144,7 +144,7 @@ revoke grants and cancel pending work. Recovery requires a fresh epoch and expli
 rearm. Software fault injection does not establish physical converter lock.
 
 Resources disclose estimated render memory/work, the deployment budget, conservative
-snapshot size, oneMiB assembly capacity, four live writers and64 cached outcomes per
+snapshot size, oneMiB assembly capacity, 16 live writers and64 cached outcomes per
 writer. Admission checks arithmetic before provisioning; capacity errors never
 reduce the requested topology. The default render budget is64MiB and16Mi sample
 operations per maximum block, accounting for strip/send work rather than promising

@@ -1,5 +1,27 @@
 # Status and next steps
 
+## Control-capacity and CI review fixes — 2026-10-06
+
+Shared authority now admits 16 live writers under a named deployment resource bound,
+matching the transport session budget. The six documented controller scopes can
+coexist; focused coverage fills all slots, refuses the next grant without eviction,
+maintains existing leases and recovers capacity after expiry. This is offline
+validation, not a new network-load or physical acceptance campaign.
+
+CI now checks default and hardware-host builds, normal tests, Clippy and release
+compilation. Hardware-host includes authenticated permission/replay/lease-expiry,
+held-proof and committed paired-readback regressions; physical activation and
+external owner-artifact campaigns remain opt-in. See [transport](REMOTE_TRANSPORT.md)
+and [development](DEVELOPMENT.md).
+
+Local offline validation: **391 default / 466 hardware-host tests passed**,
+with 15/30 opt-ins intentionally skipped. Both warning-denied Clippy
+configurations, formatting and 39 Python tests passed. Reproduce with
+`CARGO_INCREMENTAL=0 cargo test --locked -j1 --all-targets`, then the same command
+with `--features hardware-host`, under the shared build lock. Historical, physical,
+external-artifact and explicit rendering campaigns were not run. No publication
+or physical/native-window activation was performed.
+
 ## Brain local duplex audio — software validated, 2026-10-06
 
 Brain owns one duplex sound card for talkback and operator listening, crossing a

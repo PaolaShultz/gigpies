@@ -25,6 +25,15 @@ alongside both workers. This is a reviewed resource limit, not an input-channel,
 monitor-bus or universal product capacity. A seventeenth connection is refused
 without evicting existing sessions; dropping a session returns its permit.
 
+The shared authority admits at most 16 simultaneous live writers, matching the
+transport deployment budget. This includes FOH, operator-monitor, talkback-destination,
+talkback-FOH and two independently scoped performer controllers concurrently.
+Local and remote writers share this budget; authenticated admission is still not a
+grant. Each live writer has bounded replay/maintenance state, and the separate
+1024-session lifetime history bound remains unchanged. A seventeenth live writer
+is refused without eviction; expired writers return live capacity. Topology and
+scope permissions remain independently validated.
+
 Per session, QUIC permits one bidirectional control stream and no unidirectional
 streams, bounds receive/send windows to 65540 bytes and each datagram direction
 to 256 × 1232 bytes. Authority handoff reserves 16 commands, 128 completions,

@@ -27,6 +27,12 @@ CARGO_INCREMENTAL=0 cargo build --locked --release --features hardware-host --bi
 frame ownership and bounded metric reporting. Historical studies and the opt-in
 socket test retain their existing classification.
 
+CI runs the normal offline checks, warning-denied Clippy, tests and release build
+in both default and `hardware-host` configurations. The feature job installs ALSA
+build headers but opens no physical devices. Held-proof and atomic-control producer
+regressions are included; ignored owner-artifact, physical and historical campaigns
+remain explicit opt-ins (no `--ignored` in CI).
+
 ## Synthetic transport validation
 
 `src/transport/` owns packet/control contracts and bounded worker handoffs; see

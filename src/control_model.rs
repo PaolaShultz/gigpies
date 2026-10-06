@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 pub const LEASE_MS: u64 = 2000;
+/// Bounded live authority/replay state: one writer per transport session budget.
+/// This is a deployment resource limit, not a monitor/topology limit.
+pub const MAX_LIVE_WRITERS: usize = 16;
 pub const SESSION_HISTORY_CAPACITY: usize = 1024;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -846,7 +849,7 @@ impl Authority {
                 .filter(|(_, s)| s.expires <= now_ms)
                 .map(|(w, _)| w.clone())
                 .collect();
-            if self.sessions.len() - expired.len() >= 4 {
+            if self.sessions.len() - expired.len() >= MAX_LIVE_WRITERS {
                 return self.reply(r, "busy", Some("capacity"));
             }
             let Some(next) = self.next_lease.checked_add(1) else {
@@ -1568,7 +1571,7 @@ mod tests {
                 .is_some()
             );
             assert_eq!(a.previews.len(), 1);
-            assert!(a.sessions.len() <= 4);
+            assert!(a.sessions.len() <= MAX_LIVE_WRITERS);
             assert_eq!(a.sessions.len() + a.retired.len(), i + 1);
         }
         let parameters = a.parameters.clone();
@@ -1665,6 +1668,80 @@ mod atomic_maintenance_tests {
             lease,
         };
         (a, m)
+    }
+    #[test]
+    fn concurrent_controller_grants_maintain_and_refuse_capacity_without_eviction() {
+        let (_, template) = setup(0);
+        // Start with the exact six-controller deployment, then fill independent scopes.
+        let mut scopes = vec![
+            Scope::Foh,
+            Scope::LocalOperatorMonitor,
+            Scope::TalkbackDestinations,
+            Scope::TalkbackFoh,
+            Scope::Monitor1,
+            Scope::Monitor2,
+        ];
+        scopes.extend([Scope::PaConfiguration, Scope::OutputRoutes]);
+        scopes.extend((3..=11).map(Scope::Monitor));
+        let mut a = Authority::with_dimensions(SHOW, Counter(1), Counter(0), 16, 11).unwrap();
+        let mut leases = Vec::new();
+        for (i, scope) in scopes.iter().take(MAX_LIVE_WRITERS).enumerate() {
+            let writer = format!("controller-{i}");
+            let grant = Request {
+                contract: "C-AUDIO".into(),
+                version: 2,
+                show_id: SHOW.into(),
+                module: "audio".into(),
+                epoch: Counter(1),
+                writer: Some(writer.clone()),
+                lease: None,
+                request_id: Some(Counter(1)),
+                expected_revision: Some(a.revision),
+                command: Command::Grant { scope: *scope },
+            };
+            let lease = a
+                .handle(&grant, 0)
+                .body
+                .granted_lease
+                .expect("independent grant");
+            leases.push(Maintenance {
+                writer,
+                lease,
+                scope: *scope,
+                ..template.clone()
+            });
+        }
+        let revision = a.revision;
+        let parameters = a.parameters.clone();
+        let overflow = Request {
+            contract: "C-AUDIO".into(),
+            version: 2,
+            show_id: SHOW.into(),
+            module: "audio".into(),
+            epoch: Counter(1),
+            writer: Some("overflow".into()),
+            lease: None,
+            request_id: Some(Counter(1)),
+            expected_revision: Some(revision),
+            command: Command::Grant {
+                scope: scopes[MAX_LIVE_WRITERS],
+            },
+        };
+        let reply = a.handle(&overflow, 1);
+        assert_eq!(reply.kind, "busy");
+        assert_eq!(reply.body.reason.as_deref(), Some("capacity"));
+        assert_eq!(a.sessions.len(), MAX_LIVE_WRITERS);
+        assert_eq!(a.revision, revision);
+        assert_eq!(a.parameters, parameters);
+        for (id, now) in [(1, 1000), (2, 2500)] {
+            for lease in &mut leases {
+                lease.maintenance_id = Counter(id);
+                a.maintain_lease(lease, now, 48 * id, false).unwrap();
+            }
+        }
+        assert_eq!(a.sessions.len(), MAX_LIVE_WRITERS);
+        // Expiry returns capacity; admission never evicts a live writer.
+        assert!(a.handle(&overflow, 4500).body.granted_lease.is_some());
     }
     #[test]
     fn atomic_maintenance_overflow_replay_and_context_do_not_mutate_lease() {

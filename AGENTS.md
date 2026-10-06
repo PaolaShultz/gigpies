@@ -10,6 +10,25 @@ are developed in `../shr-pa`, with the finished PA module intended for integrati
 here. Keep module tasks and algorithms in their owning project; avoid parallel
 implementations in GigPies. Track integration and hardware acceptance separately.
 
+## Product capacity and clock direction
+
+The processing engine includes modular PA processing, alongside channel DSP,
+mixing, buses, recording and transport. Include the owning PA module when a task
+requires PA behavior; repository boundaries do not remove that product requirement.
+The reference UMC1820 + ADA8200 setup targets 16 analog inputs and 18 analog outputs
+at 48 kHz. Sixteen inputs is the minimum product target; 32 and 48 are growth
+targets, not ceilings or claims of current hardware qualification. The original
+output plan has flexible PA/monitor allocation, including six/eight PA outputs
+and future matrix arrangements; do not hard-code a product monitor count.
+Derive runtime dimensions from validated configuration and advertised capabilities.
+Keep finite, justified realtime/resource/protocol bounds, but never promote a test
+fixture, UI bank, legacy ABI or implementation slice into a universal product cap.
+Use the soundcard clock as the reference and keep the ADAT expansion and all audio
+paths on the same clock domain/source-frame timeline. A clock-source picker is not
+required. Distinguish proven physical synchronization from software timing tests.
+
+## Implementation and publication
+
 Use Rust 1.97.1, edition 2024, and committed Cargo.lock. Keep sibling repositories
 read-only unless the user explicitly authorizes changes there. Avoid path dependencies.
 Distinguish planned, implemented, offline-validated and hardware-verified behavior.

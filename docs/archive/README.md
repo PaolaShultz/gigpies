@@ -1,5 +1,12 @@
 # Document archive
 
+- Original execution briefs for completed software milestones: [channel processing](CHANNEL_PROCESSING_EXECUTION_PROMPT.md),
+  [four-band EQ](FOUR_BAND_PARAMETRIC_EQ_EXECUTION_PROMPT.md),
+  [modular processing](MODULAR_PROCESSING_ENGINE_EXECUTION_PROMPT.md) and
+  [Brain audio](BRAIN_AUDIO_EXECUTION_PROMPT.md). These preserve the original
+  requirements, not active task instructions. See [current status](../STATUS.md)
+  and the owning acceptance records for delivered scope and remaining physical gates.
+
 - [Before Brain duplex integration](brain-audio-before-2026-10-05/ARCHITECTURE.md):
   preserved architecture, diagram, component/console plans and modular-processing,
   transport and development documents before the two-clock correction. Relative links retain their original
