@@ -1,0 +1,20 @@
+name: CI incident notifications
+description: Notify once on CI failure and explicitly close the incident on recovery.
+inputs:
+  token:
+    description: Repository token with actions read, contents read and issues write.
+    required: true
+  recipient:
+    description: GitHub login to notify about failures and recoveries.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Reconcile current CI result
+      shell: bash
+      env:
+        CI_ALERT_TOKEN: ${{ inputs.token }}
+        CI_ALERT_RECIPIENT: ${{ inputs.recipient }}
+        CI_ALERT_ACTION_PATH: ${{ github.action_path }}
+        PYTHONDONTWRITEBYTECODE: '1'
+      run: python3 "$CI_ALERT_ACTION_PATH/notify.py"

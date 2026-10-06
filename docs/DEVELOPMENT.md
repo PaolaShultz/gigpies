@@ -354,3 +354,5 @@ change. Actual owner-library acceptance in `brain_owners` is likewise explicit:
 provide a hash-verified `GP05_MANIFEST` and `GP14_PA_FIXTURES`, then run that target
 with `--features hardware-host -- --ignored`. Nothing downloads owner artifacts or
 media. Full normal default/hardware suites remain required for shared changes.
+
+[CI failure/recovery alerts](CI_ALERTS.md) track default-branch incidents in GitHub issue threads.

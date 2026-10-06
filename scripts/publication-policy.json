@@ -26,6 +26,7 @@
   "scripts": [
     ".githooks/pre-commit",
     ".githooks/pre-push",
+    ".github/actions/ci-alerts/notify.py",
     "scripts/analyze_mix.py",
     "scripts/balance_excerpts.py",
     "scripts/bass_evidence.py",
@@ -38,6 +39,7 @@
     "scripts/snare_bleed_evidence.py",
     "scripts/snare_context.py",
     "scripts/snare_temporal_evidence.py",
+    "scripts/test_ci_alerts.py",
     "scripts/test_delivery_checkpoint.py",
     "scripts/test_ensemble_review.py",
     "scripts/test_listening_checkpoint.py",

@@ -14,6 +14,7 @@ Put one-off session/render runners and generated results under ignored `artifact
 | `snare_bleed_evidence.py`, `snare_temporal_evidence.py` | Opt-in saved-evidence audits; no processing selection or playback |
 | `play_pair.py` | Explicit two-clip playback with preflight; never run by normal tests with a real player |
 | `check_publication.py` | Git index/outgoing-history checks for private/generated content |
+| `../.github/actions/ci-alerts/notify.py`, `test_ci_alerts.py` | Shared GitHub CI failure/recovery notifier and isolated API regressions; see [CI alerts](../docs/CI_ALERTS.md) |
 | `test_*.py` | Fast synthetic regressions; normal suite, no physical audio devices |
 
 `analysis-requirements.txt` contains optional plotting/analysis dependencies.
