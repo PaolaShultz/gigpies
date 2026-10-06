@@ -29,7 +29,7 @@
 <text x="66" y="782" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">SHR PA: speaker processor.</text>
 <rect x="864" y="146" width="534" height="664" rx="16" fill="#201d2f" stroke="#806b9d"/>
 <text x="888" y="184" font-size="21" fill="#bb9fee" font-weight="bold" text-anchor="start">BRAIN / SHOW NODE</text>
-<text x="888" y="214" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">One Brain · independent processes and input</text>
+<text x="888" y="214" font-size="17" fill="#9dadc2" font-weight="normal" text-anchor="start">One duplex card · independent local audio clock</text>
 <rect x="888" y="246" width="229" height="146" rx="10" fill="#111e2e" stroke="#48d8e7"/>
 <text x="902" y="274" font-size="15" fill="#48d8e7" font-weight="bold" text-anchor="start">AUDIO CONSOLE</text>
 <text x="902" y="309" font-size="23" fill="#eff5ff" font-weight="normal" text-anchor="start">SHR Desk</text>
@@ -51,16 +51,16 @@
 <text x="906" y="657" font-size="18" fill="#eff5ff" font-weight="normal" text-anchor="start">Fixture evaluation · cues · lighting effects</text>
 <text x="906" y="688" font-size="17" fill="#eff5ff" font-weight="normal" text-anchor="start">Arbitration · output policy · physical output</text>
 <text x="906" y="716" font-size="16" fill="#9dadc2" font-weight="normal" text-anchor="start">Lightdesk sends requests; Lux owns execution.</text>
-<text x="888" y="776" font-size="18" fill="#ffc078" font-weight="normal" text-anchor="start">MANUAL / ASSIST / explicitly bounded AUTO</text>
+<text x="888" y="776" font-size="18" fill="#ffc078" font-weight="normal" text-anchor="start">Local mic → talkback · listen → local output</text>
 <path d="M510 333H846" stroke="#48d8e7" stroke-width="2" fill="none" marker-end="url(#cyan-arrow)"/>
-<text x="678" y="304" font-size="17" fill="#48d8e7" font-weight="normal" text-anchor="middle">Source audio / FX sends</text>
+<text x="678" y="304" font-size="17" fill="#48d8e7" font-weight="normal" text-anchor="middle">Source / FX / operator listen</text>
 <text x="678" y="325" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">+ status</text>
 <text x="678" y="378" font-size="15" fill="#eff5ff" font-weight="bold" text-anchor="middle">DEDICATED ETHERNET</text>
 <path d="M846 445H510" stroke="#ffc078" stroke-width="2" fill="none" marker-end="url(#amber-arrow)"/>
-<text x="678" y="477" font-size="17" fill="#ffc078" font-weight="normal" text-anchor="middle">Wet FX / acknowledged</text>
+<text x="678" y="477" font-size="17" fill="#ffc078" font-weight="normal" text-anchor="middle">Wet FX / talkback /</text>
 <text x="678" y="501" font-size="17" fill="#ffc078" font-weight="normal" text-anchor="middle">audio control / status</text>
-<text x="678" y="564" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">Lighting control remains</text>
-<text x="678" y="587" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">a distinct engine contract.</text>
+<text x="678" y="564" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">Talkback + listen use ASRC</text>
+<text x="678" y="587" font-size="15" fill="#9dadc2" font-weight="normal" text-anchor="middle">FX retains Stagebox frames.</text>
 <path d="M1132 810v30" stroke="#ffc078" stroke-width="2" fill="none" marker-end="url(#amber-arrow)"/>
 <rect x="864" y="850" width="534" height="57" rx="10" fill="#282230" stroke="#ffc078"/>
 <text x="1131" y="886" font-size="20" fill="#ffc078" font-weight="normal" text-anchor="middle">Lighting interface → patched fixtures</text>

@@ -1,6 +1,6 @@
 # Brain consoles: SHR Desk and SHR Lightdesk
 
-Updated 2026-10-04. **GigPies is the complete system with both an audio console
+Updated 2026-10-06. **GigPies is the complete system with both an audio console
 and a lighting console for human operation.** Automation is one operating mode
 inside each console. The intended Brain has **two 1920×1080 monitors and two
 independently assigned MIDI keyboard controllers**, normally one pairing for
@@ -11,16 +11,54 @@ The preceding single-surface integration draft is preserved
 [unchanged](archive/brain-console-before-lightdesk-2026-10-04.md); the earlier
 [pre-Desk plan](archive/brain-console-before-shr-desk-2026-10-04.md) also remains.
 
+## Brain sound-card ownership
+
+Alongside the two consoles, Brain has one local duplex sound card: microphone
+capture for talkback and playback for operator monitoring. GigPies owns both
+directions in one device process; SHR Desk exposes setup, selection and safety
+state through the existing authority/client layers. The card model, physical
+channel map and hardware monitoring settings require actual observation.
+Brain local I/O has a distinct device clock, bridged in both directions to the
+Stagebox reference. Brain FX continues to follow Stagebox source frames.
+See [Brain audio integration](BRAIN_AUDIO.md); the earlier console plan is
+[preserved](archive/brain-audio-before-2026-10-05/BRAIN_CONSOLE_PLAN.md).
+
 ## Current software checkpoint
 
-The subsequent [integrated milestone](HEADLESS_INTEGRATION.md) implements the
-eight-input local mixer, actual owner-library graph, named analysis, Lux null-output
-authority and both provider-backed native frontends. Process-held role leases use
-injected descriptors. Physical displays/controllers, fixture output and combined
-load remain unverified. The foundation assessment and backlog below are preserved
-as the original planning baseline; use the
+The [local integrated milestone](HEADLESS_INTEGRATION.md) established the initial
+eight-input mixer, owner-library graph, named analysis, Lux null-output authority
+and both provider-backed native frontends. The later
+[modular engine acceptance](MODULAR_ENGINE_ACCEPTANCE.md) covers configurable
+16/32/48-input software processing and authenticated source-clock FX/analysis.
+Task0015 implements Brain's separate duplex endpoint, two ASRC crossings and
+operator controls; [integrated Brain acceptance](BRAIN_AUDIO_ACCEPTANCE.md) remains
+in progress. Process-held role leases use injected descriptors. Physical
+displays/controllers, fixture output and combined console load remain unverified.
+The foundation assessment and backlog below are preserved as the original planning
+baseline; use the
 [implementation map](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
 for completed tasks and remaining gates.
+
+## Retained screen references — 2026-10-06
+
+The development-PC reference collections are integrated on both Pis. They add
+manufacturer screen images, per-screen observations, source/version notes, local
+HTML galleries and hash-pinned manifests. They are design evidence; they do not
+change either console's implemented UI or establish physical operation.
+
+| Owner | Reference collection | Questions it helps answer |
+|---|---|---|
+| SHR Desk | [12 audio-console screens](https://github.com/PaolaShultz/shr-desk/tree/main/docs/console-screen-reference) from Yamaha, Allen & Heath, Soundcraft and DiGiCo | Bank versus selected-channel detail, exact EQ/dynamics units, physical/logical patching and clear PFL/AFL destination context. |
+| SHR Lightdesk | [16 lighting-console screens](https://github.com/PaolaShultz/shr-lightdesk/tree/main/docs/console-screen-reference) from MA, ChamSys, Avolites, Onyx and ETC | Stable fixture identity, capability-aware columns, programmer versus output state, colour/phaser controls and cue/playback context. |
+
+Future layouts should preserve selection and focus as separate states, identify the
+current destination/value layer, and distinguish a requested edit from applied,
+held or measured state. Exact units belong beside precise controls; dense overview
+screens need a readable selected-detail view. These are design hypotheses to test
+against the owning screen plans and actual capabilities, not new implementation
+requirements for task0015. Reference bank sizes never define product capacity.
+Each library records image provenance and limits; old manual screenshots do not
+establish a current console version or physical output behavior.
 
 ## Original foundation checkpoint
 

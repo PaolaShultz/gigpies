@@ -1,5 +1,10 @@
 # Document archive
 
+- [Before Brain duplex integration](brain-audio-before-2026-10-05/ARCHITECTURE.md):
+  preserved architecture, diagram, component/console plans and modular-processing,
+  transport and development documents before the two-clock correction. Relative links retain their original
+  document context. Current [Brain audio](../BRAIN_AUDIO.md) owns the new path.
+
 - [Channel processing v1](channel-processing-v1-2026-10-05.md): exact three-band
   contract and dated acceptance before the four-band processing v2 correction.
 
@@ -45,3 +50,6 @@ These files retain historical context. Current status and architecture live in t
 parent documentation directory. Private experiments belong in ignored `archive/local/`.
 Unchanged Markdown snapshots retain their original relative-link context under
 `docs/`; their internal links may need that original base when opened from this archive.
+
+- `brain-audio-before-final-2026-10-06/BRAIN_AUDIO_ACCEPTANCE.md` preserves the
+  detailed pre-final task0015 trial chronology before concise acceptance reconciliation.

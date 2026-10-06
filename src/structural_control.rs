@@ -182,6 +182,8 @@ impl Reply {
 pub struct Intent {
     pub version: u32,
     pub engine: crate::mixer_control::EngineIntent,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brain: Option<crate::brain_control::Intent>,
     pub pa_configuration_json: Option<String>,
     pub pa_program_buses: Vec<usize>,
 }
@@ -209,6 +211,9 @@ impl Intent {
             return Err("composed intent version".into());
         }
         crate::mixer_control::OfflineEngine::restore_intent(&self.engine, Counter(1), 0)?;
+        if let Some(brain) = &self.brain {
+            brain.validate(&self.engine.topology)?;
+        }
         match &self.pa_configuration_json {
             None if self.pa_program_buses.is_empty() => Ok(()),
             Some(json)

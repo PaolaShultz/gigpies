@@ -74,6 +74,7 @@ impl Packet {
 enum Incoming {
     Audio(Request),
     Structural(crate::structural_control::Request),
+    Brain(crate::brain_control::Request),
     Modules(crate::module_wire::ModuleRequest),
     Processing(crate::processing_wire::ProcessingRequest),
     UnsupportedProcessing(crate::processing_wire::UnsupportedRequest),
@@ -90,6 +91,7 @@ struct Client {
     snapshot: bool,
     processing_snapshot_ms: Option<u64>,
     structural_snapshot_ms: Option<u64>,
+    brain_snapshot_ms: Option<u64>,
     writer: Option<String>,
     lease: Option<Counter>,
 }
@@ -144,7 +146,9 @@ impl Client {
         }
         let bytes = &self.buffer[4..length + 4];
         let value: serde_json::Value = crate::show::decode(bytes)?;
-        let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure") {
+        let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP15-brain") {
+            Incoming::Brain(crate::brain_control::Request::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure") {
             Incoming::Structural(crate::structural_control::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
             Incoming::Modules(crate::module_wire::ModuleRequest::decode(bytes)?)
@@ -415,6 +419,19 @@ enum StructuralAction {
     Failed(String),
 }
 pub struct LocalAudio {
+    brain: crate::brain_control::State,
+    brain_pending: Option<(
+        crate::brain_control::Request,
+        crate::brain_control::State,
+        Option<String>,
+        Option<u64>,
+    )>,
+    brain_cache: VecDeque<(crate::brain_control::Request, crate::brain_control::Reply)>,
+    brain_monitor: [f64; 96],
+    brain_path_readiness: (bool, bool),
+    brain_frame_times: [Option<(u64, u64)>; 64],
+    brain_send: [f64; 96],
+    brain_talkback: Vec<f64>,
     listener: UnixListener,
     _epoch_owner: EpochOwner,
     _endpoint: Endpoint,
@@ -518,6 +535,18 @@ impl LocalAudio {
             .map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         Ok(Self {
+            brain: crate::brain_control::State::default(),
+            brain_pending: None,
+            brain_cache: VecDeque::with_capacity(256),
+            brain_monitor: [0.; 96],
+            brain_path_readiness: (false, false),
+            brain_frame_times: {
+                let mut times = [None; 64];
+                times[0] = Some((0, 0));
+                times
+            },
+            brain_send: [0.; 96],
+            brain_talkback: vec![0.; 48 * nb],
             listener,
             _epoch_owner: epoch_owner,
             _endpoint: endpoint,
@@ -551,11 +580,442 @@ impl LocalAudio {
             module_pending: Vec::with_capacity(2),
         })
     }
+    pub fn brain_monitor_output(&self) -> &[f64] {
+        &self.brain_monitor
+    }
+    pub fn brain_fx_send(&self) -> &[f64] {
+        &self.brain_send
+    }
+    pub fn close_brain_audio(&mut self) {
+        self.brain.fault();
+        self.brain_path_readiness = (false, false);
+        self.brain_monitor.fill(0.);
+        self.brain_talkback.fill(0.);
+    }
+    pub fn brain_media_authorized(&self, now: u64) -> bool {
+        self.brain
+            .hold
+            .as_ref()
+            .is_some_and(|(r, _, deadline, frame)| {
+                now < *deadline
+                    && self.frame() < *frame
+                    && self.engine.writer_scope(r, now)
+                        == Some(crate::control_model::Scope::TalkbackDestinations)
+            })
+            && !self.brain.mute
+            && (!self.brain.foh
+                || self.brain.foh_authority.as_ref().is_some_and(|r| {
+                    self.engine.writer_scope(r, now)
+                        == Some(crate::control_model::Scope::TalkbackFoh)
+                }))
+            && self.engine.output_safety_gain(self.frame()) > 0.
+    }
+    /// Authenticated media owner supplies observations after checking current
+    /// descriptors, device status and bridge acquisition. Configuration alone is
+    /// never readiness. Device/source/session closure clears both observations.
+    pub fn set_brain_path_readiness(&mut self, talkback: bool, monitor: bool) {
+        self.brain_path_readiness = (talkback, monitor);
+    }
+    #[cfg(feature = "hardware-host")]
+    pub(crate) fn show_id(&self) -> &str {
+        &self.show
+    }
+    /// Authenticated owner operation; does not change source or hold state.
+    pub fn maintain_lease(
+        &mut self,
+        r: &crate::lease_maintenance::Request,
+        now: u64,
+        capability: u64,
+    ) -> std::result::Result<crate::lease_maintenance::Maintained, crate::lease_maintenance::Reason>
+    {
+        use crate::lease_maintenance::Reason;
+        if r.validate().is_err()
+            || r.show_id != self.show
+            || r.epoch != self.epoch
+            || r.capability_generation.0 != capability
+            || r.map_generation.0 != self.topology().map_revision
+        {
+            return Err(Reason::Identity);
+        }
+        self.engine.maintain_lease(r, now)
+    }
+    /// No await, tick, pending-state inspection, or second raw snapshot between halves.
+    pub fn paired_readback(
+        &mut self,
+        r: &crate::paired_readback::Request,
+        now: u64,
+        capability: u64,
+    ) -> std::result::Result<
+        (
+            crate::mixer_control::RenderedSnapshot,
+            crate::brain_control::Snapshot,
+        ),
+        crate::paired_readback::Reason,
+    > {
+        use crate::paired_readback::Reason;
+        if r.validate().is_err()
+            || r.show_id != self.show
+            || r.epoch != self.epoch
+            || r.capability_generation.0 != capability
+            || r.map_generation.0 != self.topology().map_revision
+        {
+            return Err(Reason::Identity);
+        }
+        self.engine
+            .observe_atomic_read_time(now)
+            .map_err(|_| Reason::Clock)?;
+        let raw = self.snapshot().map_err(|_| Reason::Capacity)?;
+        let brain = self.brain_snapshot();
+        if raw.authority.revision != brain.revision || raw.frame != brain.frame {
+            return Err(Reason::Clock);
+        }
+        Ok((raw, brain))
+    }
+    /// Fixed-size controller witness: no full mixer snapshot or authority clone.
+    pub fn held_proof(
+        &self,
+        r: &crate::held_proof::Request,
+        now: u64,
+        capability: u64,
+    ) -> std::result::Result<crate::held_proof::Witness, crate::held_proof::Reason> {
+        use crate::held_proof::{Brain, Configuration, Reason, Witness};
+        if r.show_id != self.show
+            || r.epoch != self.epoch
+            || r.capability_generation.0 != capability
+            || r.map_generation.0 != self.topology().map_revision
+        {
+            return Err(Reason::Identity);
+        }
+        if r.scope != crate::control_model::Scope::TalkbackDestinations {
+            return Err(Reason::Scope);
+        }
+        let (scope, remaining) = self
+            .engine
+            .live_lease_witness(&r.authority_request(), now)?;
+        if scope != r.scope {
+            return Err(Reason::Scope);
+        }
+        let topology = self.topology();
+        let dims = [
+            topology.inputs.len(),
+            topology.monitors,
+            topology.pa_outputs,
+            topology.capture_channels,
+            topology.playback_channels,
+            topology.sample_rate as usize,
+        ];
+        let mut dimensions = [0u32; 6];
+        for (dst, value) in dimensions.iter_mut().zip(dims) {
+            *dst = u32::try_from(value).map_err(|_| Reason::Capacity)?;
+        }
+        let digest = crate::held_proof::config_digest(Configuration {
+            show_id: &self.show,
+            epoch: self.epoch.0,
+            capability,
+            map: topology.map_revision,
+            dimensions,
+            destinations: self.brain.destination_hash,
+            gain_cdb: self.brain.gain_cdb,
+            mute: self.brain.mute,
+            foh: self.brain.foh,
+        });
+        if digest != r.expected_config_digest {
+            return Err(Reason::ConfigChanged);
+        }
+        let held = self.brain.hold.as_ref();
+        let foh_authorized = self.brain.foh_authority.as_ref().is_some_and(|request| {
+            self.engine.writer_scope(request, now) == Some(crate::control_model::Scope::TalkbackFoh)
+        });
+        let media_authorized = self.brain_media_authorized(now);
+        Ok(Witness {
+            revision: self.engine.revision(),
+            source_frame: crate::show::Counter(self.frame()),
+            config_digest: digest,
+            lease_remaining_ms: remaining,
+            brain: Brain {
+                selection_generation: crate::show::Counter(self.brain.selection_generation),
+                hold_generation_counter: crate::show::Counter(self.brain.high_generation),
+                held_generation: held.map(|h| crate::show::Counter(h.1)),
+                hold_deadline_ms: held.map(|h| crate::show::Counter(h.2)),
+                source: self.brain.source,
+                monitor_armed: self.brain.monitor_armed,
+                monitor_mute: self.brain.monitor_mute,
+                monitor_dim: self.brain.monitor_dim,
+                talkback_mute: self.brain.mute,
+                talkback_foh: self.brain.foh,
+                monitor_path_ready: self.brain_path_readiness.1
+                    && self.brain.monitor_armed
+                    && !self.brain.monitor_mute
+                    && self.brain.source != crate::brain_control::MonitorSource::None,
+                talkback_path_ready: self.brain_path_readiness.0 && media_authorized,
+            },
+            foh_authorized,
+            media_authorized,
+            heartbeat_ms: crate::brain_control::HEARTBEAT_MS,
+            deadman_ms: crate::brain_control::DEADMAN_MS,
+            fade_frames: crate::brain_control::FADE_FRAMES,
+        })
+    }
+    pub fn brain_snapshot(&self) -> crate::brain_control::Snapshot {
+        let mut snapshot = self
+            .brain
+            .snapshot(self.frame(), self.engine.revision(), false);
+        snapshot.talkback_path_ready =
+            self.brain_path_readiness.0 && self.brain_media_authorized(self.last_now);
+        snapshot.monitor_path_ready = self.brain_path_readiness.1
+            && self.brain.monitor_armed
+            && !self.brain.monitor_mute
+            && self.brain.source != crate::brain_control::MonitorSource::None;
+        snapshot.audible_path_ready = snapshot.talkback_path_ready || snapshot.monitor_path_ready;
+        snapshot
+    }
+    pub fn brain_request(
+        &mut self,
+        r: crate::brain_control::Request,
+        now: u64,
+        fresh: bool,
+        owner: Option<u64>,
+    ) -> Result<crate::brain_control::Reply> {
+        use crate::brain_control::{Command as B, Reply};
+        r.validate()?;
+        if r.show_id != self.show || r.epoch != self.epoch {
+            return Err("brain attachment identity".into());
+        }
+        if matches!(r.command, B::BrainSnapshot {}) {
+            return Ok(Reply::new(
+                &r,
+                "snapshot",
+                None,
+                self.engine.revision(),
+                None,
+                Some(self.brain_snapshot()),
+            ));
+        }
+        if self.engine.external_boundary().is_none() {
+            self.brain_pending = None;
+        }
+        let (frame, cached) = match self.engine.begin_external(
+            &r.authority_request(),
+            &r.fingerprint()?,
+            r.scope(),
+            now,
+        ) {
+            Ok(v) => v,
+            Err(reason) => {
+                return Ok(Reply::new(
+                    &r,
+                    "final",
+                    Some(reason),
+                    self.engine.revision(),
+                    None,
+                    None,
+                ));
+            }
+        };
+        if let Some(cached) = cached {
+            return Ok(self
+                .brain_cache
+                .iter()
+                .find(|(old, _)| old == &r)
+                .map(|(_, v)| v.clone())
+                .unwrap_or_else(|| {
+                    Reply::new(
+                        &r,
+                        "final",
+                        cached
+                            .body
+                            .reason
+                            .or_else(|| Some("expired_outcome".into())),
+                        cached.body.revision,
+                        cached.body.effective_frame.map(|f| f.0),
+                        None,
+                    )
+                }));
+        }
+        if self.brain_pending.is_none() {
+            let mut prepared = self.brain.clone();
+            let failure = if !fresh {
+                Some("stale_snapshot".into())
+            } else {
+                prepared
+                    .apply(
+                        &r,
+                        now,
+                        frame,
+                        self.topology().inputs.len(),
+                        self.topology().monitors,
+                    )
+                    .err()
+            };
+            if failure.is_none()
+                && matches!(r.command, crate::brain_control::Command::TalkbackSet { .. })
+            {
+                prepared.destination_hash =
+                    crate::held_proof::destination_hash(&prepared.monitors)?;
+            }
+            self.brain_pending = Some((r.clone(), prepared, failure, owner));
+        }
+        Ok(Reply::new(
+            &r,
+            "pending",
+            None,
+            self.engine.revision(),
+            Some(frame),
+            None,
+        ))
+    }
+    fn heartbeat_observation_time(
+        &self,
+        request: &crate::brain_control::Request,
+        now: u64,
+    ) -> Result<Option<u64>> {
+        if let crate::brain_control::Command::Heartbeat { observed_frame, .. } = request.command {
+            let Some((frame, observed_ms)) =
+                self.brain_frame_times[(observed_frame.0 / 48 % 64) as usize]
+            else {
+                return Err("heartbeat frame observation missing".into());
+            };
+            if frame != observed_frame.0
+                || now < observed_ms
+                || now - observed_ms > crate::brain_control::HEARTBEAT_MS
+            {
+                return Err("heartbeat frame observation stale".into());
+            }
+            Ok(Some(observed_ms))
+        } else {
+            Ok(None)
+        }
+    }
+    fn commit_brain(&mut self, now: u64) -> Result<()> {
+        if self.engine.external_boundary() != Some(self.frame()) || self.brain_pending.is_none() {
+            return Ok(());
+        }
+        let (r, mut prepared, failure, owner) = self.brain_pending.take().unwrap();
+        if !self
+            .engine
+            .external_matches(&r.authority_request(), &r.fingerprint()?)
+        {
+            self.close_brain_audio();
+            return Err("brain prepared identity".into());
+        }
+        let frame = self.frame();
+        // Re-evaluate held deadlines at the actual consumer boundary, never extend
+        // a delayed heartbeat using preparation-time permission.
+        let mut failure = failure;
+        if failure.is_none() {
+            let destination_hash = prepared.destination_hash;
+            prepared = self.brain.clone();
+            if matches!(r.command, crate::brain_control::Command::TalkbackSet { .. }) {
+                prepared.destination_hash = destination_hash;
+            }
+            failure = prepared
+                .apply(
+                    &r,
+                    now,
+                    frame,
+                    self.topology().inputs.len(),
+                    self.topology().monitors,
+                )
+                .err();
+        }
+        if failure.is_none() {
+            match self.heartbeat_observation_time(&r, now) {
+                Ok(Some(observed_ms)) => {
+                    if let Some((_, _, deadline, _)) = &mut prepared.hold {
+                        *deadline = (*deadline)
+                            .min(observed_ms.saturating_add(crate::brain_control::DEADMAN_MS));
+                    }
+                }
+                Ok(None) => (),
+                Err(reason) => failure = Some(reason),
+            }
+        }
+        let result = self
+            .engine
+            .commit_external(now, || failure.clone().map_or(Ok(()), Err))?;
+        let applied = result.kind == "applied";
+        if applied {
+            if self.brain.selection_generation != prepared.selection_generation
+                || self.brain.hold.as_ref().map(|h| h.1) != prepared.hold.as_ref().map(|h| h.1)
+            {
+                self.brain_path_readiness = (false, false);
+            }
+            self.brain = prepared;
+            self.engine.set_operator_tap(self.brain.source);
+        }
+        let reply = crate::brain_control::Reply::new(
+            &r,
+            "final",
+            failure.or(result.body.reason),
+            result.body.revision,
+            applied.then_some(frame),
+            Some(self.brain_snapshot()),
+        );
+        if self.brain_cache.len() == 256 {
+            self.brain_cache.pop_front();
+        }
+        self.brain_cache.push_back((r, reply.clone()));
+        if let Some(id) = owner {
+            if let Some(c) = self.clients.iter_mut().find(|c| c.id == id) {
+                let _ = c.queue_module(&reply, now);
+            }
+        } else if self.remote_completions.len() < 64 {
+            self.remote_completions
+                .push_back(serde_json::to_value(reply).map_err(|e| e.to_string())?);
+        }
+        Ok(())
+    }
+    fn prepare_brain_talkback(&mut self, now: u64, frame: u64, samples: Option<&[f64]>) {
+        self.brain_talkback.fill(0.);
+        if !self.brain_media_authorized(now) {
+            self.brain.close();
+        }
+        let held = self.brain.hold.is_some() && samples.is_some();
+        if self.brain.foh_authority.as_ref().is_some_and(|r| {
+            self.engine.writer_scope(r, now) != Some(crate::control_model::Scope::TalkbackFoh)
+        }) {
+            self.brain.foh = false;
+            self.brain.foh_authority = None;
+            self.brain.close();
+        }
+        let gain = 10_f64.powf(self.brain.gain_cdb as f64 / 2000.);
+        let buses = self.topology().monitors + 2;
+        let safety = std::array::from_fn(|f| self.engine.output_safety_gain(frame + f as u64));
+        #[cfg(feature = "hardware-host")]
+        let foh = self.brain.foh && self.modules.is_some() && self.topology().pa_outputs > 0;
+        #[cfg(not(feature = "hardware-host"))]
+        let foh = false;
+        let view = crate::brain_control::TalkbackRender {
+            first_frame: frame,
+            deadline_frame: if held {
+                self.brain.hold.as_ref().map(|h| h.3)
+            } else {
+                None
+            },
+            monitors: &self.brain.monitors,
+            foh,
+            gain,
+            safety: &safety,
+        };
+        // Lease/String retirement above is controller work. This helper is the
+        // separately guarded, allocation/deallocation-free sample render section.
+        let (microphone, outgoing) = crate::brain_control::render_talkback_block(
+            &view,
+            &mut self.brain.envelope,
+            samples,
+            &mut self.brain_talkback,
+            buses,
+        )
+        .unwrap_or((0., 0.));
+        self.brain.microphone_peak = microphone;
+        self.brain.outgoing_peak = outgoing;
+    }
     pub fn persisted_intent(&mut self) -> Result<crate::structural_control::Intent> {
         let snapshot = self.structural_snapshot()?;
         Ok(crate::structural_control::Intent {
             version: 1,
             engine: self.engine.persisted_intent()?,
+            brain: Some(self.brain.intent()),
             pa_configuration_json: snapshot.pa_configuration_json,
             pa_program_buses: snapshot.pa_program_buses,
         })
@@ -600,6 +1060,12 @@ impl LocalAudio {
             return Err("persisted PA unavailable".into());
         }
         self.engine = restored;
+        self.brain = intent
+            .brain
+            .as_ref()
+            .map(crate::brain_control::State::from_intent)
+            .unwrap_or_default();
+        self.engine.set_operator_tap(self.brain.source);
         Ok(())
     }
     pub fn structural_snapshot(&self) -> Result<crate::structural_control::Snapshot> {
@@ -796,7 +1262,9 @@ impl LocalAudio {
         ))
     }
     fn commit_structure(&mut self, now: u64) -> Result<()> {
-        if self.engine.external_boundary() != Some(self.frame()) {
+        if self.engine.external_boundary() != Some(self.frame())
+            || self.structural_pending.is_none()
+        {
             return Ok(());
         }
         let (r, mut action, owner) = self
@@ -911,6 +1379,9 @@ impl LocalAudio {
         self.epoch.0
     }
     pub fn quiesce_source(&mut self, reason: &str) -> Result<()> {
+        self.close_brain_audio();
+        self.brain_pending = None;
+        self.brain_cache.clear();
         self.engine.quiesce(reason);
         #[cfg(feature = "hardware-host")]
         if let Some(g) = &mut self.modules {
@@ -936,6 +1407,8 @@ impl LocalAudio {
             g.discontinuity(epoch.0, frame)?;
         }
         self.epoch = epoch;
+        self.brain_frame_times.fill(None);
+        self.brain_frame_times[(frame / 48 % 64) as usize] = Some((frame, self.last_now));
         self.analysis = None;
         self.remote_completions.clear();
         Ok(())
@@ -973,6 +1446,21 @@ impl LocalAudio {
         &self.bus_scratch
     }
     pub fn revoke_writer(&mut self, writer: &str) {
+        if self
+            .brain
+            .hold
+            .as_ref()
+            .is_some_and(|h| h.0.writer.as_deref() == Some(writer))
+        {
+            self.brain.close();
+        }
+        if self
+            .brain_pending
+            .as_ref()
+            .is_some_and(|p| p.0.writer.as_deref() == Some(writer))
+        {
+            self.brain_pending = None;
+        }
         self.engine.revoke_writer(writer);
         if self
             .structural_pending
@@ -1341,6 +1829,26 @@ impl LocalAudio {
         playback: &mut [f64],
         wet: Option<&[f64]>,
     ) -> Result<()> {
+        self.tick_with_capture_and_brain(now, epoch, first_frame, capture, playback, wet, None)
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn tick_with_capture_and_brain(
+        &mut self,
+        now: u64,
+        epoch: u64,
+        first_frame: u64,
+        capture: &[f64],
+        playback: &mut [f64],
+        wet: Option<&[f64]>,
+        talkback: Option<&[f64]>,
+    ) -> Result<()> {
+        let talkback =
+            if talkback.is_some_and(|v| v.len() != 48 || v.iter().any(|s| !s.is_finite())) {
+                self.close_brain_audio();
+                None
+            } else {
+                talkback
+            };
         let topology = self.topology();
         if capture.len() != 48 * topology.capture_channels
             || playback.len() != 48 * topology.playback_channels
@@ -1365,7 +1873,7 @@ impl LocalAudio {
             }
         }
         let mut buses = std::mem::take(&mut self.bus_scratch);
-        let result = self.tick_raw_with_wet(now, &raw, &mut buses, wet);
+        let result = self.tick_raw_with_brain(now, &raw, &mut buses, wet, talkback);
         if result.is_ok() {
             let topology = self.topology();
             #[cfg(feature = "hardware-host")]
@@ -1404,6 +1912,16 @@ impl LocalAudio {
         output: &mut [f64],
         wet: Option<&[f64]>,
     ) -> Result<()> {
+        self.tick_raw_with_brain(now, inputs, output, wet, None)
+    }
+    fn tick_raw_with_brain(
+        &mut self,
+        now: u64,
+        inputs: &[f64],
+        output: &mut [f64],
+        wet: Option<&[f64]>,
+        talkback: Option<&[f64]>,
+    ) -> Result<()> {
         if now < self.last_now {
             return Err("clock".into());
         }
@@ -1430,6 +1948,7 @@ impl LocalAudio {
                         snapshot: false,
                         processing_snapshot_ms: None,
                         structural_snapshot_ms: None,
+                        brain_snapshot_ms: None,
                         writer: None,
                         lease: None,
                     });
@@ -1450,6 +1969,30 @@ impl LocalAudio {
                     let reply = request.refusal(self.engine.revision());
                     if self.clients[index].queue_module(&reply, now).is_err() {
                         keep = false;
+                    }
+                }
+                Ok(Some(Incoming::Brain(request))) => {
+                    let read = matches!(
+                        request.command,
+                        crate::brain_control::Command::BrainSnapshot {}
+                    );
+                    let c = &self.clients[index];
+                    let authorized = read
+                        || (c.snapshot && c.writer == request.writer && c.lease == request.lease);
+                    let fresh = c
+                        .brain_snapshot_ms
+                        .is_some_and(|t| now.saturating_sub(t) <= 250);
+                    if !authorized {
+                        keep = false;
+                    } else {
+                        let owner = Some(c.id);
+                        let reply = self.brain_request(request, now, fresh, owner)?;
+                        if read && reply.snapshot.is_some() {
+                            self.clients[index].brain_snapshot_ms = Some(now);
+                        }
+                        if self.clients[index].queue_module(&reply, now).is_err() {
+                            keep = false;
+                        }
                     }
                 }
                 Ok(Some(Incoming::Structural(request))) => {
@@ -1537,6 +2080,7 @@ impl LocalAudio {
         }
         #[cfg(feature = "hardware-host")]
         self.module_completions(now)?;
+        self.commit_brain(now)?;
         self.commit_structure(now)?;
         output.fill(0.);
         let source_frame = self.frame();
@@ -1552,10 +2096,43 @@ impl LocalAudio {
             worker.update_losses(tap.dropped_windows);
         }
         let completions = self.engine.process_interleaved(inputs, output, now)?;
+        let rendered_frame = self.frame();
+        self.brain_frame_times[(rendered_frame / 48 % 64) as usize] = Some((rendered_frame, now));
+        for f in 0..48 {
+            self.brain_send[f * 2..f * 2 + 2].copy_from_slice(&output[f * buses..f * buses + 2]);
+        }
+        self.prepare_brain_talkback(now, source_frame, talkback);
+        // Capture operator taps before talkback: no implicit sidetone/feedback.
+        for f in 0..48 {
+            let pair = match self.brain.source {
+                crate::brain_control::MonitorSource::None => [0.; 2],
+                crate::brain_control::MonitorSource::Main => {
+                    [output[f * buses], output[f * buses + 1]]
+                }
+                crate::brain_control::MonitorSource::Monitor { index } => {
+                    [output[f * buses + 2 + index] * std::f64::consts::FRAC_1_SQRT_2; 2]
+                }
+                _ => {
+                    let i = ((source_frame + f as u64) % 48) as usize * 2;
+                    [
+                        self.engine.operator_tap()[i],
+                        self.engine.operator_tap()[i + 1],
+                    ]
+                }
+            };
+            self.brain_monitor[f * 2..f * 2 + 2].copy_from_slice(&pair);
+        }
         #[cfg(feature = "hardware-host")]
         if let Some(graph) = &mut self.modules {
-            match graph.process_interleaved(self.epoch.0, source_frame, inputs, output, buses, wet)
-            {
+            match graph.process_interleaved_brain(
+                self.epoch.0,
+                source_frame,
+                inputs,
+                output,
+                buses,
+                wet,
+                Some(&self.brain_talkback),
+            ) {
                 Ok(()) | Err(crate::module_graph::ProcessError::Fx(_)) => (),
                 Err(error) => {
                     output.fill(0.);
@@ -1564,8 +2141,34 @@ impl LocalAudio {
                 }
             }
         }
+        #[cfg(feature = "hardware-host")]
+        if matches!(self.brain.source, crate::brain_control::MonitorSource::Main) {
+            if let Some(graph) = &self.modules {
+                self.brain_monitor
+                    .copy_from_slice(graph.program_before_talkback());
+            } else if let Some(wet) = wet {
+                for (out, v) in self.brain_monitor.iter_mut().zip(wet) {
+                    *out += v;
+                }
+            }
+        }
         #[cfg(not(feature = "hardware-host"))]
-        let _ = (buses, wet);
+        if matches!(self.brain.source, crate::brain_control::MonitorSource::Main)
+            && let Some(wet) = wet
+        {
+            for (out, v) in self.brain_monitor.iter_mut().zip(wet) {
+                *out += v;
+            }
+        }
+        for (out, tb) in output
+            .chunks_exact_mut(buses)
+            .zip(self.brain_talkback.chunks_exact(buses))
+        {
+            for i in 2..buses {
+                out[i] += tb[i];
+            }
+        }
+        self.brain.monitor_peak = self.brain_monitor.iter().fold(0_f64, |a, v| a.max(v.abs()));
         for reply in completions {
             if self.pending_owner.is_none() && self.remote_completions.len() < 64 {
                 self.remote_completions
@@ -1642,5 +2245,85 @@ fn synthetic_sample(frame: u64, input: usize) -> f64 {
         f64::from(block[(frame % 48) as usize][input]) / 8_388_608.
     } else {
         (((frame as i64 * 17 + input as i64 * 7919) % 65537) - 32768) as f64 / 8_388_608.
+    }
+}
+
+#[cfg(test)]
+mod held_proof_boundary_tests {
+    use super::*;
+    use crate::{
+        brain_control,
+        control_model::{Command, Request, Scope},
+    };
+    #[test]
+    fn held_proof_destination_hash_is_prepared_not_recomputed_at_commit() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("held-proof-boundary-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let show = "11111111-1111-4111-8111-111111111111";
+        let mut h = LocalAudio::bind_configured(
+            &dir,
+            "audio",
+            show,
+            Counter(1),
+            crate::topology::EngineTopology::software(16, 5, 0).unwrap(),
+        )
+        .unwrap();
+        let grant = Request {
+            contract: "C-AUDIO".into(),
+            version: 2,
+            show_id: show.into(),
+            module: "audio".into(),
+            epoch: Counter(1),
+            writer: Some("desk".into()),
+            lease: None,
+            request_id: Some(Counter(1)),
+            expected_revision: Some(Counter(0)),
+            command: Command::Grant {
+                scope: Scope::TalkbackDestinations,
+            },
+        };
+        let lease = h
+            .engine_mut()
+            .handle(&grant, 0)
+            .unwrap()
+            .outcome
+            .unwrap()
+            .body
+            .granted_lease
+            .unwrap();
+        let request = brain_control::Request {
+            contract: "GP15-brain".into(),
+            version: 1,
+            show_id: show.into(),
+            module: "audio".into(),
+            epoch: Counter(1),
+            writer: Some("desk".into()),
+            lease: Some(lease),
+            request_id: Some(Counter(2)),
+            expected_revision: Some(h.engine_mut().revision()),
+            command: brain_control::Command::TalkbackSet {
+                monitors: vec![4, 0],
+                gain_cdb: -1200,
+                mute: false,
+            },
+        };
+        let expected = crate::held_proof::destination_hash(&[0, 4]).unwrap();
+        crate::held_proof::HASH_CALLS.with(|n| n.set(0));
+        assert_eq!(
+            h.brain_request(request, 1, true, None).unwrap().state,
+            "pending"
+        );
+        assert_eq!(crate::held_proof::HASH_CALLS.with(|n| n.get()), 1);
+        crate::held_proof::HASH_CALLS.with(|n| n.set(0));
+        h.tick(1).unwrap();
+        h.tick(2).unwrap();
+        assert_eq!(crate::held_proof::HASH_CALLS.with(|n| n.get()), 0);
+        assert_eq!(h.brain.destination_hash, expected);
+        let restored = brain_control::State::from_intent(&h.brain.intent());
+        assert_eq!(restored.destination_hash, expected);
+        drop(h);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

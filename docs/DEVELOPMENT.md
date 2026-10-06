@@ -326,3 +326,25 @@ and `-- --ignored` under the same lock. Do not make untrusted library loading
 or generated acceptance artifacts implicit in CI. Tests document their exact
 required inputs. Actual cross-node checks require a bounded reservation on both
 hosts; physical PCM remains a separate authorization and acceptance step.
+
+## Brain duplex software validation
+
+The `hardware-host` feature also builds `gigpies-brain`. Its fake duplex adapter
+uses the production host, ASRC, authority and authenticated transport; physical
+opening additionally requires `--activate-physical` and session authorization.
+No service is installed. [Brain audio](BRAIN_AUDIO.md) tracks integrated acceptance
+and physical gates; [bridge details](BRAIN_AUDIO_BRIDGE.md) state numerical bounds.
+
+On the two-Pi lab, hold the shared nonblocking build lock for each Cargo command:
+
+```sh
+flock -n /home/shome/p/.gigpies-build.lock env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --features hardware-host --test brain_bridge
+flock -n /home/shome/p/.gigpies-build.lock env CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --release --features hardware-host --test brain_bridge -- --ignored --nocapture
+```
+
+The first command is normal production coverage. The second explicitly selects
+long virtual-clock evidence; run it when the bridge/controller or its assumptions
+change. Actual owner-library acceptance in `brain_owners` is likewise explicit:
+provide a hash-verified `GP05_MANIFEST` and `GP14_PA_FIXTURES`, then run that target
+with `--features hardware-host -- --ignored`. Nothing downloads owner artifacts or
+media. Full normal default/hardware suites remain required for shared changes.

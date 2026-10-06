@@ -122,6 +122,31 @@ See [acceptance](MODULAR_ENGINE_ACCEPTANCE.md) for results and remaining gates,
 [PA ABI v2](../../shr-pa/docs/EMBEDDING_V2.md) for the owner schema and exact limits,
 and [authenticated transport](REMOTE_PROCESSING.md) for Brain control/media.
 
+## Authenticated physical source composition
+
+The raw duplex adapter also drives `HostAuthority::process_source` through
+`pump_authority_with`, preserving the same capture, format conversion, protected
+physical map and fault handling. Each captured 48-frame block services pending
+control with a fresh monotonic timestamp before the authenticated Brain bridges
+and shared graph run. Timer polling and network arrival never advance physical
+source frames. Capture and playback must resolve to the same card/device/subdevice.
+
+The bounded authenticated executable exposes this adapter through an explicit
+`physical_device` configuration plus `--activate-physical`; see
+[Brain operation](BRAIN_AUDIO.md). A shared durable epoch ledger prevents reuse
+across process restarts and excludes competing owners. Outputs start closed.
+Transfer, mapping or rendering failure quiesces the source and stops both PCM
+streams. Reopening requires a fresh identity and explicit output rearm.
+
+Unsubmitted playback expires one configured period after capture completes,
+including conversion, control and rendering time. The transfer checks again after
+availability queries and before every write or partial-write retry. Expired data
+is discarded through the fault path. The current authenticated runner uses a
+48-frame period, so this admission budget is 1 ms; it is conservative and may
+fail under load. Capture has a two-second controller I/O timeout, and an ALSA wait
+may detect an expired deadline later. Neither bound qualifies physical scheduling
+or acoustic closure. Already submitted PCM has its separate device-buffer tail.
+
 ## Output allocation examples
 
 The mapping regression constructs both six PA ports plus twelve monitor outputs,

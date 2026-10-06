@@ -270,6 +270,7 @@ pub struct ModuleGraph {
     next: u64,
     wet: [f64; FRAMES * 2],
     sum: [f64; FRAMES * 2],
+    program: [f64; FRAMES * 2],
     raw: Vec<f64>,
     output: [f64; FRAMES * 6],
     last_poll: Option<u64>,
@@ -320,6 +321,7 @@ impl ModuleGraph {
             next: frame,
             wet: [0.; FRAMES * 2],
             sum: [0.; FRAMES * 2],
+            program: [0.; FRAMES * 2],
             raw: vec![0.; FRAMES * inputs],
             output: [0.; FRAMES * 6],
             last_poll: None,
@@ -409,6 +411,22 @@ impl ModuleGraph {
         buses: usize,
         external_wet: Option<&[f64]>,
     ) -> std::result::Result<(), ProcessError> {
+        self.process_interleaved_brain(epoch, frame, raw, mixed, buses, external_wet, None)
+    }
+    pub fn program_before_talkback(&self) -> &[f64; FRAMES * 2] {
+        &self.program
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn process_interleaved_brain(
+        &mut self,
+        epoch: u64,
+        frame: u64,
+        raw: &[f64],
+        mixed: &[f64],
+        buses: usize,
+        external_wet: Option<&[f64]>,
+        talkback: Option<&[f64]>,
+    ) -> std::result::Result<(), ProcessError> {
         self.output.fill(0.);
         if let Some(storage) = &mut self.pa_storage {
             storage.output.fill(0.);
@@ -417,6 +435,7 @@ impl ModuleGraph {
             || buses < 2
             || buses.checked_mul(FRAMES) != Some(mixed.len())
             || external_wet.is_some_and(|w| w.len() != FRAMES * 2)
+            || talkback.is_some_and(|v| v.len() != mixed.len() || v.iter().any(|x| !x.is_finite()))
             || self
                 .pa_storage
                 .as_ref()
@@ -461,6 +480,13 @@ impl ModuleGraph {
         for i in 0..FRAMES * 2 {
             self.sum[i] += self.wet[i];
         }
+        self.program.copy_from_slice(&self.sum);
+        if let Some(tb) = talkback {
+            for f in 0..FRAMES {
+                self.sum[f * 2] += tb[f * buses];
+                self.sum[f * 2 + 1] += tb[f * buses + 1];
+            }
+        }
         let pa = if let (Some(pa), Some(storage)) = (&mut self.pa_v2, &mut self.pa_storage) {
             let count = storage.program_buses.len();
             for i in 0..FRAMES {
@@ -470,7 +496,7 @@ impl ModuleGraph {
                     storage.input[i * count + channel] = if bus < 2 {
                         self.sum[i * 2 + bus]
                     } else {
-                        mixed[i * buses + bus]
+                        mixed[i * buses + bus] + talkback.map_or(0., |tb| tb[i * buses + bus])
                     };
                 }
             }

@@ -1,18 +1,25 @@
-# Next session: physical gates and subsequent software increments
+# Next session: separate physical Brain audio qualification
 
-Current handoff includes the 2026-10-05 channel-processing slice and the
-integrated software milestone of 2026-10-04. The
-[previous local-client handoff](archive/next-session-before-modules-2026-10-04.md)
-is preserved. The [continuation prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md)
-records this completed software/publication scope; recover the current source
-and acceptance before using any historical launch card.
+Recover [status](STATUS.md), [Brain audio acceptance](BRAIN_AUDIO_ACCEPTANCE.md)
+and the current private task0015 checkpoint before acting. The production software
+passed independent review, complete owner/consumer gates and seven same-candidate
+two-Pi scenarios: 16/32/48-input coexistence, duplex stall/restart, controller stall
+and Stagebox restart. Earlier failed trials remain evidence, not current acceptance.
+The historical execution prompts and consumed reservation slots are not reusable
+launch authority. Source synchronization is not deployment.
 
-The [October 4 review and repair pass](DAILY_REVIEW_EXECUTION_PROMPT.md) is complete.
-Task0011 reviewed the twelve-owner daily inventory, repaired confirmed defects,
-validated the changes, published five scoped owner commits and synchronized both
-Pis. Historical launch cards do not reopen that completed assignment.
-The current task0012 increment adds [FOH channel processing](CHANNEL_PROCESSING.md);
-its implementation and acceptance are tracked separately from physical gates.
+Brain owns one local duplex endpoint with a separate device clock; two bounded
+ASRC crossings connect talkback and operator playback to Stagebox. Stagebox keeps
+DSP, PA, raw REC and FX/analysis on its source timeline. See the acceptance record
+for exact software scope and remaining physical limits. Unchanged historical
+research/audition cases need not be rerun after documentation-only work.
+
+The next physical increment requires a separate authorized session: read-only card
+and socket inventory first, then deliberate duplex activation at conservative
+levels, channel/direct-monitor mapping, independent-clock and sustained-deadline
+measurements, release/failure behavior, and acoustic/output-path qualification.
+Do not infer physical clock lock or safe feedback behavior from fake PCM.
+The prior handoff is [archived](archive/brain-audio-before-2026-10-05/NEXT_SESSION.md).
 
 Read the [local integration instructions](HEADLESS_INTEGRATION.md),
 [implementation map](MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
@@ -23,11 +30,11 @@ ASSIST proposes, and AUTO requires explicit bounded authority.
 
 | Owner | Accepted software foundation | Next separate increment |
 |---|---|---|
-| GigPies | GP-01..05, GP-09, private local GP-06 subset and GP-07 FOH EQ/dynamics; real owner graph, named analysis and role broker | Reviewed production remote authentication (B-NET), wider GP-07 scenes/channels; separately authorized physical/combined-load gates |
-| SHR Desk | DS-01..04 native frontend, read-only DS-05 health and GP07 channel editing/readback | Physical dual-display/controller/LED acceptance (GP-H2); later writable controls only after owner contracts |
+| GigPies | Configurable source engine, four-band strip processing, actual PA v2/FX/REC and authenticated QUIC at16/32/48 | Separately authorized physical mapping, drift, deadline and acoustic gates |
+| SHR Desk | Native frontend, dynamic high-channel processing and reviewed PA/output configuration | Physical duplex/device, dual-display/controller/LED acceptance remains separate |
 | SHR Lightdesk | LD-01..04 including native software frontend and read-only LX05 compatibility | Physical role/display/controller acceptance; later analysis controls only as an explicit increment |
 | SHR Lux | LX-01..05 null-output authority, release/recovery and named source automation | LX-06 fixture output only with known patch, explicit arming and hardware reservation |
-| SHR REC / FX / PA | REC-01/02 and fixed-v1 FX-01/PA-01 implemented in their owners and consumed by GP-05 | Writable extensions/acoustic acceptance remain owner work; no duplicate algorithms in GigPies |
+| SHR REC / FX / PA | Actual raw REC, source-clock FX and configurable PA v2 consumed by the modular graph | Owner algorithm extensions and acoustic acceptance; no duplicate algorithms in GigPies |
 
 Read each owner's instructions and current acceptance before changes. Console
 software rendering and injected descriptors do not verify actual display/controller

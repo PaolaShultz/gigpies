@@ -1,3 +1,4 @@
+use super::diagnostics::{self, Handle, Stage, Token};
 use super::*;
 use crate::show::Counter;
 use serde_json::Value;
@@ -8,6 +9,13 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc};
 /// prototype. Dispatch must check payload-derived permissions, writer, leases,
 /// revision and retry history before scheduling a real sample boundary.
 pub trait AuthorityEndpoint {
+    fn diagnostic_trace(&self) -> Handle {
+        None
+    }
+    fn diagnostic_request(&mut self, _token: Token) {}
+    fn diagnostic_reply(&mut self) -> Token {
+        Token::default()
+    }
     fn retiring(&self) -> bool {
         false
     }
@@ -39,6 +47,17 @@ pub trait AuthorityEndpoint {
         packet: crate::transport::Packet<'_>,
         now_ms: u64,
     ) -> Result<()>;
+    fn brain_media(
+        &mut self,
+        _context: &AuthenticatedContext,
+        _bytes: &[u8],
+        _now_ms: u64,
+    ) -> Result<()> {
+        Err("Brain media unsupported".into())
+    }
+    fn poll_brain_media(&mut self, _context: &AuthenticatedContext) -> Result<Option<Vec<u8>>> {
+        Ok(None)
+    }
     fn disconnect(&mut self, context: &AuthenticatedContext);
     fn source_frame(&self) -> Option<u64> {
         None
@@ -188,21 +207,53 @@ impl ServerSession {
             },
         )
         .await?;
+        let trace = authority.diagnostic_trace();
+        let reader_trace = trace.clone();
+        let writer_trace = trace.clone();
+        let trace_session = self.context.session;
+        let writer_connection = self.connection.clone();
         let (requests_tx, mut requests_rx) = mpsc::channel(8);
-        let (replies_tx, mut replies_rx) = mpsc::channel::<Response>(32);
+        let (replies_tx, mut replies_rx) = mpsc::channel::<(Response, Token)>(32);
+        let reader_guard = trace.as_ref().map(|t| t.task());
+        let writer_guard = trace.as_ref().map(|t| t.task());
         let reader = tokio::spawn(async move {
+            let _guard = reader_guard;
+            let mut ordinal = 0u64;
             loop {
-                let request = read_frame::<Request>(&mut recv).await;
+                if reader_trace.is_some() {
+                    ordinal += 1;
+                }
+                let mut token = Token {
+                    session: trace_session,
+                    ordinal,
+                    ..Token::default()
+                };
+                let request =
+                    super::wire::read_frame_diagnostic::<Request>(&mut recv, &reader_trace, token)
+                        .await;
+                if reader_trace.is_some()
+                    && let Ok(Request::Command { payload, .. }) = &request
+                {
+                    token = Token::payload(trace_session, ordinal, payload);
+                }
                 let failed = request.is_err();
-                if requests_tx.try_send(request).is_err() || failed {
+                if requests_tx.try_send((request, token)).is_err() || failed {
                     break;
                 }
             }
         });
         let (writer_error_tx, mut writer_error_rx) = mpsc::channel(1);
         let mut writer = tokio::spawn(async move {
-            while let Some(reply) = replies_rx.recv().await {
-                if let Err(error) = write_response(&mut send, &reply).await {
+            let _guard = writer_guard;
+            while let Some((reply, token)) = replies_rx.recv().await {
+                diagnostics::record(&writer_trace, token, Stage::ReplyDequeued, 0, 0);
+                diagnostics::response_identity(&writer_trace, token, &reply);
+                diagnostics::quinn_stats(&writer_trace, token, &writer_connection, false);
+                let result =
+                    super::wire::write_response_diagnostic(&mut send, &reply, &writer_trace, token)
+                        .await;
+                diagnostics::quinn_stats(&writer_trace, token, &writer_connection, true);
+                if let Err(error) = result {
                     let _ = writer_error_tx.try_send(error);
                     break;
                 }
@@ -211,6 +262,11 @@ impl ServerSession {
             let _ =
                 tokio::time::timeout(Duration::from_millis(IO_TIMEOUT_MS), send.stopped()).await;
         });
+        let _diagnostic_children = diagnostics::AbortChildren(
+            trace
+                .as_ref()
+                .map(|_| [reader.abort_handle(), writer.abort_handle()]),
+        );
         let result = async {
             let mut media = MediaRegistry::new();
             let mut pending_negotiation = None;
@@ -221,7 +277,9 @@ impl ServerSession {
                 if authority.retiring() {
                     for _ in 0..128 {
                         let Some(payload) = authority.poll_reply(&self.context, monotonic_ms())? else { break; };
-                        tokio::time::timeout(Duration::from_millis(IO_TIMEOUT_MS), replies_tx.send(Response::Reply { session: Counter(self.context.session), payload }))
+                        let token=authority.diagnostic_reply();
+                        diagnostics::record(&trace,token,Stage::ReplyEnqueued,0,0);
+                        tokio::time::timeout(Duration::from_millis(IO_TIMEOUT_MS), replies_tx.send((Response::Reply { session: Counter(self.context.session), payload },token)))
                             .await.map_err(|_| "generation completion timeout")?.map_err(|_| "generation completion writer")?;
                     }
                     return Ok(());
@@ -230,7 +288,10 @@ impl ServerSession {
                 let now = monotonic_ms();
                 tokio::select! {
                     request = requests_rx.recv() => {
-                        let request = request.ok_or("control reader closed")??;
+                        let (request,token) = request.ok_or("control reader closed")?;
+                        let request=request?;
+                        diagnostics::record(&trace,token,Stage::RequestDequeued,0,0);
+                        authority.diagnostic_request(token);
                         self.policy.check(&self.context)?;
                         let response = match request {
                             Request::Command { session, capability_generation, payload } => {
@@ -264,12 +325,14 @@ impl ServerSession {
                             }
                             Request::Open { .. } => return Err("repeated remote open".into()),
                         };
-                        if let Some(response) = response { replies_tx.try_send(response).map_err(|_| "slow client reply capacity")?; }
+                        if let Some(response) = response { diagnostics::record(&trace,token,Stage::ReplyEnqueued,0,0); replies_tx.try_send((response,token)).map_err(|_| "slow client reply capacity")?; }
                     }
                     bytes = self.connection.read_datagram() => {
                         let bytes = bytes.map_err(|e| e.to_string())?;
                         self.policy.check(&self.context)?;
-                        if let Ok(packet) = media.receive(&bytes, MediaSide::ProcessingNode, authority.source_frame()) {
+                        if bytes.starts_with(b"GBA1") {
+                            let _ = authority.brain_media(&self.context, &bytes, now);
+                        } else if let Ok(packet) = media.receive(&bytes, MediaSide::ProcessingNode, authority.source_frame()) {
                             authority.media(&self.context, packet, now)?;
                         }
                     }
@@ -279,26 +342,37 @@ impl ServerSession {
                             Ok(Some(descriptor)) => {
                                 if pending_negotiation.take().as_ref() != Some(&descriptor) { return Err("unexpected media negotiation completion".into()); }
                                 media.install(descriptor.clone(), &self.context, &identity, max_datagram)?;
-                                replies_tx.try_send(Response::MediaAccepted { session: Counter(self.context.session), descriptor })
+                                let token=authority.diagnostic_reply();diagnostics::record(&trace,token,Stage::ReplyEnqueued,0,0);
+                                replies_tx.try_send((Response::MediaAccepted { session: Counter(self.context.session), descriptor },token))
                                     .map_err(|_| "slow client reply capacity")?;
                             }
                             Ok(None) => (),
                             Err(reason) => {
                                 if pending_negotiation.take().is_none() { return Err(reason); }
-                                replies_tx.try_send(Response::Refused { session: Counter(self.context.session), reason })
+                                let token=authority.diagnostic_reply();diagnostics::record(&trace,token,Stage::ReplyEnqueued,0,0);
+                                replies_tx.try_send((Response::Refused { session: Counter(self.context.session), reason },token))
                                     .map_err(|_| "slow client reply capacity")?;
                             }
                         }
                         for _ in 0..32 {
                             let Some(reason) = authority.poll_refusal()? else { break; };
-                            replies_tx.try_send(Response::Refused { session: Counter(self.context.session), reason })
+                            let token=authority.diagnostic_reply();diagnostics::record(&trace,token,Stage::ReplyEnqueued,0,0);
+                            replies_tx.try_send((Response::Refused { session: Counter(self.context.session), reason },token))
                                 .map_err(|_| "slow client reply capacity")?;
                         }
                         // Bounded batches; independent host queues own overrun policy.
                         for _ in 0..32 {
                             let Some(payload) = authority.poll_reply(&self.context, now)? else { break; };
-                            replies_tx.try_send(Response::Reply { session: Counter(self.context.session), payload })
+                            let mut token=authority.diagnostic_reply();
+                            if trace.is_some() && token.ordinal==0 {token=Token::payload(self.context.session,0,&payload);}
+                            diagnostics::record(&trace,token,Stage::ReplyEnqueued,0,0);
+                            replies_tx.try_send((Response::Reply { session: Counter(self.context.session), payload },token))
                                 .map_err(|_| "slow client reply capacity")?;
+                        }
+                        for _ in 0..64 {
+                            let Some(bytes) = authority.poll_brain_media(&self.context)? else { break; };
+                            if bytes.len() > max_datagram { return Err("Brain datagram capacity".into()); }
+                            self.connection.send_datagram(bytes.into()).map_err(|e| e.to_string())?;
                         }
                         for _ in 0..64 {
                             let Some(bytes) = authority.poll_media(&self.context)? else { break; };
@@ -343,6 +417,9 @@ pub struct RemoteClient {
     media: MediaRegistry,
     media_generation: Arc<std::sync::atomic::AtomicU64>,
     media_taken: bool,
+    brain_taken: bool,
+    brain_last_received: Option<(u64, u64)>,
+    brain_generation: Arc<std::sync::atomic::AtomicU64>,
 }
 impl RemoteClient {
     pub async fn connect(
@@ -413,6 +490,9 @@ impl RemoteClient {
             media: MediaRegistry::new(),
             media_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             media_taken: false,
+            brain_taken: false,
+            brain_last_received: None,
+            brain_generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         })
     }
     pub fn hello(&self) -> &Response {
@@ -449,6 +529,79 @@ impl RemoteClient {
         }
         Ok(())
     }
+    /// Move the connection's one Brain datagram reader into the media worker.
+    /// The reliable control stream remains owned by this client.
+    pub fn take_brain_media(&mut self) -> Result<BrainMediaChannel> {
+        self.check()?;
+        if self.brain_taken || self.media_taken || self.media.descriptor().is_some() {
+            return Err("connection media reader already assigned".into());
+        }
+        self.brain_taken = true;
+        Ok(BrainMediaChannel {
+            connection: self.connection.clone(),
+            context: self.context.clone(),
+            policy: self.policy.clone(),
+            identity: self.identity.clone(),
+            generation: self.brain_generation.clone(),
+            max_datagram: self.max_datagram(),
+            last_received: None,
+        })
+    }
+    pub async fn report_brain_device(&mut self, observation: BrainDeviceObservation) -> Result<()> {
+        observation.validate()?;
+        self.send_command(serde_json::json!({"contract":"GP15-device","version":1,"kind":"device_observation","writer":self.writer(),"observation":observation})).await
+    }
+    pub async fn negotiate_brain_media(&mut self, descriptor: BrainMediaDescriptor) -> Result<()> {
+        descriptor.validate(self.session(), &self.identity)?;
+        self.send_command(serde_json::json!({"contract":"GP15-media","version":1,"kind":"negotiate","writer":self.writer(),"descriptor":descriptor})).await
+    }
+    /// A dedicated duplex connection has one datagram reader, independent of FX.
+    pub fn send_brain_media(&self, packet: &BrainPacket) -> Result<()> {
+        self.check()?;
+        packet.descriptor.validate(self.session(), &self.identity)?;
+        if packet.role != BrainMediaRole::Talkback {
+            return Err("Brain send direction".into());
+        }
+        let bytes = packet.encode()?;
+        if bytes.len() > self.max_datagram() {
+            return Err("Brain datagram capacity".into());
+        }
+        self.connection
+            .send_datagram(bytes.into())
+            .map_err(|e| e.to_string())
+    }
+    pub async fn receive_brain_media(
+        &mut self,
+        descriptor: &BrainMediaDescriptor,
+    ) -> Result<BrainPacket> {
+        self.check()?;
+        if self.brain_taken || self.media_taken {
+            return Err("connection media reader already assigned".into());
+        }
+        descriptor.validate(self.session(), &self.identity)?;
+        if descriptor.generation
+            != self
+                .brain_generation
+                .load(std::sync::atomic::Ordering::Acquire)
+        {
+            return Err("Brain media negotiation not accepted/current".into());
+        }
+        let bytes = self
+            .connection
+            .read_datagram()
+            .await
+            .map_err(|e| e.to_string())?;
+        self.check()?;
+        let packet = BrainPacket::decode(&bytes, descriptor, BrainMediaRole::Monitor)?;
+        if self
+            .brain_last_received
+            .is_some_and(|(g, f)| g == descriptor.selection_generation && packet.frame <= f)
+        {
+            return Err("Brain replay/reordered media".into());
+        }
+        self.brain_last_received = Some((descriptor.selection_generation, packet.frame));
+        Ok(packet)
+    }
     pub async fn send_command(&mut self, payload: Value) -> Result<()> {
         self.check()?;
         write_frame(
@@ -476,6 +629,21 @@ impl RemoteClient {
         if session.0 != self.session() {
             return Err("remote response session".into());
         }
+        if let Response::Reply { payload, .. } = &response
+            && payload.get("contract").and_then(Value::as_str) == Some("GP15-media")
+            && payload.get("state").and_then(Value::as_str) == Some("accepted")
+        {
+            let descriptor: BrainMediaDescriptor = serde_json::from_value(
+                payload
+                    .get("descriptor")
+                    .cloned()
+                    .ok_or("Brain accepted descriptor missing")?,
+            )
+            .map_err(|e| e.to_string())?;
+            descriptor.validate(self.session(), &self.identity)?;
+            self.brain_generation
+                .store(descriptor.generation, std::sync::atomic::Ordering::Release);
+        }
         if let Response::MediaAccepted { descriptor, .. } = &response {
             // These permissions describe the local peer's grant ceiling from the
             // authenticated server, not the local policy for server commands.
@@ -493,6 +661,9 @@ impl RemoteClient {
     }
     pub async fn negotiate(&mut self, descriptor: MediaDescriptor) -> Result<()> {
         self.check()?;
+        if self.brain_taken {
+            return Err("dedicated Brain duplex connection".into());
+        }
         write_frame(
             &mut self.send,
             &Request::Negotiate {
@@ -507,7 +678,7 @@ impl RemoteClient {
     /// negotiated map invalidates every previous channel; control stays separate.
     pub fn media_channel(&mut self) -> Result<MediaChannel> {
         self.check()?;
-        if self.media_taken {
+        if self.media_taken || self.brain_taken {
             return Err("media channel already owned".into());
         }
         let descriptor = self
@@ -547,7 +718,7 @@ impl RemoteClient {
     }
     pub async fn receive_media(&mut self) -> Result<Vec<u8>> {
         self.check()?;
-        if self.media_taken {
+        if self.media_taken || self.brain_taken {
             return Err("media owned by independent channel".into());
         }
         let bytes = self
@@ -620,6 +791,64 @@ impl MediaChannel {
                 .is_ok()
             {
                 return Ok(bytes.to_vec());
+            }
+            tokio::task::yield_now().await;
+        }
+    }
+}
+
+/// Independent authenticated duplex datagram handle. This is not Clone: exactly
+/// one receiver consumes its connection, while RemoteClient retains control.
+pub struct BrainMediaChannel {
+    connection: quinn::Connection,
+    context: AuthenticatedContext,
+    policy: PolicyStore,
+    identity: EngineIdentity,
+    generation: Arc<std::sync::atomic::AtomicU64>,
+    max_datagram: usize,
+    last_received: Option<(u64, u64)>,
+}
+impl BrainMediaChannel {
+    fn check(&self, descriptor: &BrainMediaDescriptor) -> Result<()> {
+        if self.connection.close_reason().is_some() {
+            return Err("Brain media connection closed".into());
+        }
+        self.policy.check(&self.context)?;
+        descriptor.validate(self.context.session(), &self.identity)?;
+        if descriptor.generation != self.generation.load(std::sync::atomic::Ordering::Acquire) {
+            return Err("Brain media negotiation not accepted/current".into());
+        }
+        Ok(())
+    }
+    pub fn send(&self, packet: &BrainPacket) -> Result<()> {
+        self.check(&packet.descriptor)?;
+        if packet.role != BrainMediaRole::Talkback {
+            return Err("Brain media send direction".into());
+        }
+        let bytes = packet.encode()?;
+        if bytes.len() > self.max_datagram {
+            return Err("Brain datagram capacity".into());
+        }
+        self.connection
+            .send_datagram(bytes.into())
+            .map_err(|e| e.to_string())
+    }
+    pub async fn receive(&mut self, descriptor: &BrainMediaDescriptor) -> Result<BrainPacket> {
+        self.check(descriptor)?;
+        loop {
+            let bytes = self
+                .connection
+                .read_datagram()
+                .await
+                .map_err(|e| e.to_string())?;
+            self.check(descriptor)?;
+            if let Ok(packet) = BrainPacket::decode(&bytes, descriptor, BrainMediaRole::Monitor)
+                && !self.last_received.is_some_and(|(generation, frame)| {
+                    generation == descriptor.selection_generation && packet.frame <= frame
+                })
+            {
+                self.last_received = Some((descriptor.selection_generation, packet.frame));
+                return Ok(packet);
             }
             tokio::task::yield_now().await;
         }

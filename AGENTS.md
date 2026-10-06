@@ -34,3 +34,10 @@ Never publish private audio or state. Publication follows the user's authorized 
 Follow docs/PUBLICATION.md. Enable the versioned hooks when absent and run the
 publication guard against the complete index. New scripts need a reviewed entry in
 scripts/publication-policy.json; private user data and one-off runners stay ignored.
+
+Task0015 clock direction: Brain has one local duplex sound-card owner for operator
+talkback capture and monitor playback. Stagebox plus its ADAT expansion remains
+the processing reference; Brain local I/O has a separate device epoch/timeline.
+Both new crossings require bounded ASRC. Keep FX, raw REC and source analysis on
+Stagebox frames. Desk controls the owner without opening PCM. Physical activation,
+clock lock, socket mapping and acoustic qualification remain separate acceptance.

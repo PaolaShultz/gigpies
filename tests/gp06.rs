@@ -411,23 +411,36 @@ fn headless_binary_runs_explicitly_and_gracefully_removes_own_socket() {
     let bytes = request("", Command::Snapshot {}, 0, 0, None)
         .encode()
         .unwrap();
-    socket
-        .write_all(&(bytes.len() as u32).to_be_bytes())
-        .unwrap();
-    socket.write_all(&bytes).unwrap();
-    let mut header = [0; 4];
-    socket.read_exact(&mut header).unwrap();
-    let mut body = vec![0; u32::from_be_bytes(header) as usize];
-    socket.read_exact(&mut body).unwrap();
-    assert!(
-        RenderedReply::decode(&body)
+    // The endpoint can answer before its first render tick. Require observed
+    // progress within the existing deadline rather than scheduling-dependent
+    // progress in the very first valid snapshot.
+    loop {
+        socket
+            .write_all(&(bytes.len() as u32).to_be_bytes())
+            .unwrap();
+        socket.write_all(&bytes).unwrap();
+        let mut header = [0; 4];
+        socket.read_exact(&mut header).unwrap();
+        let length = u32::from_be_bytes(header) as usize;
+        assert!(length <= 65536);
+        let mut body = vec![0; length];
+        socket.read_exact(&mut body).unwrap();
+        if RenderedReply::decode(&body)
             .unwrap()
             .snapshot
             .unwrap()
             .frame
             .0
             > 0
-    );
+        {
+            break;
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(2),
+            "headless source failed to advance"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
     fn exchange(socket: &mut UnixStream, r: &Request) -> RenderedReply {
         let bytes = r.encode().unwrap();
         socket

@@ -38,12 +38,18 @@ The [original concept artwork](docs/CONCEPT_REVIEW.md) is retained as a historic
 
 | Stagebox / Mixer | Brain / Show |
 |---|---|
-| Owns audio I/O and the local signal path | Analyzes soundcheck and prepares mix settings |
+| Owns Stagebox audio I/O and the processing reference clock | Owns one local duplex card for talkback and operator listening |
 | Runs channel DSP, monitors, PA protection and local NVMe recording | Hosts audio/lighting consoles, richer FX and analysis |
 | Applies validated settings and local protection | Sends bounded parameter updates |
 
-These are the intended full-system boundaries. A qualified stereo bench exercises
-part of the audio path; full integration remains planned. See [architecture](docs/ARCHITECTURE.md).
+Brain local capture/playback has its own device clock. Talkback and operator
+monitoring cross through independent asynchronous sample-rate bridges; FX and
+raw analysis retain Stagebox source-frame identities. See the
+[Brain audio integration](docs/BRAIN_AUDIO.md) for implementation and acceptance status.
+
+These boundaries passed integrated software acceptance at 16/32/48 inputs and
+under the declared restart/stall scenarios. Physical qualification is separate. The qualified stereo
+bench exercises a narrower audio path. See [architecture](docs/ARCHITECTURE.md).
 The [dual-console Brain](docs/BRAIN_CONSOLE_PLAN.md) pairs **two 1920×1080 monitors
 and two MIDI keyboard controllers**: SHR Desk for audio and SHR Lightdesk for
 lighting, both on one Brain. Both surfaces now have optional native frontends over
@@ -54,26 +60,29 @@ the PA unit.
 
 ## Working today
 
-The [integrated software milestone](docs/MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
-combines an eight-input mixer, independent monitor sends, bounded local control,
-process-held console roles and named PCM analysis. The optional graph records all
-eight raw inputs through SHR REC and sends stereo FOH through the actual fixed
-SHR FX and PA libraries. Desk reports their real health read-only. Lux consumes
-the named analysis with explicit calibration and bounded intensity automation,
-while preserving human holds and disarmed recovery.
+The [configurable modular engine](docs/MODULAR_PROCESSING.md) combines validated
+input and monitor dimensions, four-band channel EQ and compression, actual SHR PA
+v2, source-clock SHR FX and raw SHR REC. Task0014 software acceptance covers
+16/32/48 inputs and a 17-input regression; these profiles are not product caps.
+Desk supports authenticated control, reviewed PA configuration and output mapping.
+The [acceptance matrix](docs/MODULAR_ENGINE_ACCEPTANCE.md) records the scope.
 
-Desk and Lightdesk native software, real provider actions and failure recovery
-are validated without physical outputs. Rendering uses an explicitly selected
-CPU backend. The PA sample limiter applies to logical main outputs only; meters,
-acoustic protection and writable FX/PA controls remain unavailable. The existing
-offline workflows below remain available.
+Brain duplex talkback and operator monitoring, independent ASRC crossings and
+Desk controls passed independent review, complete offline gates and all seven
+reserved two-Pi scenarios on one frozen candidate. Atomic scoped lease maintenance,
+paired raw/Brain readback and held-action safety retain their original limits.
+See [Brain audio acceptance](docs/BRAIN_AUDIO_ACCEPTANCE.md) for independent sample
+checks, retained failed trials and measured software resource ranges.
+Physical mapping, clock lock, sustained hardware deadlines and acoustic protection
+remain unqualified.
 
-The [channel-processing increment](docs/CHANNEL_PROCESSING.md) adds four-band fully parametric
-EQ and compression on each of the eight FOH inputs, with neutral defaults,
-explicit makeup gain and provider-confirmed Desk editing. Raw recording/analysis
-and the post-mute monitor sends retain their established samples. The real
-operator/provider/sample chain is software-validated; listening and hardware
-acceptance remain separate.
+Desk and Lightdesk native software uses real provider actions with CPU-headless
+rendering evidence. Physical displays and controllers remain separate gates.
+Lux consumes named analysis with explicit calibration and bounded intensity
+automation while preserving human holds and disarmed recovery. The earlier
+[eight-input integrated milestone](docs/MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+and [channel-processing increment](docs/CHANNEL_PROCESSING.md) retain their dated
+fixed-graph scope and evidence. The offline workflows below remain available.
 
 The first offline automixer now provides causal soundcheck, editable instrument
 presets, frozen settings and full-song stereo rendering. A new unity-source workflow

@@ -835,3 +835,69 @@ fn write_actual_remote48_response_pages() {
     )
     .unwrap();
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn scoped_controllers_workers_and_reconnect_share_bounded_tls_admission() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let (server_credentials, client_credentials) = credentials();
+        let policy = PolicyStore::new(vec![peer(
+            client_credentials.certificate_chain[0].as_ref(),
+            &[
+                Permission::LocalOperatorMonitor,
+                Permission::TalkbackDestinations,
+                Permission::TalkbackFoh,
+                Permission::Fx,
+                Permission::Analysis,
+            ],
+        )])
+        .unwrap();
+        let server =
+            RemoteServer::bind("127.0.0.1:0".parse().unwrap(), &server_credentials, policy)
+                .unwrap();
+        let endpoint =
+            client_endpoint("127.0.0.1:0".parse().unwrap(), &client_credentials).unwrap();
+        let address = server.local_addr().unwrap();
+        let mut sessions = Vec::new();
+        let mut connections = Vec::new();
+        // Concrete reviewed deployment budget, including the five simultaneously
+        // required Brain/Desk/FX roles that the historical four-slot cap rejected.
+        for _ in 0..16 {
+            let connecting = endpoint.connect(address, "stagebox.test").unwrap();
+            let (accepted, connected) = tokio::join!(server.accept(), connecting);
+            sessions.push(accepted.unwrap());
+            connections.push(connected.unwrap());
+        }
+        let identities: std::collections::BTreeSet<_> =
+            sessions.iter().map(|s| s.context().session()).collect();
+        assert_eq!(
+            identities.len(),
+            16,
+            "each role has an independent authenticated session"
+        );
+        let connecting = endpoint.connect(address, "stagebox.test").unwrap();
+        let (refused, connected) = tokio::join!(server.accept(), connecting);
+        assert!(matches!(refused, Err(e) if e == "remote connection capacity"));
+        assert!(connected.is_err());
+        assert!(
+            connections.iter().all(|c| c.close_reason().is_none()),
+            "capacity refusal must not evict existing workers/controllers"
+        );
+        let retired = sessions.pop().unwrap().context().session();
+        connections
+            .pop()
+            .unwrap()
+            .close(0u8.into(), b"explicit reconnect");
+        let connecting = endpoint.connect(address, "stagebox.test").unwrap();
+        let (accepted, connected) = tokio::join!(server.accept(), connecting);
+        let replacement = accepted.unwrap();
+        assert_ne!(replacement.context().session(), retired);
+        assert!(!identities.contains(&replacement.context().session()));
+        let replacement_connection = connected.unwrap();
+        assert!(sessions.iter().all(|s| s.context().check_current().is_ok()));
+        replacement_connection.close(0u8.into(), b"test complete");
+        endpoint.close(0u8.into(), b"test complete");
+        server.close();
+    })
+    .await
+    .unwrap();
+}

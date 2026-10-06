@@ -1,3 +1,4 @@
+use super::diagnostics::{self, Handle, Stage, Token};
 use super::{IO_TIMEOUT_MS, MAX_FRAME, MediaDescriptor, Permission, Result};
 use crate::show::Counter;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -81,11 +82,19 @@ pub fn decode<T: DeserializeOwned>(bytes: &[u8]) -> Result<T> {
 }
 /// One complete bounded frame, including a deadline for partial/trickled data.
 pub async fn read_frame<T: DeserializeOwned>(stream: &mut quinn::RecvStream) -> Result<T> {
+    read_frame_diagnostic(stream, &None, Token::default()).await
+}
+pub(crate) async fn read_frame_diagnostic<T: DeserializeOwned>(
+    stream: &mut quinn::RecvStream,
+    trace: &Handle,
+    token: Token,
+) -> Result<T> {
     let mut length = [0; 4];
     stream
         .read_exact(&mut length[..1])
         .await
         .map_err(|e| e.to_string())?;
+    diagnostics::record(trace, token, Stage::FirstByte, 0, 0);
     tokio::time::timeout(Duration::from_millis(IO_TIMEOUT_MS), async {
         stream
             .read_exact(&mut length[1..])
@@ -100,7 +109,10 @@ pub async fn read_frame<T: DeserializeOwned>(stream: &mut quinn::RecvStream) -> 
             .read_exact(&mut bytes)
             .await
             .map_err(|e| e.to_string())?;
-        decode(&bytes)
+        diagnostics::record(trace, token, Stage::Framed, bytes.len() as u64, 0);
+        let result = decode(&bytes);
+        diagnostics::record(trace, token, Stage::Decoded, u64::from(result.is_err()), 0);
+        result
     })
     .await
     .map_err(|_| "remote frame timeout".to_string())?
@@ -121,9 +133,16 @@ pub async fn write_frame<T: Serialize>(stream: &mut quinn::SendStream, value: &T
 /// The same GP14 immutable snapshot pages as the Unix provider, with one MiB
 /// admission and a whole-assembly deadline. Commands remain single-frame only.
 pub async fn write_response(stream: &mut quinn::SendStream, response: &Response) -> Result<()> {
-    let bytes = serde_json::to_vec(response).map_err(|e| e.to_string())?;
-    let pages = crate::snapshot_pages::encode(bytes)?;
-    tokio::time::timeout(Duration::from_millis(IO_TIMEOUT_MS), async {
+    write_response_diagnostic(stream, response, &None, Token::default()).await
+}
+pub(crate) async fn write_response_diagnostic(
+    stream: &mut quinn::SendStream,
+    response: &Response,
+    trace: &Handle,
+    token: Token,
+) -> Result<()> {
+    let pages = prepare_response(response, trace, token)?;
+    let operation = async {
         for page in pages {
             if page.is_empty() || page.len() > MAX_FRAME {
                 return Err("remote page capacity".into());
@@ -135,9 +154,17 @@ pub async fn write_response(stream: &mut quinn::SendStream, response: &Response)
             stream.write_all(&page).await.map_err(|e| e.to_string())?;
         }
         Ok(())
-    })
+    };
+    let result = tokio::time::timeout(
+        Duration::from_millis(IO_TIMEOUT_MS),
+        observe_write(operation, trace, token),
+    )
     .await
-    .map_err(|_| "remote snapshot write timeout".to_string())?
+    .map_err(|_| "remote snapshot write timeout".to_string());
+    if result.is_err() {
+        diagnostics::record(trace, token, Stage::WriteEnd, 2, 0);
+    }
+    result?
 }
 pub async fn read_response(stream: &mut quinn::RecvStream) -> Result<Response> {
     let first: Value = read_frame(stream).await?;
@@ -158,4 +185,128 @@ pub async fn read_response(stream: &mut quinn::RecvStream) -> Result<Response> {
     })
     .await
     .map_err(|_| "remote snapshot assembly timeout".to_string())?
+}
+
+fn prepare_response(response: &Response, trace: &Handle, token: Token) -> Result<Vec<Vec<u8>>> {
+    diagnostics::record(trace, token, Stage::SerializeBegin, 0, 0);
+    let bytes = serde_json::to_vec(response).map_err(|e| e.to_string())?;
+    diagnostics::record(trace, token, Stage::SerializeEnd, bytes.len() as u64, 0);
+    let pages = crate::snapshot_pages::encode(bytes)?;
+    if trace.is_some() {
+        diagnostics::record(
+            trace,
+            token,
+            Stage::PagesEnd,
+            pages.len() as u64,
+            pages.iter().map(|p| p.len() as u64 + 4).sum(),
+        );
+    }
+    Ok(pages)
+}
+
+async fn observe_write<F: std::future::Future<Output = Result<()>>>(
+    future: F,
+    trace: &Handle,
+    token: Token,
+) -> Result<()> {
+    if trace.is_none() {
+        return future.await;
+    }
+    tokio::pin!(future);
+    let mut polls = 0u64;
+    let mut first = true;
+    std::future::poll_fn(|cx| {
+        if first {
+            diagnostics::record(trace, token, Stage::WritePoll, 0, 0);
+            first = false;
+        }
+        match future.as_mut().poll(cx) {
+            std::task::Poll::Pending => {
+                if polls == 0 {
+                    diagnostics::record(trace, token, Stage::WritePending, 0, 0);
+                }
+                polls += 1;
+                std::task::Poll::Pending
+            }
+            std::task::Poll::Ready(result) => {
+                diagnostics::record(
+                    trace,
+                    token,
+                    Stage::WriteEnd,
+                    u64::from(result.is_err()),
+                    polls,
+                );
+                std::task::Poll::Ready(result)
+            }
+        }
+    })
+    .await
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    #[test]
+    fn disabled_and_enabled_response_wire_bytes_are_identical() {
+        let response = Response::Refused {
+            session: Counter(1),
+            reason: "test".into(),
+        };
+        let plain = prepare_response(&response, &None, Token::default()).unwrap();
+        let traced = prepare_response(
+            &response,
+            &Some(super::super::diagnostics::Trace::test_trace()),
+            Token::default(),
+        )
+        .unwrap();
+        assert_eq!(plain, traced);
+        assert_eq!(
+            plain,
+            vec![br#"{"kind":"refused","session":"1","reason":"test"}"#.to_vec()]
+        );
+    }
+
+    #[tokio::test]
+    async fn write_observer_preserves_success_error_and_pending() {
+        let storage = super::super::diagnostics::Trace::test_trace();
+        let trace = Some(storage.clone());
+        let token = Token {
+            session: 1,
+            ordinal: 2,
+            ..Token::default()
+        };
+        let mut first = true;
+        let operation = std::future::poll_fn(move |cx| {
+            if first {
+                first = false;
+                cx.waker().wake_by_ref();
+                std::task::Poll::Pending
+            } else {
+                std::task::Poll::Ready(Ok(()))
+            }
+        });
+        assert!(observe_write(operation, &trace, token).await.is_ok());
+        assert_eq!(
+            observe_write(async { Err("original".into()) }, &trace, token)
+                .await
+                .unwrap_err(),
+            "original"
+        );
+        assert_eq!(
+            observe_write(async { Err("original".into()) }, &None, token)
+                .await
+                .unwrap_err(),
+            "original"
+        );
+        let rows = storage.report().records;
+        assert!(rows.iter().any(|r| r[0] == Stage::WritePending as u64));
+        assert!(
+            rows.iter()
+                .any(|r| r[0] == Stage::WriteEnd as u64 && r[6] == 0 && r[7] == 1)
+        );
+        assert!(
+            rows.iter()
+                .any(|r| r[0] == Stage::WriteEnd as u64 && r[6] == 1)
+        );
+    }
 }

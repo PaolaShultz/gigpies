@@ -4,6 +4,8 @@
 mod authority;
 #[cfg(feature = "hardware-host")]
 mod brain;
+mod brain_audio;
+mod diagnostics;
 #[cfg(all(target_os = "linux", feature = "hardware-host"))]
 mod host;
 mod media;
@@ -18,6 +20,7 @@ mod wire;
 pub use authority::*;
 #[cfg(feature = "hardware-host")]
 pub use brain::*;
+pub use brain_audio::*;
 #[cfg(all(target_os = "linux", feature = "hardware-host"))]
 pub use host::*;
 pub use media::*;
@@ -33,7 +36,9 @@ pub type Result<T> = std::result::Result<T, String>;
 pub const ALPN: &[u8] = b"gigpies-remote/1";
 pub const MAX_FRAME: usize = 65_536;
 pub const MAX_PEERS: usize = 64;
-pub const MAX_CONNECTIONS: usize = 4;
+// Finite deployment budget: six independently scoped controllers, duplex + FX
+// workers, and eight observer/reconnect slots. Not an engine channel/product cap.
+pub const MAX_CONNECTIONS: usize = 16;
 pub const IO_TIMEOUT_MS: u64 = 2_000;
 
 #[cfg(test)]
@@ -49,3 +54,9 @@ pub fn monotonic_ms() -> u64 {
         .as_millis()
         .min(u64::MAX as u128) as u64
 }
+
+#[cfg(all(test, target_os = "linux", feature = "hardware-host"))]
+mod held_proof_tests;
+
+#[cfg(all(test, target_os = "linux", feature = "hardware-host"))]
+mod atomic_control_tests;

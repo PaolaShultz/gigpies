@@ -181,6 +181,8 @@ pub struct PreparedOutputPatch {
 }
 #[derive(Debug)]
 pub struct Mixer {
+    operator_source: crate::brain_control::MonitorSource,
+    operator_samples: [f64; 96],
     clock: u64,
     ramps: Vec<Vec<Ramp>>,
     pending: Option<Pending>,
@@ -215,6 +217,8 @@ impl Mixer {
         ];
         row.extend((0..monitors).map(|i| Ramp::fixed(if i == 0 { 1.0 } else { 0.001 })));
         Ok(Self {
+            operator_source: crate::brain_control::MonitorSource::None,
+            operator_samples: [0.; 96],
             clock: frame,
             ramps: vec![row; inputs],
             pending: None,
@@ -226,6 +230,20 @@ impl Mixer {
             armed: true,
             output_gain: Ramp::fixed(1.),
         })
+    }
+    pub fn set_operator_tap(&mut self, source: crate::brain_control::MonitorSource) {
+        self.operator_source = source;
+        self.operator_samples.fill(0.);
+    }
+    pub fn operator_tap(&self) -> &[f64; 96] {
+        &self.operator_samples
+    }
+    pub fn output_safety_gain(&self, frame: u64) -> f64 {
+        if self.fault || !self.armed {
+            0.
+        } else {
+            self.output_gain.at(frame)
+        }
     }
     pub fn restore_intent(
         &mut self,
@@ -511,12 +529,17 @@ impl Mixer {
                 self.retired = self.pending.take();
             }
             out.fill(0.);
+            let tap = (self.clock % 48) as usize * 2;
+            self.operator_samples[tap..tap + 2].fill(0.);
             if sources.iter().any(|s| !s.is_finite()) {
                 self.fault = true;
             }
             if !self.fault {
-                for ((sample, row), strip) in
-                    sources.iter().zip(&self.ramps).zip(&mut self.processing)
+                for (channel, ((sample, row), strip)) in sources
+                    .iter()
+                    .zip(&self.ramps)
+                    .zip(&mut self.processing)
+                    .enumerate()
                 {
                     if row.iter().any(|r| !r.at(self.clock).is_finite()) {
                         self.fault = true;
@@ -529,6 +552,21 @@ impl Mixer {
                         break;
                     }
                     let foh = processed * row[3].at(self.clock);
+                    use crate::brain_control::MonitorSource;
+                    match self.operator_source {
+                        MonitorSource::Pfl { input } if input == channel => {
+                            self.operator_samples[tap] =
+                                processed * std::f64::consts::FRAC_1_SQRT_2;
+                            self.operator_samples[tap + 1] = self.operator_samples[tap];
+                        }
+                        MonitorSource::Afl { input } if input == channel => {
+                            self.operator_samples[tap] =
+                                foh * row[0].at(self.clock) * row[1].at(self.clock);
+                            self.operator_samples[tap + 1] =
+                                foh * row[0].at(self.clock) * row[2].at(self.clock);
+                        }
+                        _ => (),
+                    }
                     out[0] += foh * row[0].at(self.clock) * row[1].at(self.clock);
                     out[1] += foh * row[0].at(self.clock) * row[2].at(self.clock);
                     for (out, send) in out[2..].iter_mut().zip(&row[4..]) {
@@ -538,6 +576,9 @@ impl Mixer {
                 if out.iter().any(|s| !s.is_finite()) {
                     self.fault = true;
                 }
+            }
+            if self.fault {
+                self.operator_samples[tap..tap + 2].fill(0.);
             }
             if self.fault || !self.armed {
                 out.fill(0.);

@@ -1,5 +1,11 @@
 # Modular engine acceptance
 
+Scope clarification: this task0014 record covers the Stagebox source-clock graph
+and device-free FX worker. Brain's separate local duplex sound card and its two
+ASRC crossings are tracked in [Brain audio](BRAIN_AUDIO.md). The historical
+single-domain checks below do not establish synchronization between those cards.
+
+
 Task0014 has passed the required software and two-Pi functional acceptance.
 The original eight-input milestone, PA v1 ABI and historical evidence remain
 intact. Physical UMC1820/ADA8200 mapping, converter synchronization, acoustic

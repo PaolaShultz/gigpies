@@ -14,6 +14,9 @@ pub enum Scope {
     Monitor(u16),
     PaConfiguration,
     OutputRoutes,
+    LocalOperatorMonitor,
+    TalkbackDestinations,
+    TalkbackFoh,
 }
 impl Scope {
     pub fn monitor(n: usize) -> Self {
@@ -288,6 +291,8 @@ impl Reply {
         Ok(b)
     }
 }
+type MaintenanceOutcome =
+    std::result::Result<crate::lease_maintenance::Maintained, crate::lease_maintenance::Reason>;
 #[derive(Debug, Clone)]
 struct Session {
     scope: Scope,
@@ -295,6 +300,8 @@ struct Session {
     expires: u64,
     high: u64,
     cache: VecDeque<(Request, Reply)>,
+    maintenance_high: u64,
+    maintenance_cache: VecDeque<(crate::lease_maintenance::Request, MaintenanceOutcome)>,
 }
 #[derive(Debug, Clone)]
 struct StoredPreview {
@@ -456,6 +463,71 @@ impl Authority {
                 .collect(),
         })
     }
+    /// Only the owner calls this after authenticating the attachment and permission.
+    /// Replay state lives in the existing bounded live session and follows clones.
+    pub(crate) fn maintain_lease(
+        &mut self,
+        r: &crate::lease_maintenance::Request,
+        now: u64,
+        source_frame: u64,
+        busy: bool,
+    ) -> std::result::Result<crate::lease_maintenance::Maintained, crate::lease_maintenance::Reason>
+    {
+        use crate::lease_maintenance::{Maintained, Reason};
+        if r.show_id != self.show || r.epoch != self.epoch {
+            return Err(Reason::Identity);
+        }
+        if !r.supported_scope() {
+            return Err(Reason::Scope);
+        }
+        if now < self.now {
+            return Err(Reason::Clock);
+        }
+        // Observe authenticated owner time even on a terminal lease refusal;
+        // a later regressed timestamp must not revive an expired cached success.
+        self.now = now;
+        let session = self.sessions.get_mut(&r.writer).ok_or(Reason::Lease)?;
+        if session.lease != r.lease || session.expires <= now {
+            return Err(Reason::Lease);
+        }
+        if session.scope != r.scope {
+            return Err(Reason::Scope);
+        }
+        if let Some((old, result)) = session
+            .maintenance_cache
+            .iter()
+            .find(|(old, _)| old.maintenance_id == r.maintenance_id)
+        {
+            return if old == r {
+                result.clone()
+            } else {
+                Err(Reason::ReusedId)
+            };
+        }
+        if r.maintenance_id.0 <= session.maintenance_high {
+            return Err(Reason::ExpiredId);
+        }
+        let result = if busy {
+            Err(Reason::Unavailable)
+        } else if let Some(expiry) = now.checked_add(LEASE_MS) {
+            session.expires = expiry;
+            Ok(Maintained {
+                revision: self.revision,
+                source_frame: Counter(source_frame),
+                lease_remaining_ms: LEASE_MS as u32,
+            })
+        } else {
+            Err(Reason::Clock)
+        };
+        session.maintenance_high = r.maintenance_id.0;
+        if session.maintenance_cache.len() == 64 {
+            session.maintenance_cache.pop_front();
+        }
+        session
+            .maintenance_cache
+            .push_back((r.clone(), result.clone()));
+        result
+    }
     pub(crate) fn observe_control_time(&mut self, now: u64) -> Result<()> {
         if now < self.now {
             return Err("clock".into());
@@ -472,6 +544,30 @@ impl Authority {
     }
     pub(crate) fn writer_live(&self, writer: &str, now: u64) -> bool {
         self.sessions.get(writer).is_some_and(|s| s.expires > now)
+    }
+    /// Read-only scoped witness; shares the live lease check and never extends it.
+    pub(crate) fn live_lease_witness(
+        &self,
+        r: &Request,
+        now: u64,
+    ) -> std::result::Result<(Scope, u32), crate::held_proof::Reason> {
+        if now < self.now {
+            return Err(crate::held_proof::Reason::Clock);
+        }
+        let scope = self
+            .live_scope(r, now)
+            .ok_or(crate::held_proof::Reason::Lease)?;
+        let session = self
+            .sessions
+            .get(r.writer.as_ref().ok_or(crate::held_proof::Reason::Lease)?)
+            .ok_or(crate::held_proof::Reason::Lease)?;
+        let remaining = session
+            .expires
+            .checked_sub(now)
+            .and_then(|v| u32::try_from(v).ok())
+            .filter(|v| (1..=2000).contains(v))
+            .ok_or(crate::held_proof::Reason::Lease)?;
+        Ok((scope, remaining))
     }
     pub(crate) fn live_scope(&self, r: &Request, now: u64) -> Option<Scope> {
         let session = self.sessions.get(r.writer.as_ref()?)?;
@@ -707,7 +803,15 @@ impl Authority {
         }
         if let Command::Grant { scope } = r.command
             && !self.modes.contains_key(&scope)
-            && !(self.version == 2 && matches!(scope, Scope::PaConfiguration | Scope::OutputRoutes))
+            && !(self.version == 2
+                && matches!(
+                    scope,
+                    Scope::PaConfiguration
+                        | Scope::OutputRoutes
+                        | Scope::LocalOperatorMonitor
+                        | Scope::TalkbackDestinations
+                        | Scope::TalkbackFoh
+                ))
         {
             return self.reply(r, "rejected", Some("scope"));
         }
@@ -770,6 +874,8 @@ impl Authority {
                     expires,
                     high: r.request_id.unwrap().0,
                     cache: VecDeque::from([(r.clone(), p.clone())]),
+                    maintenance_high: 0,
+                    maintenance_cache: VecDeque::new(),
                 },
             );
             return p;
@@ -836,8 +942,14 @@ impl Authority {
         Ok(())
     }
     fn execute(&mut self, r: &Request, scope: Scope, now: u64) -> Reply {
-        if matches!(scope, Scope::PaConfiguration | Scope::OutputRoutes)
-            && !matches!(r.command, Command::Renew {} | Command::Release {})
+        if matches!(
+            scope,
+            Scope::PaConfiguration
+                | Scope::OutputRoutes
+                | Scope::LocalOperatorMonitor
+                | Scope::TalkbackDestinations
+                | Scope::TalkbackFoh
+        ) && !matches!(r.command, Command::Renew {} | Command::Release {})
         {
             return self.reply(r, "rejected", Some("scope"));
         }
@@ -1512,5 +1624,119 @@ mod tests {
         a.sequence = u64::MAX;
         assert!(a.snapshot().is_err());
         assert_eq!(a.sequence, u64::MAX);
+    }
+}
+
+#[cfg(test)]
+mod atomic_maintenance_tests {
+    use super::*;
+    use crate::lease_maintenance::{Reason, Request as Maintenance};
+    const SHOW: &str = "11111111-1111-4111-8111-111111111111";
+    fn setup(now: u64) -> (Authority, Maintenance) {
+        let mut a = Authority::with_dimensions(SHOW, Counter(1), Counter(0), 16, 5).unwrap();
+        let r = Request {
+            contract: "C-AUDIO".into(),
+            version: 2,
+            show_id: SHOW.into(),
+            module: "audio".into(),
+            epoch: Counter(1),
+            writer: Some("atomic-writer".into()),
+            lease: None,
+            request_id: Some(Counter(1)),
+            expected_revision: Some(Counter(0)),
+            command: Command::Grant {
+                scope: Scope::TalkbackDestinations,
+            },
+        };
+        let lease = a.handle(&r, now).body.granted_lease.unwrap();
+        let m = Maintenance {
+            contract: crate::lease_maintenance::CONTRACT.into(),
+            version: 1,
+            kind: "maintain".into(),
+            show_id: SHOW.into(),
+            module: "audio".into(),
+            epoch: Counter(1),
+            authenticated_session: Counter(1),
+            writer: "atomic-writer".into(),
+            capability_generation: Counter(1),
+            map_generation: Counter(1),
+            maintenance_id: Counter(1),
+            scope: Scope::TalkbackDestinations,
+            lease,
+        };
+        (a, m)
+    }
+    #[test]
+    fn atomic_maintenance_overflow_replay_and_context_do_not_mutate_lease() {
+        let (mut a, mut m) = setup(u64::MAX - LEASE_MS);
+        assert_eq!(
+            a.maintain_lease(&m, u64::MAX - 1, 48, false),
+            Err(Reason::Clock)
+        );
+        assert_eq!(a.sessions[&m.writer].expires, u64::MAX);
+        assert_eq!(a.sessions[&m.writer].maintenance_cache.len(), 1);
+        assert_eq!(
+            a.maintain_lease(&m, u64::MAX - 1, 96, true),
+            Err(Reason::Clock)
+        );
+        m.capability_generation = Counter(2); // current owner admission is an outer prerequisite
+        assert_eq!(
+            a.maintain_lease(&m, u64::MAX - 1, 96, false),
+            Err(Reason::ReusedId)
+        );
+        assert_eq!(
+            a.maintain_lease(&m, u64::MAX, 96, false),
+            Err(Reason::Lease)
+        );
+        assert_eq!(a.revision, Counter(0));
+        let (mut a, m) = setup(0);
+        let original = a.maintain_lease(&m, 10, 48, false).unwrap();
+        let mut changed = m.clone();
+        changed.capability_generation = Counter(2);
+        assert_eq!(
+            a.maintain_lease(&changed, 11, 48, false),
+            Err(Reason::ReusedId)
+        );
+        changed = m.clone();
+        changed.show_id = "22222222-2222-4222-8222-222222222222".into();
+        assert_eq!(
+            a.maintain_lease(&changed, 11, 48, false),
+            Err(Reason::Identity)
+        );
+        changed = m.clone();
+        changed.scope = Scope::TalkbackFoh;
+        assert_eq!(
+            a.maintain_lease(&changed, 11, 48, false),
+            Err(Reason::Scope)
+        );
+        changed = m.clone();
+        changed.lease = Counter(9);
+        assert_eq!(
+            a.maintain_lease(&changed, 11, 48, false),
+            Err(Reason::Lease)
+        );
+        assert_eq!(a.sessions[&m.writer].maintenance_cache.len(), 1);
+        assert_eq!(
+            a.clone().maintain_lease(&m, 12, 96, true).unwrap(),
+            original
+        );
+        assert_eq!(a.sessions[&m.writer].expires, 2010);
+    }
+    #[test]
+    fn atomic_maintenance_unknown_writers_cannot_allocate_cache_or_advance_highwater() {
+        let (mut a, mut m) = setup(0);
+        for n in 0..100 {
+            m.writer = format!("unknown-{n}");
+            m.maintenance_id = Counter(u64::MAX);
+            assert_eq!(a.maintain_lease(&m, 0, 0, false), Err(Reason::Lease));
+        }
+        assert_eq!(a.sessions.len(), 1);
+        let s = &a.sessions["atomic-writer"];
+        assert_eq!(s.maintenance_high, 0);
+        assert!(s.maintenance_cache.is_empty());
+        m.writer = "atomic-writer".into();
+        assert!(a.maintain_lease(&m, 1, 0, false).is_ok());
+        m.maintenance_id = Counter(1);
+        assert_eq!(a.maintain_lease(&m, 2, 0, false), Err(Reason::ExpiredId));
     }
 }

@@ -101,6 +101,12 @@ pub struct ReadState {
 }
 
 impl ReadState {
+    /// Admit a completely constructed paired snapshot without discarding the
+    /// independent processing observation or marking it fresh again.
+    #[cfg(all(target_os = "linux", feature = "hardware-host"))]
+    pub(crate) fn admit_audio_snapshot(&mut self) {
+        self.audio_snapshot = true;
+    }
     #[cfg(all(target_os = "linux", feature = "hardware-host"))]
     pub(crate) fn audio_ready(&self) -> bool {
         self.audio_snapshot
@@ -177,6 +183,9 @@ pub fn scope_permission(scope: Scope) -> Permission {
         Scope::Monitor(n) => Permission::Monitor(u32::from(n)),
         Scope::PaConfiguration => Permission::PaConfiguration,
         Scope::OutputRoutes => Permission::OutputRoutes,
+        Scope::LocalOperatorMonitor => Permission::LocalOperatorMonitor,
+        Scope::TalkbackDestinations => Permission::TalkbackDestinations,
+        Scope::TalkbackFoh => Permission::TalkbackFoh,
     }
 }
 impl AuthorityEndpoint for EngineAuthority {
@@ -286,5 +295,22 @@ impl AuthorityEndpoint for EngineAuthority {
     }
     fn poll_media(&mut self, _context: &AuthenticatedContext) -> Result<Option<Vec<u8>>> {
         Ok(self.outgoing_media.pop_front())
+    }
+}
+
+#[cfg(all(test, target_os = "linux", feature = "hardware-host"))]
+mod atomic_latch_tests {
+    use super::ReadState;
+    #[test]
+    fn atomic_audio_admission_preserves_processing_freshness() {
+        let mut state = ReadState {
+            audio_snapshot: false,
+            processing_snapshot_ms: Some(17),
+        };
+        state.admit_audio_snapshot();
+        assert!(state.audio_ready());
+        assert_eq!(state.processing_snapshot_ms, Some(17));
+        state.admit_audio_snapshot();
+        assert_eq!(state.processing_snapshot_ms, Some(17));
     }
 }

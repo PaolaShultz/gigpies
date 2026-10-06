@@ -54,3 +54,21 @@ pub mod snapshot_pages;
 
 /// Explicit PA/physical patch controls using the same authority and boundary.
 pub mod structural_control;
+
+/// Brain local duplex I/O and bounded bridges between independent device clocks.
+pub mod brain_audio;
+/// Scoped operator monitoring and held talkback control.
+pub mod brain_control;
+/// Explicit fake/physical Brain process; never auto-started.
+#[cfg(all(target_os = "linux", feature = "hardware-host"))]
+pub mod brain_runtime;
+
+#[cfg(all(target_os = "linux", feature = "hardware-host"))]
+mod device_epoch;
+
+/// Correlated, scoped held-talkback authority readback.
+pub mod held_proof;
+
+/// Atomic scoped lease maintenance and committed paired observation.
+pub mod lease_maintenance;
+pub mod paired_readback;

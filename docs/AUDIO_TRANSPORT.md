@@ -1,5 +1,10 @@
 # Synthetic audio transport
 
+Historical scope: the device-free Brain described below is the source-clock FX
+worker. The complete Brain now includes a separate local duplex sound card and
+[two ASRC crossings](BRAIN_AUDIO.md). Production control/media uses
+[authenticated QUIC](REMOTE_TRANSPORT.md); this dated UDP evidence is retained.
+
 The completed synthetic phase continues in [USB hardware integration](AUDIO_HARDWARE.md)
 and its [owning plan](AUDIO_HARDWARE_PLAN.md). Results below retain their original
 synthetic scope; actual-device measurements are recorded separately.

@@ -1,6 +1,7 @@
 //! Bounded SPSC handoff between the network worker and the existing authority
 //! owner. `AuthorityMailbox::service` runs outside render, before its next source
 //! block. Neither network activity nor a stalled client can lock the callback.
+use super::diagnostics::{self, Handle, Stage, Token};
 use super::*;
 use rtrb::{Consumer, Producer, RingBuffer};
 use serde_json::Value;
@@ -10,12 +11,12 @@ use std::sync::{
 };
 
 enum Job {
-    Command(Value),
-    Negotiate(MediaDescriptor),
+    Command(Value, Token),
+    Negotiate(MediaDescriptor, Token),
 }
 enum Event {
-    Reply(Result<Value>),
-    Negotiated(Result<MediaDescriptor>),
+    Reply(Result<Value>, Token),
+    Negotiated(Result<MediaDescriptor>, Token),
 }
 struct Shared {
     disconnected: AtomicBool,
@@ -24,6 +25,8 @@ struct Shared {
 }
 
 pub struct AuthorityProxy {
+    trace: Handle,
+    token: Token,
     context: AuthenticatedContext,
     identity: EngineIdentity,
     shared: Arc<Shared>,
@@ -31,11 +34,14 @@ pub struct AuthorityProxy {
     events: Consumer<Event>,
     media_in: Producer<Vec<u8>>,
     media_out: Consumer<Vec<u8>>,
-    replies: std::collections::VecDeque<Result<Value>>,
-    negotiations: std::collections::VecDeque<Result<MediaDescriptor>>,
-    refusals: std::collections::VecDeque<String>,
+    brain_in: Producer<Vec<u8>>,
+    brain_out: Consumer<Vec<u8>>,
+    replies: std::collections::VecDeque<(Result<Value>, Token)>,
+    negotiations: std::collections::VecDeque<(Result<MediaDescriptor>, Token)>,
+    refusals: std::collections::VecDeque<(String, Token)>,
 }
 pub struct AuthorityMailbox {
+    trace: Handle,
     context: AuthenticatedContext,
     identity: EngineIdentity,
     shared: Arc<Shared>,
@@ -43,6 +49,8 @@ pub struct AuthorityMailbox {
     events: Producer<Event>,
     media_in: Consumer<Vec<u8>>,
     media_out: Producer<Vec<u8>>,
+    brain_in: Consumer<Vec<u8>>,
+    brain_out: Producer<Vec<u8>>,
     retired: bool,
 }
 /// Per authenticated connection: 16 command slots, 128 completion slots and 256
@@ -62,8 +70,12 @@ pub fn authority_channel(
     let (events_tx, events_rx) = RingBuffer::new(128);
     let (media_in_tx, media_in_rx) = RingBuffer::new(256);
     let (media_out_tx, media_out_rx) = RingBuffer::new(256);
+    let (brain_in_tx, brain_in_rx) = RingBuffer::new(64);
+    let (brain_out_tx, brain_out_rx) = RingBuffer::new(64);
     Ok((
         AuthorityProxy {
+            trace: None,
+            token: Token::default(),
             context: context.clone(),
             identity: identity.clone(),
             shared: shared.clone(),
@@ -71,11 +83,14 @@ pub fn authority_channel(
             events: events_rx,
             media_in: media_in_tx,
             media_out: media_out_rx,
+            brain_in: brain_in_tx,
+            brain_out: brain_out_rx,
             replies: std::collections::VecDeque::with_capacity(128),
             negotiations: std::collections::VecDeque::with_capacity(1),
             refusals: std::collections::VecDeque::with_capacity(32),
         },
         AuthorityMailbox {
+            trace: None,
             context: context.clone(),
             identity,
             shared,
@@ -83,11 +98,18 @@ pub fn authority_channel(
             events: events_tx,
             media_in: media_in_rx,
             media_out: media_out_tx,
+            brain_in: brain_in_rx,
+            brain_out: brain_out_tx,
             retired: false,
         },
     ))
 }
 impl AuthorityProxy {
+    #[cfg(all(target_os = "linux", feature = "hardware-host"))]
+    pub(crate) fn set_diagnostics(&mut self, mailbox: &mut AuthorityMailbox, trace: Handle) {
+        self.trace = trace.clone();
+        mailbox.trace = trace;
+    }
     fn check(&self, context: &AuthenticatedContext) -> Result<()> {
         if context != &self.context
             || self.shared.disconnected.load(Ordering::Acquire)
@@ -106,14 +128,14 @@ impl AuthorityProxy {
                 break;
             };
             match event {
-                Event::Reply(Err(reason)) if self.refusals.len() < 32 => {
-                    self.refusals.push_back(reason)
+                Event::Reply(Err(reason), token) if self.refusals.len() < 32 => {
+                    self.refusals.push_back((reason, token))
                 }
-                Event::Reply(Ok(reply)) if self.replies.len() < 128 => {
-                    self.replies.push_back(Ok(reply))
+                Event::Reply(Ok(reply), token) if self.replies.len() < 128 => {
+                    self.replies.push_back((Ok(reply), token))
                 }
-                Event::Negotiated(reply) if self.negotiations.is_empty() => {
-                    self.negotiations.push_back(reply)
+                Event::Negotiated(reply, token) if self.negotiations.is_empty() => {
+                    self.negotiations.push_back((reply, token))
                 }
                 _ => {
                     self.shared.disconnected.store(true, Ordering::Release);
@@ -130,6 +152,15 @@ impl Drop for AuthorityProxy {
     }
 }
 impl AuthorityEndpoint for AuthorityProxy {
+    fn diagnostic_trace(&self) -> Handle {
+        self.trace.clone()
+    }
+    fn diagnostic_request(&mut self, token: Token) {
+        self.token = token;
+    }
+    fn diagnostic_reply(&mut self) -> Token {
+        self.token
+    }
     fn retiring(&self) -> bool {
         self.shared.retiring.load(Ordering::Acquire)
     }
@@ -144,8 +175,9 @@ impl AuthorityEndpoint for AuthorityProxy {
     ) -> Result<Option<Value>> {
         self.check(context)?;
         self.commands
-            .push(Job::Command(payload))
+            .push(Job::Command(payload, self.token))
             .map_err(|_| "authority command queue full")?;
+        diagnostics::record(&self.trace, self.token, Stage::ProxyEnqueued, 0, 0);
         Ok(None)
     }
     fn negotiate(
@@ -155,17 +187,28 @@ impl AuthorityEndpoint for AuthorityProxy {
     ) -> Result<bool> {
         self.check(context)?;
         self.commands
-            .push(Job::Negotiate(descriptor.clone()))
+            .push(Job::Negotiate(descriptor.clone(), self.token))
             .map_err(|_| "authority command queue full")?;
         Ok(false)
     }
     fn poll_refusal(&mut self) -> Result<Option<String>> {
         self.drain()?;
-        Ok(self.refusals.pop_front())
+        Ok(self.refusals.pop_front().map(|(reply, token)| {
+            self.token = token;
+            diagnostics::record(&self.trace, token, Stage::EventDequeued, 0, 0);
+            reply
+        }))
     }
     fn poll_negotiation(&mut self) -> Result<Option<MediaDescriptor>> {
         self.drain()?;
-        self.negotiations.pop_front().transpose()
+        self.negotiations
+            .pop_front()
+            .map(|(reply, token)| {
+                self.token = token;
+                diagnostics::record(&self.trace, token, Stage::EventDequeued, 0, 0);
+                reply
+            })
+            .transpose()
     }
     fn media(
         &mut self,
@@ -178,6 +221,24 @@ impl AuthorityEndpoint for AuthorityProxy {
         // it never stalls source progress or consumes REC capacity.
         let _ = self.media_in.push(packet.bytes().to_vec());
         Ok(())
+    }
+    fn brain_media(
+        &mut self,
+        context: &AuthenticatedContext,
+        bytes: &[u8],
+        _now_ms: u64,
+    ) -> Result<()> {
+        self.check(context)?;
+        context.require(&Permission::TalkbackDestinations)?;
+        if bytes.len() > 464 {
+            return Err("Brain media capacity".into());
+        }
+        let _ = self.brain_in.push(bytes.to_vec());
+        Ok(())
+    }
+    fn poll_brain_media(&mut self, context: &AuthenticatedContext) -> Result<Option<Vec<u8>>> {
+        self.check(context)?;
+        Ok(self.brain_out.pop().ok())
     }
     fn disconnect(&mut self, _context: &AuthenticatedContext) {
         self.shared.disconnected.store(true, Ordering::Release);
@@ -194,7 +255,14 @@ impl AuthorityEndpoint for AuthorityProxy {
         _now_ms: u64,
     ) -> Result<Option<Value>> {
         self.drain()?;
-        self.replies.pop_front().transpose()
+        self.replies
+            .pop_front()
+            .map(|(reply, token)| {
+                self.token = token;
+                diagnostics::record(&self.trace, token, Stage::EventDequeued, 0, 0);
+                reply
+            })
+            .transpose()
     }
     fn poll_media(&mut self, _context: &AuthenticatedContext) -> Result<Option<Vec<u8>>> {
         Ok(self.media_out.pop().ok())
@@ -212,6 +280,7 @@ impl AuthorityMailbox {
         }
         while self.commands.pop().is_ok() {}
         while self.media_in.pop().is_ok() {}
+        while self.brain_in.pop().is_ok() {}
     }
     /// Owner must call this outside render before processing its next block,
     /// including after a network worker exits. Retirement cannot be lost behind
@@ -231,7 +300,12 @@ impl AuthorityMailbox {
                 let Some(reply) = authority.poll_reply(&self.context, now_ms)? else {
                     break;
                 };
-                if self.events.push(Event::Reply(Ok(reply))).is_err() {
+                let token = if self.trace.is_some() {
+                    Token::payload(self.context.session, 0, &reply)
+                } else {
+                    Token::default()
+                };
+                if self.events.push(Event::Reply(Ok(reply), token)).is_err() {
                     self.retire(authority);
                     return Err("generation completion capacity".into());
                 }
@@ -240,6 +314,7 @@ impl AuthorityMailbox {
             self.retired = true;
             while self.commands.pop().is_ok() {}
             while self.media_in.pop().is_ok() {}
+            while self.brain_in.pop().is_ok() {}
             self.shared.retiring.store(true, Ordering::Release);
             return Ok(());
         }
@@ -267,34 +342,49 @@ impl AuthorityMailbox {
                 self.retire(authority);
                 return Ok(());
             }
+            let token = match &job {
+                Job::Command(_, token) | Job::Negotiate(_, token) => *token,
+            };
+            diagnostics::record(&self.trace, token, Stage::DispatchBegin, 0, 0);
             let event = match job {
-                Job::Command(payload) => {
-                    Event::Reply(authority.dispatch(&self.context, payload, now_ms).and_then(
-                        |reply| reply.ok_or_else(|| "nested deferred authority unsupported".into()),
-                    ))
-                }
-                Job::Negotiate(descriptor) => {
-                    Event::Negotiated(authority.negotiate(&self.context, &descriptor).and_then(
-                        |ready| {
+                Job::Command(payload, token) => Event::Reply(
+                    authority
+                        .dispatch(&self.context, payload, now_ms)
+                        .and_then(|reply| {
+                            reply.ok_or_else(|| "nested deferred authority unsupported".into())
+                        }),
+                    token,
+                ),
+                Job::Negotiate(descriptor, token) => Event::Negotiated(
+                    authority
+                        .negotiate(&self.context, &descriptor)
+                        .and_then(|ready| {
                             if ready {
                                 Ok(descriptor)
                             } else {
                                 Err("nested deferred negotiation unsupported".into())
                             }
-                        },
-                    ))
-                }
+                        }),
+                    token,
+                ),
             };
+            diagnostics::record(&self.trace, token, Stage::DispatchEnd, 0, 0);
             self.events
                 .push(event)
                 .map_err(|_| "authority result queue full")?;
+            diagnostics::record(&self.trace, token, Stage::EventEnqueued, 0, 0);
         }
         for _ in 0..32 {
             let Some(reply) = authority.poll_reply(&self.context, now_ms)? else {
                 break;
             };
+            let token = if self.trace.is_some() {
+                Token::payload(self.context.session, 0, &reply)
+            } else {
+                Token::default()
+            };
             self.events
-                .push(Event::Reply(Ok(reply)))
+                .push(Event::Reply(Ok(reply), token))
                 .map_err(|_| "authority completion queue full")?;
         }
         for _ in 0..64 {
@@ -315,11 +405,90 @@ impl AuthorityMailbox {
             authority.media(&self.context, packet, now_ms)?;
         }
         for _ in 0..64 {
+            let Ok(bytes) = self.brain_in.pop() else {
+                break;
+            };
+            let _ = authority.brain_media(&self.context, &bytes, now_ms);
+        }
+        for _ in 0..64 {
+            let Some(bytes) = authority.poll_brain_media(&self.context)? else {
+                break;
+            };
+            let _ = self.brain_out.push(bytes);
+        }
+        for _ in 0..64 {
             let Some(bytes) = authority.poll_media(&self.context)? else {
                 break;
             };
             let _ = self.media_out.push(bytes);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+    use crate::show::Counter;
+    #[test]
+    fn event_tokens_survive_interleaved_queries_refusal_and_deferred_final() {
+        let policy = PolicyStore::new(vec![Peer {
+            id: "test".into(),
+            certificate_sha256: fingerprint(b"test"),
+            permissions: std::collections::BTreeSet::new(),
+        }])
+        .unwrap();
+        let context = policy.authenticate(b"test", 91).unwrap();
+        let identity = EngineIdentity {
+            source_epoch: Counter(1),
+            capability_generation: Counter(1),
+            map_generation: Counter(1),
+        };
+        let (mut proxy, mut mailbox) = authority_channel(&context, identity).unwrap();
+        let trace = Some(diagnostics::Trace::test_trace());
+        proxy.trace = trace.clone();
+        mailbox.trace = trace;
+        let first = Token {
+            session: 91,
+            ordinal: 4,
+            request: 10,
+            kind: 1,
+        };
+        let second = Token {
+            session: 91,
+            ordinal: 5,
+            request: 11,
+            kind: 2,
+        };
+        proxy.diagnostic_request(first);
+        proxy.dispatch(&context, serde_json::json!({}), 0).unwrap();
+        proxy.diagnostic_request(second);
+        proxy.dispatch(&context, serde_json::json!({}), 0).unwrap();
+        assert!(matches!(mailbox.commands.pop().unwrap(),Job::Command(_,token) if token==first));
+        assert!(matches!(mailbox.commands.pop().unwrap(),Job::Command(_,token) if token==second));
+        let final_reply = serde_json::json!({"context":{"request_id":"10"},"state":"final"});
+        let completion = Token::payload(91, 0, &final_reply);
+        mailbox
+            .events
+            .push(Event::Reply(Ok(serde_json::json!({"query":1})), first))
+            .ok()
+            .unwrap();
+        mailbox
+            .events
+            .push(Event::Reply(Ok(final_reply), completion))
+            .ok()
+            .unwrap();
+        mailbox
+            .events
+            .push(Event::Reply(Err("refused".into()), second))
+            .ok()
+            .unwrap();
+        assert!(proxy.poll_reply(&context, 0).unwrap().is_some());
+        assert_eq!(proxy.diagnostic_reply(), first);
+        assert!(proxy.poll_reply(&context, 0).unwrap().is_some());
+        assert_eq!(proxy.diagnostic_reply(), completion);
+        assert_eq!(completion.ordinal, 0);
+        assert_eq!(proxy.poll_refusal().unwrap().as_deref(), Some("refused"));
+        assert_eq!(proxy.diagnostic_reply(), second);
     }
 }

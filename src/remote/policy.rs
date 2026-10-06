@@ -16,6 +16,9 @@ pub enum Permission {
     OutputRoutes,
     Analysis,
     Fx,
+    LocalOperatorMonitor,
+    TalkbackDestinations,
+    TalkbackFoh,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -207,6 +210,8 @@ impl AuthenticatedContext {
                 | "clock_snapshot"
                 | "pa_snapshot"
                 | "structural_snapshot"
+                | "brain_snapshot"
+                | "device_snapshot"
         ) {
             if !writer.is_null() {
                 return Err("snapshot writer".into());

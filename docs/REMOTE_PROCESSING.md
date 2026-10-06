@@ -29,8 +29,11 @@ join dry FOH before the actual PA owner. Missing returns fade through the existi
 bounded gate; local recording and dry/monitor paths do not depend on Brain.
 Algorithmic delay does not synchronize physical converters.
 
-The bounded `gigpies-remote --config PRIVATE.json` provider/Brain executable is a
-synthetic acceptance host, not a deployed service or physical audio activator.
+The bounded `gigpies-remote --config PRIVATE.json` provider/Brain executable defaults
+to synthetic acceptance. Its explicit physical provider configuration additionally
+requires `--activate-physical` and separate session authorization; see
+[device composition](BRAIN_AUDIO.md#executable-device-composition). Nothing installs
+or starts a service.
 Use explicit private bind addresses, per-run identities and duration limits.
 The provider begins muted; operator authority controls patch/PA/rearm. Both nodes
 must reserve any functional network run. Tests and qualification are recorded in
@@ -44,3 +47,13 @@ freshness fence and is refused safely. The finite Brain runner queues close but
 does not await transport drain before process exit, so its peer may retain media
 ownership until the 2 s idle timeout. Reconnect never steals an occupied media role;
 accepted recovery requires a fresh session and observed old-owner retirement.
+
+## Separate Brain local duplex owner
+
+The Brain runner and loss/restart evidence above describe source-clock FX. The
+complete Brain also has a [local duplex card](BRAIN_AUDIO.md) for microphone
+capture and operator playback, with independent device epochs and two bounded
+ASRC crossings. GP15-brain/device/media and GBA1 roles extend the authenticated
+path in [REMOTE_TRANSPORT](REMOTE_TRANSPORT.md) without taking the existing FX
+media owner. Desk never opens PCM. Integrated task0015 acceptance is tracked
+separately; task0014's source-clock results are not physical two-card evidence.

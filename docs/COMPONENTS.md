@@ -112,7 +112,10 @@ now expose the PA, source-frame FX and local NVMe recorder adapters used by
 the stereo bench. Owner source changed within the authorized task; no sibling
 algorithms were duplicated here. Optional alsa 0.11.0/libloading 0.7.4 dependencies
 serve the explicit hardware-host feature.
-ASRC and a network-clock implementation remain unselected integration work.
+Brain local duplex hosting and both asynchronous clock crossings belong to
+GigPies; Desk owns their operator controls. ASRC selection and acceptance are
+tracked in [Brain audio](BRAIN_AUDIO.md). Source-indexed FX remains independent
+of the Brain device clock.
 
 The [Brain console integration plan](BRAIN_CONSOLE_PLAN.md) delegates audio surface
 ownership to `../shr-desk` and lighting surface ownership to `../shr-lightdesk`

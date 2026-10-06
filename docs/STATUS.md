@@ -1,5 +1,32 @@
 # Status and next steps
 
+## Brain local duplex audio — software validated, 2026-10-06
+
+Brain owns one duplex sound card for talkback and operator listening, crossing a
+separate clock domain through two bounded ASRC paths. Stagebox remains the DSP,
+PA, raw recording and source-clock FX/analysis reference. Device/routing/authority,
+authenticated media and actual Desk controls are implemented.
+
+Independent contract, combined source and artifact reviews passed. Producer gates
+passed 390 default/465 hardware-host tests, four actual-owner tests, both Clippy
+configurations, releases and 39 Python tests. Desk passed 240 default/242 native
+tests, explicit CPU-headless rendering, both Clippy configurations, release driver/
+applications and nine Python tests. Normal opt-ins were intentionally excluded.
+
+Trials 37–43 passed all seven scenarios on the same frozen candidate: simultaneous
+16/32/48 inputs, duplex stall/restart, controller stall and Stagebox restart.
+Independent checks cover actual audio/overlap, exact raw samples, safe closure,
+continued dry/PA/FX/REC where applicable and fresh unarmed recovery. Earlier passes
+and failures remain separate evidence; no freshness or safety limit was relaxed.
+
+Desk's 12 and Lightdesk's 16 development-PC screen references were integrated and
+inspected. CI was added to the eight canonical repositories that lacked it, and
+all eight hosted workflows completed successfully. Source publication follows
+provider before consumer; exact publication/CI and twelve-repository receiving
+receipts belong to the private task ledger. No physical PCM was opened. See
+[acceptance](BRAIN_AUDIO_ACCEPTANCE.md) for measurements, retained failures and
+separate hardware gates.
+
 ## Configurable modular processing — 2026-10-05
 
 The shared Mixer/Authority now admits configured strip and monitor counts, explicit

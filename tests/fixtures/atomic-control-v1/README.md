@@ -1,0 +1,66 @@
+# Atomic controller producer fixtures
+
+These integer-only JSON fixtures are generated through the real authenticated
+HostAuthority/LocalAudio path using synthetic 16/32/48-input topologies. No PCM
+device, network trial or external owner library is activated. Paired replies
+contain the existing raw and Brain schemas once each. Successful maintenance
+replies retain their original outcome on exact retry.
+
+Regenerate explicitly from the repository root:
+
+```sh
+flock -n /home/shome/p/.gigpies-build.lock env \
+  CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 GIGPIES_UPDATE_ATOMIC_FIXTURES=1 \
+  cargo +1.97.1 test --locked -j1 --features hardware-host --lib atomic
+```
+
+Without the update environment variable, normal tests compare the corpus and do
+not write it. Focused codec/engine tests:
+
+```sh
+flock -n /home/shome/p/.gigpies-build.lock env \
+  CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0 \
+  cargo +1.97.1 test --locked -j1 --test atomic_control
+```
+
+The corpus includes exact requests, paired snapshots, maintenance successes,
+identity/scope/lease/permission/clock/duplicate refusals, a cached busy refusal,
+and committed old/new views across an actual staged Brain change. The tests also
+cover all three staged-authority classes, eviction/highwater, overflow, permission
+revocation/reconnect, independent nonce admission and active heartbeat churn.
+Unsupported versions and malformed inputs fail at the outer decoding boundary;
+there is no fabricated successful fallback fixture.
+
+The scope-complete extension adds `scope-*-request`, `scope-*-maintained`,
+`scope-*-mismatch` and `scope-*-permission` files from
+`atomic_maintenance_every_existing_scope_admitted_by_live_lease` and
+`atomic_all_scope_permissions_contexts_revocation_and_replaced_leases` in
+`src/remote/atomic_control_tests.rs`. Each uses actual HostAuthority dispatch,
+current scope-specific permission, and an explicit C-AUDIO grant against the
+16-input/five-monitor software topology. Named monitors 1/2 and dynamic monitors
+3/5 are examples, not a product cap. No mock successful reply is substituted.
+
+`scope-noncanonical-monitor-{0,1,2}.json` records explicit producer `scope`
+refusals for noncanonical object forms. These are negative inputs, not valid
+consumer authority contexts; a strict consumer may reject their context codec.
+Unknown names, unit-variant object aliases, extra keys and out-of-u16 values
+instead fail at the outer decoder and have no fabricated maintenance reply.
+Out-of-topology grants (6 and u16::MAX in this fixture) are separately rejected.
+
+`maintain-scope.json` previously requested FOH against a talkback lease when FOH
+maintenance was unsupported. It now requests the configured dynamic monitor 3
+against that same talkback lease, preserving a real scope-mismatch refusal after
+admission expansion. All other pre-extension fixture bytes, including existing
+valid Brain requests/successes and paired snapshots, remain unchanged.
+
+`SHA256SUMS` pins all JSON bytes from these production paths. After explicit
+regeneration, refresh and verify it from the repository root:
+
+```sh
+sha256sum tests/fixtures/atomic-control-v1/*.json > tests/fixtures/atomic-control-v1/SHA256SUMS
+sha256sum --check tests/fixtures/atomic-control-v1/SHA256SUMS
+```
+
+Consumer reconciliation must copy the complete corpus and verify this manifest;
+provisional client fixtures cannot replace these producer bytes. These fixtures
+establish offline protocol behavior only, not network or physical acceptance.

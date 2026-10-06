@@ -370,7 +370,14 @@ impl OfflineEngine {
     ) -> Result<(u64, Option<Reply>)> {
         r.encode()?;
         if r.version != self.wire_version()
-            || !matches!(scope, Scope::PaConfiguration | Scope::OutputRoutes)
+            || !matches!(
+                scope,
+                Scope::PaConfiguration
+                    | Scope::OutputRoutes
+                    | Scope::LocalOperatorMonitor
+                    | Scope::TalkbackDestinations
+                    | Scope::TalkbackFoh
+            )
             || fingerprint.is_empty()
             || fingerprint.len() > 128
         {
@@ -487,6 +494,42 @@ impl OfflineEngine {
     }
     pub fn topology(&self) -> &crate::topology::EngineTopology {
         self.mixer.topology()
+    }
+    pub fn set_operator_tap(&mut self, source: crate::brain_control::MonitorSource) {
+        self.mixer.set_operator_tap(source);
+    }
+    pub fn operator_tap(&self) -> &[f64; 96] {
+        self.mixer.operator_tap()
+    }
+    pub fn output_safety_gain(&self, frame: u64) -> f64 {
+        self.mixer.output_safety_gain(frame)
+    }
+    pub fn maintain_lease(
+        &mut self,
+        r: &crate::lease_maintenance::Request,
+        now: u64,
+    ) -> std::result::Result<crate::lease_maintenance::Maintained, crate::lease_maintenance::Reason>
+    {
+        if r.validate().is_err() {
+            return Err(crate::lease_maintenance::Reason::Identity);
+        }
+        if !self.frame().is_multiple_of(48) {
+            return Err(crate::lease_maintenance::Reason::Clock);
+        }
+        let busy = self.pending.is_some()
+            || self.processing_pending.is_some()
+            || self.external_pending.is_some();
+        self.authority.maintain_lease(r, now, self.frame(), busy)
+    }
+    pub(crate) fn observe_atomic_read_time(&mut self, now: u64) -> Result<()> {
+        self.authority.observe_control_time(now)
+    }
+    pub fn live_lease_witness(
+        &self,
+        r: &Request,
+        now: u64,
+    ) -> std::result::Result<(Scope, u32), crate::held_proof::Reason> {
+        self.authority.live_lease_witness(r, now)
     }
     pub fn writer_scope(&self, r: &Request, now: u64) -> Option<Scope> {
         self.authority.live_scope(r, now)

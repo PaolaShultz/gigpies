@@ -71,3 +71,12 @@ The shelf coefficient equations follow Robert Bristow-Johnson's mathematical
 [Audio EQ Cookbook, published by W3C](https://www.w3.org/TR/audio-eq-cookbook/).
 Our implementation fixes shelf slope to S=1. No manufacturer DSP code, firmware,
 manual or preset collection is included. See [reference-use boundaries](docs/PRESET_EXPERIMENT.md).
+
+## Brain asynchronous sample-rate conversion
+
+Rubato5.0.1, copyright HEnquist and contributors, is used under its
+MIT OR Apache-2.0 licence. The published crate and committed Cargo.lock pin the
+implementation. Its asynchronous sinc path supplies preallocated variable-ratio
+conversion; no owner PA/FX/REC algorithms are copied.
+[Official source and licences](https://github.com/HEnquist/rubato/tree/v5.0.1) ·
+[versioned API](https://docs.rs/rubato/5.0.1/rubato/).
