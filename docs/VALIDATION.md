@@ -317,3 +317,43 @@ old/new-owner/Unix/policy-authenticated endpoint campaigns are retained with
 unchanged protected-source and artifact pins. Historical/private-media/load and
 physical campaigns were intentionally skipped. Release gates and coordinator
 acceptance remain pending; complete software validation is not yet claimed.
+
+### Explicit Desk provider witness
+
+`tests/desk_operator_witness.rs` is an ignored, external-driver test harness over
+actual LocalAudio and hash-verified PA/FX/REC libraries. It opens no device and
+starts muted/disarmed. The fixed synthetic witness topology (17 inputs, three
+monitors, six PA outputs at 48 kHz) is a test case, not a product capacity limit.
+Only the first input contains a periodic, exact PCM24-quantized 1 kHz signal.
+The harness grants no authority and performs no operator rearm.
+
+Commit reviewed harness source before compiling so the executable embeds its
+full source revision. With Rust 1.97.1, committed lockfile, one build job,
+`CARGO_INCREMENTAL=0`, canonical target and parent-held shared build lock:
+
+```sh
+GP_DESK_WITNESS_SOURCE=<full-source-commit> cargo +1.97.1 test --locked -j1 --features hardware-host --test desk_operator_witness --no-run
+GP_DESK_WITNESS_SOURCE=<full-source-commit> cargo +1.97.1 clippy --locked -j1 --features hardware-host --test desk_operator_witness -- -D warnings
+```
+
+Retain the exact test executable separately with source SHA, executable SHA-256
+and command manifest. Launch that pinned binary with absolute trusted
+`GP_EQ_MANIFEST`, `GP_PA_V2_FIXTURES` and `GP_DESK_WITNESS_DIR` (a new empty,
+owned mode0700 directory), selecting only
+`--ignored --exact serve_desk_operator_witness --nocapture --test-threads=1`.
+Keep stdout/stderr outside the initial directory. Check ready provenance before
+requests. Atomically publish strict `capture-request.json` containing a unique
+alphanumeric/hyphen ID (at most32 characters) and `blocks` in1..32. Wait for
+`capture-ID.json` before another request. Up to16 captures and180 wall seconds
+are allowed. Stop only after the final response by creating an empty `stop`;
+require exit0 and `summary.json`. Preserve every failed trial and `failure.json`,
+including any retained partial PCM. Completion capture remains owned until
+successful publication; timeout assertions run inside the panic catcher.
+
+For settled samples require matching epoch/revision on every block, stable
+relevant state/maps and no relevant ramps. A muted one-block baseline smoke
+establishes startup/provenance, silence and quiesced/disarmed state only. The
+later Desk Frontend driver owns actual controls and affected/unaffected sample
+assertions. This harness is not physical, acoustic, listening, deadline or full
+Frontend integration acceptance; allocation evidence remains owner/narrow commit
+scope and authenticated endpoint evidence does not add a TLS handshake.
