@@ -38,6 +38,7 @@ impl Token {
             Some("GP14-mixer") => 3,
             Some("GP14-structure") => 4,
             Some("GP07-processing") => 5,
+            Some("GP18-sends") => 8,
             Some("C-AUDIO") => 6,
             Some("GP15-media") => 7,
             _ => 255,
@@ -236,7 +237,7 @@ impl Trace {
             active_tasks: self.active_tasks(),
             append_elapsed_us: self.overhead.load(Ordering::Relaxed),
             overhead_scope: "sum successful append elapsed microseconds only; excludes failed-capacity attempts, token extraction, stats reads and timestamp call overhead; per-event truncation applies",
-            request_kinds: "contract*256+operation; contracts 1:GP15-brain 2:GP15-device 3:GP14-mixer 4:GP14-structure 5:GP07-processing 6:C-AUDIO 7:GP15-media 255:other; operations 1:snapshot 2:heartbeat 3:hold 4:release 5:grant 6:renew 7:query 255:other; ordinal0:explicit uncorrelated/deferred completion; request_id0:unavailable",
+            request_kinds: "contract*256+operation; contracts 1:GP15-brain 2:GP15-device 3:GP14-mixer 4:GP14-structure 5:GP07-processing 6:C-AUDIO 7:GP15-media 8:GP18-sends 255:other; operations 1:snapshot 2:heartbeat 3:hold 4:release 5:grant 6:renew 7:query 255:other; ordinal0:explicit uncorrelated/deferred completion; request_id0:unavailable",
             columns: [
                 "stage",
                 "time_us",

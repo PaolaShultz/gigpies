@@ -33,6 +33,13 @@ impl Ramp {
         }
     }
 }
+#[derive(Debug, Clone, Copy, Default)]
+struct TapTransition {
+    current: crate::sends_wire::Tap,
+    target: crate::sends_wire::Tap,
+    begin: u64,
+    end: u64,
+}
 #[derive(Debug, Clone, Copy)]
 enum Change {
     Keep,
@@ -44,6 +51,7 @@ enum Change {
 pub struct Prepared {
     changes: Vec<Vec<Change>>,
     processing: Option<(usize, crate::channel_processing::Prepared)>,
+    send: Option<(usize, usize, crate::sends_wire::Tap)>,
 }
 impl Prepared {
     pub fn processing(input: usize, prepared: crate::channel_processing::Prepared) -> Result<Self> {
@@ -61,6 +69,23 @@ impl Prepared {
         Ok(Self {
             changes: vec![vec![Change::Keep; 4 + monitors]; inputs],
             processing: Some((input, prepared)),
+            send: None,
+        })
+    }
+    pub fn send_for(
+        inputs: usize,
+        monitors: usize,
+        input: usize,
+        monitor: usize,
+        tap: crate::sends_wire::Tap,
+    ) -> Result<Self> {
+        if input >= inputs || monitor >= monitors {
+            return Err("target".into());
+        }
+        Ok(Self {
+            changes: vec![vec![Change::Keep; 4 + monitors]; inputs],
+            processing: None,
+            send: Some((input, monitor, tap)),
         })
     }
     pub fn edits(edits: &[Edit]) -> Result<Self> {
@@ -73,6 +98,7 @@ impl Prepared {
         let mut p = Self {
             changes: vec![vec![Change::Keep; 4 + monitors]; inputs],
             processing: None,
+            send: None,
         };
         let mut seen = vec![vec![false; 3 + monitors]; inputs];
         for e in edits {
@@ -116,6 +142,7 @@ impl Prepared {
         let mut p = Self {
             changes: vec![vec![Change::Keep; 4 + monitors]; inputs],
             processing: None,
+            send: None,
         };
         for row in &mut p.changes {
             match scope {
@@ -185,6 +212,7 @@ pub struct Mixer {
     operator_samples: [f64; 96],
     clock: u64,
     ramps: Vec<Vec<Ramp>>,
+    sends: Vec<Vec<TapTransition>>,
     pending: Option<Pending>,
     completion: Option<Completion>,
     fault: bool,
@@ -221,6 +249,7 @@ impl Mixer {
             operator_samples: [0.; 96],
             clock: frame,
             ramps: vec![row; inputs],
+            sends: vec![vec![TapTransition::default(); monitors]; inputs],
             pending: None,
             completion: None,
             fault: false,
@@ -384,6 +413,45 @@ impl Mixer {
     pub fn faulted(&self) -> bool {
         self.fault
     }
+    pub fn sends_ready(&self) -> bool {
+        self.sends.iter().flatten().all(|s| self.clock >= s.end)
+    }
+    pub fn send_observations(
+        &self,
+    ) -> Vec<Vec<(crate::sends_wire::Tap, crate::sends_wire::Tap, u32)>> {
+        self.sends
+            .iter()
+            .map(|row| {
+                row.iter()
+                    .map(|s| {
+                        let remaining = s.end.saturating_sub(self.clock) as u32;
+                        (
+                            if remaining == 0 { s.target } else { s.current },
+                            s.target,
+                            remaining,
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+    pub fn restore_sends(&mut self, taps: &[Vec<crate::sends_wire::Tap>]) -> Result<()> {
+        if taps.len() != self.input_count() || taps.iter().any(|r| r.len() != self.monitor_count())
+        {
+            return Err("intent sends shape".into());
+        }
+        for (row, taps) in self.sends.iter_mut().zip(taps) {
+            for (s, &tap) in row.iter_mut().zip(taps) {
+                *s = TapTransition {
+                    current: tap,
+                    target: tap,
+                    begin: 0,
+                    end: 0,
+                };
+            }
+        }
+        Ok(())
+    }
     pub fn processing_observations(
         &self,
     ) -> Vec<(
@@ -422,6 +490,7 @@ impl Mixer {
             || self.retired.is_some()
             || self.completion.is_some()
             || (prepared.processing.is_some() && !self.processing_ready())
+            || (prepared.send.is_some() && !self.sends_ready())
         {
             return Err("capacity".into());
         }
@@ -522,6 +591,19 @@ impl Mixer {
                 if let Some((input, prepared)) = p.prepared.processing {
                     self.processing[input].apply(prepared, self.clock);
                 }
+                if let Some((input, monitor, target)) = p.prepared.send {
+                    let old = self.sends[input][monitor].target;
+                    self.sends[input][monitor] = TapTransition {
+                        current: old,
+                        target,
+                        begin: self.clock,
+                        end: if old == target {
+                            self.clock
+                        } else {
+                            self.clock + RAMP_FRAMES
+                        },
+                    };
+                }
                 self.completion = Some(Completion {
                     ticket: p.ticket,
                     frame: p.frame,
@@ -569,8 +651,24 @@ impl Mixer {
                     }
                     out[0] += foh * row[0].at(self.clock) * row[1].at(self.clock);
                     out[1] += foh * row[0].at(self.clock) * row[2].at(self.clock);
-                    for (out, send) in out[2..].iter_mut().zip(&row[4..]) {
-                        *out += shared * send.at(self.clock);
+                    for (monitor, (out, send)) in out[2..].iter_mut().zip(&row[4..]).enumerate() {
+                        let mode = self.sends[channel][monitor];
+                        let select = |tap| match tap {
+                            crate::sends_wire::Tap::RawPostMute => shared,
+                            crate::sends_wire::Tap::ProcessedPreFader => foh,
+                            crate::sends_wire::Tap::ProcessedPostFader => {
+                                foh * row[0].at(self.clock)
+                            }
+                        };
+                        let signal = if self.clock >= mode.end {
+                            select(mode.target)
+                        } else if self.clock <= mode.begin {
+                            select(mode.current)
+                        } else {
+                            let w = (self.clock - mode.begin) as f64 / RAMP_FRAMES as f64;
+                            select(mode.current) * (1. - w) + select(mode.target) * w
+                        };
+                        *out += signal * send.at(self.clock);
                     }
                 }
                 if out.iter().any(|s| !s.is_finite()) {

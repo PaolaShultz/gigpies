@@ -72,3 +72,6 @@ pub mod held_proof;
 /// Atomic scoped lease maintenance and committed paired observation.
 pub mod lease_maintenance;
 pub mod paired_readback;
+
+/// GP18 per-destination monitor tap control.
+pub mod sends_wire;

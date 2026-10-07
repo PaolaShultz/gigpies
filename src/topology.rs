@@ -265,6 +265,9 @@ impl EngineTopology {
             .and_then(|n| n.checked_mul(self.max_block_frames))
             .and_then(|n| n.checked_mul(8))
             .ok_or("resource overflow")?;
+        // The existing conservative 128-byte coefficient reservation also covers
+        // the 32-byte per-send tap state alongside ramps/prepared changes. Work
+        // units remain coefficient visits, not processor instructions or deadlines.
         let estimated_bytes = coefficients
             .checked_mul(128)
             .and_then(|n| {

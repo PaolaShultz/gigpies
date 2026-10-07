@@ -3,6 +3,7 @@
 use crate::processing_wire::{
     Channel, ProcessingCommand, ProcessingReply, ProcessingRequest, ProcessingSnapshot,
 };
+use crate::sends_wire::{SendsCommand, SendsReply, SendsRequest, SendsSnapshot};
 use crate::{
     control_model::{Authority, Command, Edit, Reply, Request, Scope, Snapshot},
     mixer::{INPUTS, Mixer, Prepared},
@@ -294,6 +295,12 @@ struct ProcessingPending {
     frame: u64,
 }
 #[derive(Debug)]
+struct SendsPending {
+    request: SendsRequest,
+    ticket: u64,
+    frame: u64,
+}
+#[derive(Debug)]
 pub struct OfflineEngine {
     authority: Authority,
     mixer: Mixer,
@@ -301,6 +308,9 @@ pub struct OfflineEngine {
     next_ticket: u64,
     outcomes: BTreeMap<String, VecDeque<(Request, RenderedReply)>>,
     holds: Vec<Vec<Option<u64>>>,
+    sends_pending: Option<SendsPending>,
+    sends_outcomes: BTreeMap<String, VecDeque<(SendsRequest, SendsReply)>>,
+    sends_completions: Vec<SendsReply>,
     processing_pending: Option<ProcessingPending>,
     processing_outcomes: BTreeMap<String, VecDeque<(ProcessingRequest, ProcessingReply)>>,
     processing_completions: Vec<ProcessingReply>,
@@ -354,10 +364,18 @@ impl OfflineEngine {
             outcomes: BTreeMap::new(),
             holds: vec![vec![None; 4 + monitors]; inputs],
             module_ids: BTreeMap::new(),
+            sends_pending: None,
+            sends_outcomes: BTreeMap::new(),
+            sends_completions: Vec::new(),
             processing_pending: None,
             processing_outcomes: BTreeMap::new(),
             processing_completions: Vec::new(),
         })
+    }
+    fn send_id_conflict(&self, r: &Request) -> bool {
+        self.sends_pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer == r.writer && p.request.request_id == r.request_id)
     }
     /// Reserve one shared authority transaction. Fingerprint must bind the exact
     /// contract and complete body. The caller retains prepared owned state offRT.
@@ -388,6 +406,9 @@ impl OfflineEngine {
         if let Some(reason) = self.authority.processing_identity(&history, now) {
             return Err(reason.into());
         }
+        if self.send_id_conflict(r) {
+            return Err("reused_id".into());
+        }
         if let Some(reply) = self.authority.cached(&history, now) {
             return Ok((0, Some(reply)));
         }
@@ -398,7 +419,10 @@ impl OfflineEngine {
                 Err("backpressure".into())
             };
         }
-        if self.pending.is_some() || self.processing_pending.is_some() {
+        if self.pending.is_some()
+            || self.processing_pending.is_some()
+            || self.sends_pending.is_some()
+        {
             return Err("backpressure".into());
         }
         let checked = self
@@ -518,6 +542,7 @@ impl OfflineEngine {
         }
         let busy = self.pending.is_some()
             || self.processing_pending.is_some()
+            || self.sends_pending.is_some()
             || self.external_pending.is_some();
         self.authority.maintain_lease(r, now, self.frame(), busy)
     }
@@ -539,6 +564,8 @@ impl OfflineEngine {
         self.mixer.quiesce();
         self.pending = None;
         self.processing_pending = None;
+        self.sends_pending = None;
+        self.sends_completions.clear();
         self.external_pending = None;
         self.authority.revoke_all();
     }
@@ -559,8 +586,15 @@ impl OfflineEngine {
     pub fn persisted_intent(&mut self) -> Result<EngineIntent> {
         let snapshot = self.authority.snapshot()?;
         Ok(EngineIntent {
-            version: 1,
+            version: 2,
             show_id: snapshot.show_id,
+            send_taps: Some(
+                self.mixer
+                    .send_observations()
+                    .into_iter()
+                    .map(|r| r.into_iter().map(|s| s.1).collect())
+                    .collect(),
+            ),
             topology: self.topology().clone(),
             parameters: snapshot
                 .parameters
@@ -590,7 +624,11 @@ impl OfflineEngine {
         Self::restore_intent(intent, epoch, frame)
     }
     pub fn restore_intent(intent: &EngineIntent, epoch: Counter, frame: u64) -> Result<Self> {
-        if intent.version != 1 || intent.processing.len() != intent.topology.inputs.len() {
+        if ![1, 2].contains(&intent.version)
+            || intent.processing.len() != intent.topology.inputs.len()
+            || (intent.version == 1 && intent.send_taps.is_some())
+            || (intent.version == 2 && intent.send_taps.is_none())
+        {
             return Err("intent version/shape".into());
         }
         intent
@@ -606,6 +644,17 @@ impl OfflineEngine {
         e.mixer
             .restore_intent(&intent.parameters, &intent.processing)?;
         e.authority.restore_parameters(&intent.parameters)?;
+        if let Some(taps) = &intent.send_taps {
+            if e.topology().is_legacy()
+                && taps
+                    .iter()
+                    .flatten()
+                    .any(|t| *t != crate::sends_wire::Tap::RawPostMute)
+            {
+                return Err("legacy monitor taps".into());
+            }
+            e.mixer.restore_sends(taps)?;
+        }
         e.clock.state = crate::clock_domain::ClockState::Disarmed;
         e.mixer.quiesce();
         Ok(e)
@@ -691,8 +740,22 @@ impl OfflineEngine {
             self.mixer.cancel(p.ticket);
         }
         self.outcomes.remove(writer);
+        if self
+            .sends_pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer.as_deref() == Some(writer))
+        {
+            let p = self.sends_pending.take().unwrap();
+            self.mixer.cancel(p.ticket);
+        }
+        self.sends_outcomes.remove(writer);
+        self.sends_completions
+            .retain(|p| p.context.writer.as_deref() != Some(writer));
         self.processing_outcomes.remove(writer);
         self.module_ids.remove(writer);
+    }
+    pub fn processing_version(&self) -> u32 {
+        if self.topology().is_legacy() { 2 } else { 4 }
     }
     pub fn wire_version(&self) -> u32 {
         self.authority.version()
@@ -804,7 +867,12 @@ impl OfflineEngine {
             frame: Counter(self.frame()),
             sample_rate: 48000,
             foh_tap: crate::processing_wire::FOH_TAP.into(),
-            monitor_tap: crate::processing_wire::MONITOR_TAP.into(),
+            monitor_tap: if self.topology().is_legacy() {
+                crate::processing_wire::MONITOR_TAP
+            } else {
+                crate::processing_wire::PER_SEND_TAP
+            }
+            .into(),
             faulted: self.mixer.faulted(),
             channels: self
                 .mixer
@@ -854,7 +922,7 @@ impl OfflineEngine {
         fresh: bool,
     ) -> Result<ProcessingReply> {
         r.validate()?;
-        if r.version != if self.authority.version() == 1 { 2 } else { 3 } {
+        if r.version != self.processing_version() {
             return Ok(ProcessingReply::new(
                 r,
                 "final",
@@ -935,6 +1003,18 @@ impl OfflineEngine {
                 self.revision(),
             ));
         }
+        if self
+            .sends_pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer == r.writer && p.request.request_id == r.request_id)
+        {
+            return Ok(ProcessingReply::new(
+                r,
+                "final",
+                Some("reused_id".into()),
+                self.revision(),
+            ));
+        }
         // Probe shared high-water/cache before pressure; do not consume new IDs.
         let mut check = self.authority.clone();
         let refusal = if !fresh {
@@ -957,6 +1037,7 @@ impl OfflineEngine {
         if self.external_pending.is_some()
             || self.pending.is_some()
             || self.processing_pending.is_some()
+            || self.sends_pending.is_some()
             || !self.mixer.processing_ready()
             || !self.processing_completions.is_empty()
         {
@@ -1015,6 +1096,246 @@ impl OfflineEngine {
     pub fn take_processing_completions(&mut self) -> Vec<ProcessingReply> {
         std::mem::take(&mut self.processing_completions)
     }
+    pub fn sends_snapshot(&mut self) -> Result<SendsSnapshot> {
+        let a = self.authority.snapshot()?;
+        Ok(SendsSnapshot {
+            show_id: a.show_id,
+            epoch: a.epoch,
+            revision: a.revision,
+            sequence: a.sequence,
+            frame: Counter(self.frame()),
+            sample_rate: 48000,
+            supported_modes: crate::sends_wire::MODES.to_vec(),
+            tap_positions: crate::sends_wire::POSITIONS
+                .iter()
+                .map(|s| (*s).into())
+                .collect(),
+            monitors: (1..=self.mixer.monitor_count())
+                .map(|m| format!("monitor-{m}"))
+                .collect(),
+            faulted: self.mixer.faulted(),
+            channels: self
+                .mixer
+                .send_observations()
+                .into_iter()
+                .enumerate()
+                .map(|(i, row)| crate::sends_wire::Channel {
+                    input: format!("input-{:02}", i + 1),
+                    sends: row
+                        .into_iter()
+                        .enumerate()
+                        .map(
+                            |(m, (current, target, remaining))| crate::sends_wire::Send {
+                                monitor: format!("monitor-{}", m + 1),
+                                current,
+                                target,
+                                transition_remaining_frames: remaining,
+                                ready: remaining == 0,
+                            },
+                        )
+                        .collect(),
+                })
+                .collect(),
+        })
+    }
+    fn remember_sends(&mut self, r: SendsRequest, p: SendsReply) {
+        let cache = self
+            .sends_outcomes
+            .entry(r.writer.clone().expect("mutation"))
+            .or_default();
+        cache.push_back((r, p));
+        if cache.len() > 64 {
+            cache.pop_front();
+        }
+    }
+    fn sends_pending_reply(&self, p: &SendsPending) -> SendsReply {
+        let mut r = SendsReply::new(&p.request, "pending", None, self.revision());
+        r.ticket = Some(Counter(p.ticket));
+        r.effective_frame = Some(Counter(p.frame));
+        r.ramp_frames = Some(240);
+        r
+    }
+    /// Complete atomic processing admission; all preparation remains off render.
+    pub fn handle_sends(&mut self, r: &SendsRequest, now: u64) -> Result<SendsReply> {
+        self.handle_sends_with_freshness(r, now, true)
+    }
+    pub(crate) fn handle_sends_with_freshness(
+        &mut self,
+        r: &SendsRequest,
+        now: u64,
+        fresh: bool,
+    ) -> Result<SendsReply> {
+        r.validate()?;
+        if self.topology().is_legacy() {
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                Some("unsupported_topology".into()),
+                self.revision(),
+            ));
+        }
+        if let SendsCommand::SendTapSet { input, monitor, .. } = &r.command
+            && (crate::processing_wire::input_index(input)? >= self.mixer.input_count()
+                || crate::sends_wire::monitor_index(monitor)? >= self.mixer.monitor_count())
+        {
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                Some("target".into()),
+                self.revision(),
+            ));
+        }
+        if matches!(r.command, SendsCommand::SendsSnapshot {}) {
+            let reply = self.authority.handle(&r.authority_request(), now);
+            let mut p = SendsReply::new(r, "final", reply.body.reason, self.revision());
+            if reply.kind == "applied" {
+                p.snapshot = Some(self.sends_snapshot()?);
+            }
+            return Ok(p);
+        }
+        let history = r.history_request();
+        if let Some(reason) = self.authority.processing_identity(&history, now) {
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                Some(reason.into()),
+                self.revision(),
+            ));
+        }
+        self.authority.observe_control_time(now)?;
+        self.sends_outcomes
+            .retain(|w, _| self.authority.writer_live(w, now));
+        if self.authority.cached(&history, now).is_some() {
+            if let Some((old, p)) = self
+                .sends_outcomes
+                .get(r.writer.as_ref().unwrap())
+                .and_then(|v| v.iter().find(|(old, _)| old.request_id == r.request_id))
+            {
+                return Ok(if old == r {
+                    p.clone()
+                } else {
+                    SendsReply::new(r, "final", Some("reused_id".into()), self.revision())
+                });
+            }
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                Some("expired_id".into()),
+                self.revision(),
+            ));
+        }
+        if let Some(p) = &self.sends_pending {
+            if p.request == *r {
+                return Ok(self.sends_pending_reply(p));
+            }
+            if p.request.writer == r.writer && p.request.request_id == r.request_id {
+                return Ok(SendsReply::new(
+                    r,
+                    "final",
+                    Some("reused_id".into()),
+                    self.revision(),
+                ));
+            }
+        }
+        if let Some(p) = &self.pending
+            && p.request.writer == r.writer
+            && p.request.request_id == r.request_id
+        {
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                Some("reused_id".into()),
+                self.revision(),
+            ));
+        }
+        if self
+            .processing_pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer == r.writer && p.request.request_id == r.request_id)
+            || self
+                .external_pending
+                .as_ref()
+                .is_some_and(|p| p.0.writer == r.writer && p.0.request_id == r.request_id)
+        {
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                Some("reused_id".into()),
+                self.revision(),
+            ));
+        }
+        // Probe shared high-water/cache before pressure; do not consume new IDs.
+        let mut check = self.authority.clone();
+        let refusal = if !fresh {
+            Some("stale_snapshot")
+        } else {
+            self.mixer.faulted().then_some("faulted")
+        };
+        let checked = check.scoped_transaction(&history, now, refusal, r.scope()?);
+        if matches!(
+            checked.body.reason.as_deref(),
+            Some("reused_id" | "expired_id")
+        ) {
+            return Ok(SendsReply::new(
+                r,
+                "final",
+                checked.body.reason,
+                self.revision(),
+            ));
+        }
+        if self.external_pending.is_some()
+            || self.pending.is_some()
+            || self.sends_pending.is_some()
+            || self.processing_pending.is_some()
+            || !self.mixer.sends_ready()
+            || !self.sends_completions.is_empty()
+        {
+            return Ok(SendsReply::new(r, "backpressure", None, self.revision()));
+        }
+        if checked.kind != "applied" {
+            let reply = self
+                .authority
+                .scoped_transaction(&history, now, refusal, r.scope()?);
+            let p = SendsReply::new(r, "final", reply.body.reason, self.revision());
+            if self.authority.cached(&history, now).is_some() {
+                self.remember_sends(r.clone(), p.clone());
+            }
+            return Ok(p);
+        }
+        let SendsCommand::SendTapSet {
+            input,
+            monitor,
+            tap,
+        } = &r.command
+        else {
+            unreachable!()
+        };
+        let prepared = Prepared::send_for(
+            self.mixer.input_count(),
+            self.mixer.monitor_count(),
+            crate::processing_wire::input_index(input)?,
+            crate::sends_wire::monitor_index(monitor)?,
+            *tap,
+        )?;
+        let Some(next) = self.next_ticket.checked_add(1) else {
+            return Ok(SendsReply::new(r, "backpressure", None, self.revision()));
+        };
+        let Ok(frame) = self.mixer.schedule(prepared, self.next_ticket) else {
+            return Ok(SendsReply::new(r, "backpressure", None, self.revision()));
+        };
+        let pending = SendsPending {
+            request: r.clone(),
+            ticket: self.next_ticket,
+            frame,
+        };
+        self.next_ticket = next;
+        let reply = self.sends_pending_reply(&pending);
+        self.sends_pending = Some(pending);
+        Ok(reply)
+    }
+    pub fn take_sends_completions(&mut self) -> Vec<SendsReply> {
+        std::mem::take(&mut self.sends_completions)
+    }
     /// GP05 admission shares the authority's session high-water with GP03.
     /// Fingerprints include contract/kind/body. A private Renew reserves the ID;
     /// GP03 is fenced from replaying that internal reservation below. No graph
@@ -1056,6 +1377,9 @@ impl OfflineEngine {
         if self.authority.cached(r, now).is_some() {
             return Err("reused_id".into());
         }
+        if self.send_id_conflict(r) {
+            return Err("reused_id".into());
+        }
         if self.external_pending.is_some() {
             return Err("backpressure".into());
         }
@@ -1065,7 +1389,10 @@ impl OfflineEngine {
         {
             return Err("reused_id".into());
         }
-        if self.pending.is_some() || self.processing_pending.is_some() {
+        if self.pending.is_some()
+            || self.processing_pending.is_some()
+            || self.sends_pending.is_some()
+        {
             return Err("backpressure".into());
         }
         let reply = self.authority.handle(r, now);
@@ -1129,6 +1456,26 @@ impl OfflineEngine {
             return Ok(Self::wrapped(cached));
         }
         if let Some(p) = &self.processing_pending
+            && !matches!(r.command, Command::Snapshot {})
+        {
+            let mut check = self.authority.clone();
+            let checked = check.handle(r, now);
+            if matches!(
+                checked.body.reason.as_deref(),
+                Some("wrong_show" | "epoch" | "lease" | "clock" | "expired_id" | "reused_id")
+            ) {
+                return Ok(Self::wrapped(checked));
+            }
+            if p.request.writer == r.writer && p.request.request_id == r.request_id {
+                return Ok(Self::wrapped(self.authority.reply(
+                    r,
+                    "rejected",
+                    Some("reused_id"),
+                )));
+            }
+            return Ok(Self::backpressure(r));
+        }
+        if let Some(p) = &self.sends_pending
             && !matches!(r.command, Command::Snapshot {})
         {
             let mut check = self.authority.clone();
@@ -1355,6 +1702,62 @@ impl OfflineEngine {
             self.clock.next_frame = self.frame();
             return Ok(replies);
         }
+        if let Some(split) = self
+            .sends_pending
+            .as_ref()
+            .filter(|p| p.frame < end)
+            .map(|p| (p.frame - self.frame()) as usize)
+        {
+            self.mixer
+                .process_interleaved(&input[..split * ni], &mut output[..split * no])
+                .map_err(|e| format!("{e:?}"))?;
+            let p = self.sends_pending.take().expect("pending");
+            let mut staged = self.authority.clone();
+            let checked = staged.scoped_transaction(
+                &p.request.history_request(),
+                now_ms,
+                self.mixer.faulted().then_some("faulted"),
+                p.request.scope()?,
+            );
+            if checked.kind != "applied" {
+                self.mixer.cancel(p.ticket);
+                self.authority = staged;
+                let reply =
+                    SendsReply::new(&p.request, "final", checked.body.reason, self.revision());
+                self.remember_sends(p.request, reply.clone());
+                self.sends_completions.push(reply);
+                self.mixer
+                    .process_interleaved(&input[split * ni..], &mut output[split * no..])
+                    .map_err(|e| format!("{e:?}"))?;
+            } else {
+                self.mixer
+                    .process_interleaved(
+                        &input[split * ni..(split + 1) * ni],
+                        &mut output[split * no..(split + 1) * no],
+                    )
+                    .map_err(|e| format!("{e:?}"))?;
+                let done = self.mixer.take_completion().ok_or("completion missing")?;
+                if done.ticket != p.ticket || done.frame != p.frame {
+                    return Err("completion identity".into());
+                }
+                self.authority = staged;
+                let mut reply = SendsReply::new(&p.request, "final", None, self.revision());
+                reply.ticket = Some(Counter(p.ticket));
+                reply.effective_frame = Some(Counter(p.frame));
+                reply.ramp_frames = Some(240);
+                reply.snapshot = Some(self.sends_snapshot()?);
+                self.remember_sends(p.request, reply.clone());
+                self.sends_completions.push(reply);
+                self.mixer
+                    .process_interleaved(
+                        &input[(split + 1) * ni..],
+                        &mut output[(split + 1) * no..],
+                    )
+                    .map_err(|e| format!("{e:?}"))?;
+            }
+            self.clock.next_frame = self.frame();
+            return Ok(replies);
+        }
         let split = self
             .pending
             .as_ref()
@@ -1479,7 +1882,7 @@ fn nano(gain: f64) -> u64 {
 
 /// Show intent only: leases, pending requests, mode grants and armed state are
 /// deliberately unrepresentable. Restoring always requires explicit rearm.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct EngineIntent {
     pub version: u32,
@@ -1487,6 +1890,54 @@ pub struct EngineIntent {
     pub topology: crate::topology::EngineTopology,
     pub parameters: Vec<Edit>,
     pub processing: Vec<crate::channel_processing::Config>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_taps: Option<Vec<Vec<crate::sends_wire::Tap>>>,
+}
+
+impl<'de> Deserialize<'de> for EngineIntent {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let object = value
+            .as_object()
+            .ok_or_else(|| serde::de::Error::custom("intent object"))?;
+        let old = ["version", "show_id", "topology", "parameters", "processing"];
+        let version = value["version"]
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom("intent version"))?;
+        let count = match version {
+            1 => 5,
+            2 => 6,
+            _ => return Err(serde::de::Error::custom("intent version")),
+        };
+        if object.len() != count
+            || object
+                .keys()
+                .any(|k| !old.contains(&k.as_str()) && !(version == 2 && k == "send_taps"))
+        {
+            return Err(serde::de::Error::custom("intent fields"));
+        }
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Fields {
+            version: u32,
+            show_id: String,
+            topology: crate::topology::EngineTopology,
+            parameters: Vec<Edit>,
+            processing: Vec<crate::channel_processing::Config>,
+            send_taps: Option<Vec<Vec<crate::sends_wire::Tap>>>,
+        }
+        let fields: Fields = serde_json::from_value(value).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            version: fields.version,
+            show_id: fields.show_id,
+            topology: fields.topology,
+            parameters: fields.parameters,
+            processing: fields.processing,
+            send_taps: fields.send_taps,
+        })
+    }
 }
 
 impl EngineIntent {

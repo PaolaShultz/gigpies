@@ -85,11 +85,12 @@ fn atomic_all_staged_authority_classes_preserve_maintenance_history_through_comm
         Scope::TalkbackDestinations,
         Scope::TalkbackFoh,
     ] {
-        for class in ["ordinary", "processing", "external"] {
+        for class in ["ordinary", "processing", "sends", "external"] {
             for cancel in [false, true] {
                 let mut e = engine();
                 let lease = grant(&mut e, "maintainer", scope);
                 let other_scope = match class {
+                    "sends" => Scope::Monitor(3),
                     "external" if scope == Scope::PaConfiguration => Scope::OutputRoutes,
                     "external" => Scope::PaConfiguration,
                     "ordinary" if scope == Scope::Foh => Scope::Monitor1,
@@ -135,7 +136,7 @@ fn atomic_all_staged_authority_classes_preserve_maintenance_history_through_comm
                     "processing" => {
                         let p = ProcessingRequest {
                             contract: "GP07-processing".into(),
-                            version: 3,
+                            version: 4,
                             show_id: r.show_id.clone(),
                             module: r.module.clone(),
                             epoch: r.epoch,
@@ -149,6 +150,25 @@ fn atomic_all_staged_authority_classes_preserve_maintenance_history_through_comm
                             },
                         };
                         assert_eq!(e.handle_processing(&p, 101).unwrap().state, "pending");
+                    }
+                    "sends" => {
+                        let p = gigpies::sends_wire::SendsRequest {
+                            contract: "GP18-sends".into(),
+                            version: 1,
+                            show_id: r.show_id.clone(),
+                            module: r.module.clone(),
+                            epoch: r.epoch,
+                            writer: r.writer.clone(),
+                            lease: r.lease,
+                            request_id: r.request_id,
+                            expected_revision: r.expected_revision,
+                            command: gigpies::sends_wire::SendsCommand::SendTapSet {
+                                input: "input-16".into(),
+                                monitor: "monitor-3".into(),
+                                tap: gigpies::sends_wire::Tap::ProcessedPreFader,
+                            },
+                        };
+                        assert_eq!(e.handle_sends(&p, 101).unwrap().state, "pending");
                     }
                     "external" => {
                         assert!(

@@ -205,6 +205,7 @@ impl AuthenticatedContext {
             kind,
             "snapshot"
                 | "processing_snapshot"
+                | "sends_snapshot"
                 | "module_status"
                 | "topology_snapshot"
                 | "clock_snapshot"

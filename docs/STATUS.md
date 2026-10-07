@@ -1,5 +1,16 @@
 # Status and next steps
 
+## Monitor/aux tap routing — task0018 producer
+
+Configured engines implement independent raw post-mute, processed pre-fader and
+processed post-fader mono sends through GP18-sends:1, with shared monitor authority,
+revision/dedup, bounded 240-frame transitions, committed-only version2 intent and
+disarmed recovery. Configured processing explicitly advances to GP07:4; legacy
+8/2 processing2 and raw monitor bytes remain unchanged. [Contract and validation](MONITOR_SENDS.md).
+Producer software gates and actual corpus provenance are recorded with the scoped
+handoff; coordinator acceptance and Desk integration remain separate. No physical
+mapping, listening, audio-clock lock or sustained hardware deadline claim.
+
 ## Control-capacity and CI review fixes — 2026-10-06
 
 Shared authority now admits 16 live writers under a named deployment resource bound,

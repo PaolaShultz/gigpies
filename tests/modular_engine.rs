@@ -255,7 +255,7 @@ fn write_producer_fixtures() {
         r.lease = grant.outcome.unwrap().body.granted_lease;
         let pr = gigpies::processing_wire::ProcessingRequest {
             contract: "GP07-processing".into(),
-            version: 3,
+            version: 4,
             show_id: SHOW.into(),
             module: "audio".into(),
             epoch: Counter(14),

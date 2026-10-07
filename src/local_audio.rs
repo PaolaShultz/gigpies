@@ -76,6 +76,7 @@ enum Incoming {
     Structural(crate::structural_control::Request),
     Brain(crate::brain_control::Request),
     Modules(crate::module_wire::ModuleRequest),
+    Sends(crate::sends_wire::SendsRequest),
     Processing(crate::processing_wire::ProcessingRequest),
     UnsupportedProcessing(crate::processing_wire::UnsupportedRequest),
 }
@@ -89,6 +90,7 @@ struct Client {
     telemetry: Option<Packet>,
     last_write: u64,
     snapshot: bool,
+    sends_snapshot_ms: Option<u64>,
     processing_snapshot_ms: Option<u64>,
     structural_snapshot_ms: Option<u64>,
     brain_snapshot_ms: Option<u64>,
@@ -152,6 +154,10 @@ impl Client {
             Incoming::Structural(crate::structural_control::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
             Incoming::Modules(crate::module_wire::ModuleRequest::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str())
+            == Some(crate::sends_wire::CONTRACT)
+        {
+            Incoming::Sends(crate::sends_wire::SendsRequest::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP07-processing") {
             if let Some(request) =
                 crate::processing_wire::UnsupportedRequest::decode_for(bytes, processing_version)?
@@ -441,6 +447,7 @@ pub struct LocalAudio {
     ticks: u64,
     last_now: u64,
     pending_owner: Option<(u64, u64)>,
+    sends_owner: Option<(u64, u64)>,
     processing_owner: Option<(u64, u64)>,
     writer_connections: BTreeMap<String, u64>,
     show: String,
@@ -556,6 +563,7 @@ impl LocalAudio {
             ticks: 0,
             last_now: 0,
             pending_owner: None,
+            sends_owner: None,
             processing_owner: None,
             writer_connections: BTreeMap::new(),
             show: show.into(),
@@ -1393,6 +1401,7 @@ impl LocalAudio {
         self.writer_connections.clear();
         self.pending_owner = None;
         self.processing_owner = None;
+        self.sends_owner = None;
         Ok(())
     }
     pub fn recover_source(&mut self, epoch: Counter, frame: u64) -> Result<()> {
@@ -1698,6 +1707,40 @@ impl LocalAudio {
         reply.validate()?;
         self.clients[index].queue_module(&reply, now)
     }
+    fn sends_request(
+        &mut self,
+        index: usize,
+        r: crate::sends_wire::SendsRequest,
+        now: u64,
+    ) -> Result<()> {
+        use crate::sends_wire::{SendsCommand, SendsReply};
+        let read = matches!(r.command, SendsCommand::SendsSnapshot {});
+        let client = &self.clients[index];
+        let reply = if !read
+            && (!client.snapshot || client.writer != r.writer || client.lease != r.lease)
+        {
+            SendsReply::new(&r, "final", Some("lease".into()), self.engine.revision())
+        } else {
+            self.engine.handle_sends_with_freshness(
+                &r,
+                now,
+                client
+                    .sends_snapshot_ms
+                    .is_some_and(|t| now.saturating_sub(t) <= 250),
+            )?
+        };
+        if read && reply.snapshot.is_some() {
+            self.clients[index].sends_snapshot_ms = Some(now);
+        }
+        if reply.state == "pending" {
+            self.sends_owner = Some((
+                reply.ticket.expect("pending ticket").0,
+                self.clients[index].id,
+            ));
+        }
+        reply.validate()?;
+        self.clients[index].queue_module(&reply, now)
+    }
     /// Captured final PA output from the actual owner graph, when enabled.
     #[cfg(feature = "hardware-host")]
     pub fn module_output(&self) -> Option<&[f64; 48 * 6]> {
@@ -1946,6 +1989,7 @@ impl LocalAudio {
                         telemetry: None,
                         last_write: now,
                         snapshot: false,
+                        sends_snapshot_ms: None,
                         processing_snapshot_ms: None,
                         structural_snapshot_ms: None,
                         brain_snapshot_ms: None,
@@ -1960,7 +2004,7 @@ impl LocalAudio {
         }
         let mut index = 0;
         while index < self.clients.len() {
-            let result = self.clients[index].receive(now, self.engine.wire_version() + 1);
+            let result = self.clients[index].receive(now, self.engine.processing_version());
             let mut keep = true;
             match result {
                 Err(_) => keep = false,
@@ -2021,6 +2065,11 @@ impl LocalAudio {
                 }
                 Ok(Some(Incoming::Processing(request))) => {
                     if self.processing_request(index, request, now).is_err() {
+                        keep = false;
+                    }
+                }
+                Ok(Some(Incoming::Sends(request))) => {
+                    if self.sends_request(index, request, now).is_err() {
                         keep = false;
                     }
                 }
@@ -2193,6 +2242,22 @@ impl LocalAudio {
                 && self.clients[index].queue_module(&reply, now).is_err()
             {
                 self.clients.remove(index);
+            }
+        }
+        for reply in self.engine.take_sends_completions() {
+            if self.sends_owner.is_none() && self.remote_completions.len() < 64 {
+                self.remote_completions
+                    .push_back(serde_json::to_value(&reply).map_err(|e| e.to_string())?);
+            }
+            if let Some((ticket, owner)) = self.sends_owner.take()
+                && reply.ticket.is_none_or(|t| t.0 == ticket)
+                && let Some(index) = self.clients.iter().position(|c| c.id == owner)
+                && self.clients[index].queue_module(&reply, now).is_err()
+            {
+                let removed = self.clients.remove(index);
+                if let Some(writer) = removed.writer {
+                    self.revoke_writer(&writer);
+                }
             }
         }
         // Latest-only telemetry never replaces a partially transmitted frame.

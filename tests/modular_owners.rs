@@ -153,3 +153,103 @@ fn recorder_admission_refuses_before_loading_or_creating() {
         assert!(error.contains(reason), "{error}");
     }
 }
+
+#[test]
+#[ignore = "explicit hash-verified PA/FX/REC libraries and owner PA fixtures; software only"]
+fn actual_monitor_taps_feed_owner_matrix_after_send_gain_without_reprocessing_foh() {
+    use gigpies::{
+        channel_processing::Config, mixer_control::OfflineEngine, module_graph::ModuleGraph,
+        sends_wire::Tap, show::Counter, topology::EngineTopology,
+    };
+    let manifest = manifest();
+    let root = std::path::PathBuf::from(std::env::var("GP_PA_V2_FIXTURES").unwrap());
+    let json = std::fs::read(root.join("matrix4x8.json")).unwrap();
+    let mut engine = OfflineEngine::with_topology(
+        "11111111-1111-4111-8111-111111111111",
+        Counter(7),
+        Counter(0),
+        0,
+        EngineTopology::software(17, 3, 8).unwrap(),
+    )
+    .unwrap();
+    let mut intent = engine.persisted_intent().unwrap();
+    intent.processing[0] = Config {
+        eq_bypass: false,
+        band3_gain_mdb: 6000,
+        compressor_bypass: false,
+        threshold_mdb: -24000,
+        ratio_milli: 4000,
+        attack_us: 100,
+        ..Default::default()
+    };
+    intent.send_taps.as_mut().unwrap()[0][0] = Tap::ProcessedPreFader;
+    intent.send_taps.as_mut().unwrap()[0][1] = Tap::ProcessedPostFader;
+    let mut actual = gigpies::mixer::Mixer::from_topology(0, intent.topology.clone()).unwrap();
+    actual
+        .restore_intent(&intent.parameters, &intent.processing)
+        .unwrap();
+    actual
+        .restore_sends(intent.send_taps.as_ref().unwrap())
+        .unwrap();
+    intent.send_taps.as_mut().unwrap()[0].fill(Tap::RawPostMute);
+    let mut legacy = gigpies::mixer::Mixer::from_topology(0, intent.topology.clone()).unwrap();
+    legacy
+        .restore_intent(&intent.parameters, &intent.processing)
+        .unwrap();
+    legacy
+        .restore_sends(intent.send_taps.as_ref().unwrap())
+        .unwrap();
+    actual.rearm().unwrap();
+    legacy.rearm().unwrap();
+    let mut graph = ModuleGraph::load_configured(manifest.clone(), 7, 0, 17).unwrap();
+    let mut prepared = graph.prepare_pa_change(&json, vec![0, 1, 2, 3], 5).unwrap();
+    assert_eq!(graph.commit_pa_change(&mut prepared, 7, 0), 0);
+    graph.retire_pa_changes();
+    graph.rearm_pa().unwrap();
+    let mut pa = Pa::load(&manifest.pa.library, &json, 7, 0).unwrap();
+    assert_eq!(pa.rearm(7, 0), 0);
+    let mut fx = Dsp::load(&manifest.fx.library, "fx", 48).unwrap();
+    let mut raw = vec![0.; 17 * 48];
+    let mut buses = vec![0.; 5 * 48];
+    let mut original = vec![0.; 5 * 48];
+    let mut pa_input = vec![0.; 4 * 48];
+    let mut expected = vec![0.; 8 * 48];
+    let mut foh = [0.; 96];
+    let mut wet = [0.; 96];
+    let mut difference = false;
+    for block in 0..32u64 {
+        for f in 0..48 {
+            let frame = block * 48 + f as u64;
+            raw[f * 17] = 0.25 * (std::f64::consts::TAU * 2000. * frame as f64 / 48000.).sin();
+        }
+        actual.process_interleaved(&raw, &mut buses).unwrap();
+        legacy.process_interleaved(&raw, &mut original).unwrap();
+        for f in 0..48 {
+            assert_eq!(&buses[f * 5..f * 5 + 2], &original[f * 5..f * 5 + 2]);
+            foh[f * 2] = buses[f * 5];
+            foh[f * 2 + 1] = buses[f * 5 + 1];
+        }
+        assert_eq!(fx.process_result(&foh, &mut wet, 2), 0);
+        for f in 0..48 {
+            pa_input[f * 4] = buses[f * 5] + wet[f * 2];
+            pa_input[f * 4 + 1] = buses[f * 5 + 1] + wet[f * 2 + 1];
+            pa_input[f * 4 + 2] = buses[f * 5 + 2];
+            pa_input[f * 4 + 3] = buses[f * 5 + 3];
+        }
+        graph
+            .process_interleaved_brain(7, block * 48, &raw, &buses, 5, None, None)
+            .unwrap();
+        assert_eq!(pa.process(&pa_input, &mut expected, 7, block * 48), 0);
+        assert_eq!(graph.output_interleaved(), expected);
+        if block > 12 {
+            difference |= buses
+                .iter()
+                .zip(&original)
+                .any(|(a, b)| (a - b).abs() > 1e-6);
+        }
+    }
+    assert!(
+        difference,
+        "actual PA matrix must receive changed monitor signals"
+    );
+}

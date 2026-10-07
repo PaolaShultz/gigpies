@@ -68,6 +68,9 @@ impl EngineAuthority {
         for reply in self.engine.take_processing_completions() {
             self.queue_reply(serde_json::to_value(&reply).map_err(|e| e.to_string())?)?;
         }
+        for reply in self.engine.take_sends_completions() {
+            self.queue_reply(serde_json::to_value(&reply).map_err(|e| e.to_string())?)?;
+        }
         Ok(())
     }
     fn queue_reply(&mut self, value: Value) -> Result<()> {
@@ -97,6 +100,7 @@ impl EngineAuthority {
 #[derive(Default)]
 pub struct ReadState {
     audio_snapshot: bool,
+    sends_snapshot_ms: Option<u64>,
     processing_snapshot_ms: Option<u64>,
 }
 
@@ -150,7 +154,7 @@ pub fn dispatch_engine(
         Some(crate::processing_wire::CONTRACT) => {
             if let Some(unsupported) = crate::processing_wire::UnsupportedRequest::decode_for(
                 &bytes,
-                engine.wire_version() + 1,
+                engine.processing_version(),
             )? {
                 return Ok(unsupported.refusal(engine.revision()));
             }
@@ -169,6 +173,28 @@ pub fn dispatch_engine(
                 && reply.snapshot.is_some()
             {
                 state.processing_snapshot_ms = Some(now_ms);
+            }
+            serde_json::to_value(&reply).map_err(|e| e.to_string())
+        }
+        Some(crate::sends_wire::CONTRACT) => {
+            use crate::sends_wire::{SendsCommand, SendsRequest};
+            let request = SendsRequest::decode(&bytes)?;
+            let read = matches!(request.command, SendsCommand::SendsSnapshot {});
+            if !read {
+                let scope = request.scope()?;
+                context.require(&scope_permission(scope))?;
+                if !state.audio_snapshot
+                    || engine.writer_scope(&request.authority_request(), now_ms) != Some(scope)
+                {
+                    return Err("remote monitor lease required".into());
+                }
+            }
+            let fresh = state
+                .sends_snapshot_ms
+                .is_some_and(|t| now_ms >= t && now_ms - t <= 250);
+            let reply = engine.handle_sends_with_freshness(&request, now_ms, fresh)?;
+            if read && reply.snapshot.is_some() {
+                state.sends_snapshot_ms = Some(now_ms);
             }
             serde_json::to_value(&reply).map_err(|e| e.to_string())
         }
@@ -306,6 +332,7 @@ mod atomic_latch_tests {
         let mut state = ReadState {
             audio_snapshot: false,
             processing_snapshot_ms: Some(17),
+            sends_snapshot_ms: None,
         };
         state.admit_audio_snapshot();
         assert!(state.audio_ready());

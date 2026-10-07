@@ -57,3 +57,8 @@ ASRC crossings. GP15-brain/device/media and GBA1 roles extend the authenticated
 path in [REMOTE_TRANSPORT](REMOTE_TRANSPORT.md) without taking the existing FX
 media owner. Desk never opens PCM. Integrated task0015 acceptance is tracked
 separately; task0014's source-clock results are not physical two-card evidence.
+
+Configured monitor tap control uses [GP18-sends:1](MONITOR_SENDS.md) on the same
+Unix/authenticated endpoints. Each connection needs its own fresh GP18 readback
+and matching monitor permission/lease. Configured channel processing is GP07:4;
+GP07:3 requests receive typed unsupported-version refusals.

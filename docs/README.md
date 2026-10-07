@@ -96,3 +96,5 @@ a feature described in a blueprint is not evidence that it is implemented or ver
 validation and launch instructions. The [execution checkpoint](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
 records the subsequent implementation; the original planning baseline and hardware
 evidence retain their dated scope.
+
+- [Monitor/aux send taps and producer contract](MONITOR_SENDS.md)

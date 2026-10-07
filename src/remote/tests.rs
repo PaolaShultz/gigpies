@@ -901,3 +901,199 @@ async fn scoped_controllers_workers_and_reconnect_share_bounded_tls_admission() 
     .await
     .unwrap();
 }
+
+fn sends_read() -> Value {
+    json!({"contract":"GP18-sends","version":1,"show_id":SHOW,"module":"audio","epoch":"9","writer":null,"lease":null,"request_id":null,"expected_revision":null,"kind":"sends_snapshot","body":{}})
+}
+fn sends_set(writer: &str, lease: &str, id: u64, revision: u64) -> Value {
+    json!({"contract":"GP18-sends","version":1,"show_id":SHOW,"module":"audio","epoch":"9","writer":writer,"lease":lease,"request_id":id.to_string(),"expected_revision":revision.to_string(),"kind":"send_tap_set","body":{"input":"input-48","monitor":"monitor-3","tap":"processed_post_fader"}})
+}
+#[test]
+fn sends_authenticated_scope_freshness_completions_reconnect_and_revocation() {
+    let ctx = context(&[Permission::Monitor(3)]);
+    let mut owner = engine();
+    owner.dispatch_command(&ctx, snapshot_request(), 0).unwrap();
+    let grant = owner
+        .dispatch_command(
+            &ctx,
+            audio(
+                &ctx,
+                Command::Grant {
+                    scope: Scope::Monitor(3),
+                },
+                1,
+                12,
+                None,
+            ),
+            0,
+        )
+        .unwrap();
+    let lease = grant["outcome"]["body"]["granted_lease"].as_str().unwrap();
+    let stale = owner
+        .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 2, 12), 1)
+        .unwrap();
+    assert_eq!(stale["reason"], "stale_snapshot");
+    owner.dispatch_command(&ctx, sends_read(), 2).unwrap();
+    let pending = owner
+        .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 3, 12), 3)
+        .unwrap();
+    assert_eq!(pending["state"], "pending");
+    let mut output = vec![0.; 96 * 6];
+    owner
+        .process_interleaved(&vec![0.; 96 * 48], &mut output, 4)
+        .unwrap();
+    let final_reply = owner.poll_reply(&ctx, 4).unwrap().unwrap();
+    assert_eq!(final_reply["ticket"], pending["ticket"]);
+    assert_eq!(final_reply["revision"], "13");
+    assert_eq!(
+        owner
+            .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 3, 12), 5)
+            .unwrap(),
+        final_reply
+    );
+    let mut wrong = sends_set(ctx.writer(), lease, 4, 13);
+    wrong["body"]["monitor"] = json!("monitor-2");
+    assert!(owner.dispatch_command(&ctx, wrong, 5).is_err());
+    owner
+        .process_interleaved(&vec![0.; 240 * 48], &mut vec![0.; 240 * 6], 6)
+        .unwrap();
+    assert_eq!(
+        owner
+            .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 4, 13), 253)
+            .unwrap()["reason"],
+        "stale_snapshot"
+    );
+    owner.dispatch_command(&ctx, sends_read(), 254).unwrap();
+    let mut queued = sends_set(ctx.writer(), lease, 5, 13);
+    queued["body"]["tap"] = json!("raw_post_mute");
+    assert_eq!(
+        owner.dispatch_command(&ctx, queued, 255).unwrap()["state"],
+        "pending"
+    );
+    owner.disconnect(&ctx);
+    owner
+        .process_interleaved(&vec![0.; 96 * 48], &mut vec![0.; 96 * 6], 256)
+        .unwrap();
+    assert_eq!(owner.engine().revision(), Counter(13));
+    assert_eq!(
+        owner.engine().mixer().send_observations()[47][2].1,
+        crate::sends_wire::Tap::ProcessedPostFader
+    );
+    assert!(
+        owner
+            .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 5, 13), 257)
+            .is_err()
+    );
+    let foh = context(&[Permission::Foh]);
+    assert!(
+        owner
+            .dispatch_command(&foh, sends_set(foh.writer(), lease, 6, 13), 258)
+            .is_err()
+    );
+}
+#[tokio::test(flavor = "current_thread")]
+async fn sends_actual_mutual_tls_provider_boundary_and_policy_revocation() {
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let (server_credentials, client_credentials) = credentials();
+        let server_policy = PolicyStore::new(vec![peer(
+            client_credentials.certificate_chain[0].as_ref(),
+            &[Permission::Monitor(3)],
+        )])
+        .unwrap();
+        let client_policy = PolicyStore::new(vec![peer(
+            server_credentials.certificate_chain[0].as_ref(),
+            &[],
+        )])
+        .unwrap();
+        let server = RemoteServer::bind(
+            "127.0.0.1:0".parse().unwrap(),
+            &server_credentials,
+            server_policy.clone(),
+        )
+        .unwrap();
+        let address = server.local_addr().unwrap();
+        let endpoint =
+            client_endpoint("127.0.0.1:0".parse().unwrap(), &client_credentials).unwrap();
+        let retired = Arc::new(AtomicBool::new(false));
+        let flag = retired.clone();
+        let server_task = tokio::spawn(async move {
+            let session = server.accept().await.unwrap();
+            let mut owner = engine();
+            let (mut proxy, mut mailbox) =
+                authority_channel(session.context(), owner.identity()).unwrap();
+            let network = tokio::spawn(async move { session.run(&mut proxy).await });
+            let start = std::time::Instant::now();
+            let mut timer = tokio::time::interval(Duration::from_millis(5));
+            timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let input = vec![0.25; 48 * 48];
+            let mut output = vec![0.; 48 * 6];
+            loop {
+                timer.tick().await;
+                let now = start.elapsed().as_millis() as u64;
+                mailbox.service(&mut owner, now).unwrap();
+                if mailbox.retired() {
+                    flag.store(true, Ordering::Release);
+                    break;
+                }
+                owner.process_interleaved(&input, &mut output, now).unwrap();
+            }
+            let _ = network.await;
+            assert_eq!(owner.engine().revision(), Counter(13));
+            assert_eq!(
+                owner.engine().mixer().send_observations()[47][2].1,
+                crate::sends_wire::Tap::ProcessedPostFader
+            );
+        });
+        let mut client = RemoteClient::connect(endpoint, address, "stagebox.test", client_policy)
+            .await
+            .unwrap();
+        client.send_command(snapshot_request()).await.unwrap();
+        client.receive().await.unwrap();
+        let ctx = context(&[Permission::Monitor(3)]);
+        let mut grant = audio(
+            &ctx,
+            Command::Grant {
+                scope: Scope::Monitor(3),
+            },
+            1,
+            12,
+            None,
+        );
+        grant["writer"] = json!(client.writer());
+        client.send_command(grant).await.unwrap();
+        let Response::Reply { payload: grant, .. } = client.receive().await.unwrap() else {
+            panic!("grant")
+        };
+        let lease = grant["outcome"]["body"]["granted_lease"].as_str().unwrap();
+        client.send_command(sends_read()).await.unwrap();
+        let Response::Reply { payload: read, .. } = client.receive().await.unwrap() else {
+            panic!("read")
+        };
+        assert_eq!(read["snapshot"]["channels"].as_array().unwrap().len(), 48);
+        client
+            .send_command(sends_set(client.writer(), lease, 2, 12))
+            .await
+            .unwrap();
+        let Response::Reply {
+            payload: pending, ..
+        } = client.receive().await.unwrap()
+        else {
+            panic!("pending")
+        };
+        assert_eq!(pending["state"], "pending");
+        let Response::Reply {
+            payload: final_reply,
+            ..
+        } = client.receive().await.unwrap()
+        else {
+            panic!("final")
+        };
+        assert_eq!(final_reply["revision"], "13");
+        assert_eq!(pending["ticket"], final_reply["ticket"]);
+        server_policy.replace(vec![]).unwrap();
+        server_task.await.unwrap();
+        assert!(retired.load(Ordering::Acquire));
+    })
+    .await
+    .expect("bounded authenticated sends test");
+}
