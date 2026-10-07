@@ -69,3 +69,17 @@ artifact/corpus hashes and source pins must accompany coordinator acceptance.
 Desk renders a display response using these exact coefficient fixtures; it must
 not implement PA audio DSP or plot committed target as settled current during fade.
 No physical mapping, microphone, audio deadline, listening or acoustic claim follows.
+
+## Scheduling and allocation evidence boundary
+
+Loaded-owner allocation guards bracket the direct owner apply/process/status/retire
+entrypoints, including endpoint, fault, busy/stale and managed-span refusals. The
+ModuleGraph narrow commit contains owner acceptance plus an owned String swap; it
+is separate from full control orchestration. LocalAudio's control/source worker
+accepts sockets, parses/queues requests, prepares JSON/filter banks, clones authority
+and builds replies outside the owner DSP contract. HostAuthority::process_source
+is that source-worker entry, not an allocation-free hardware device callback.
+These existing orchestration allocations and control I/O are outside the guarded
+owner kernel; no whole-host hard realtime or physical deadline claim is made.
+Actual transport evidence here uses Unix sockets and a policy-authenticated test
+context through the receive codec/endpoint. It adds no TLS/QUIC handshake campaign.
