@@ -7,12 +7,15 @@ processed post-fader mono sends through GP18-sends:1, with shared monitor author
 revision/dedup, bounded 240-frame transitions, committed-only version2 intent and
 disarmed recovery. Configured processing explicitly advances to GP07:4; legacy
 8/2 processing2 and raw monitor bytes remain unchanged. [Contract and validation](MONITOR_SENDS.md).
-This is a provisional implementation, not an accepted producer freeze. Focused
-send/provider tests passed; the full default run stopped at a repeatable GP04 Unix
-analysis first-window prefix timeout (the labelled rerun received its descriptor). The original hardware-host attempt stopped at missing ALSA
-development metadata; the coordinator resolved that prerequisite, with reruns pending. Remaining suites, Clippy/release and actual-owner gates
-are listed in the scoped handoff. The candidate corpus names its exact committed
-producing revision; coordinator acceptance and Desk integration remain separate.
+This remains a provisional producer, pending coordinator acceptance. The corrective
+pass repaired synthetic-source block reuse without changing source bytes or deadlines,
+added mixed transport ownership, nondefault composed restore, oversized paging and
+strict transition validation. Final default validation passed 409 tests; hardware-host
+library validation passed 108. Both Clippy configurations passed with warnings denied.
+The full hardware-host all-target suite and both release variants remain required
+before freeze; the bounded handoff records exact commands, evidence and remaining gates.
+Historical corpus provenance is retained; the separate corrected corpus pins its
+committed producing source. Desk integration remains separate.
 No physical mapping, listening, audio-clock lock or sustained hardware deadline claim.
 
 ## Control-capacity and CI review fixes — 2026-10-06
