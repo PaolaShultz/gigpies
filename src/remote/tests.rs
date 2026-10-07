@@ -933,7 +933,11 @@ fn sends_authenticated_scope_freshness_completions_reconnect_and_revocation() {
         .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 2, 12), 1)
         .unwrap();
     assert_eq!(stale["reason"], "stale_snapshot");
-    owner.dispatch_command(&ctx, sends_read(), 2).unwrap();
+    let read = owner.dispatch_command(&ctx, sends_read(), 2).unwrap();
+    assert!(read["snapshot"].is_object());
+    let mut forged = sends_read();
+    forged["writer"] = json!("forged-writer");
+    assert!(owner.dispatch_command(&ctx, forged, 2).is_err());
     let pending = owner
         .dispatch_command(&ctx, sends_set(ctx.writer(), lease, 3, 12), 3)
         .unwrap();

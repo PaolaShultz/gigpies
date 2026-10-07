@@ -9,7 +9,7 @@ disarmed recovery. Configured processing explicitly advances to GP07:4; legacy
 8/2 processing2 and raw monitor bytes remain unchanged. [Contract and validation](MONITOR_SENDS.md).
 This is a provisional implementation, not an accepted producer freeze. Focused
 send/provider tests passed; the full default run stopped at a repeatable GP04 Unix
-analysis descriptor timeout. The hardware-host attempt stopped at missing ALSA
+analysis first-window prefix timeout (the labelled rerun received its descriptor). The original hardware-host attempt stopped at missing ALSA
 development metadata; the coordinator resolved that prerequisite, with reruns pending. Remaining suites, Clippy/release and actual-owner gates
 are listed in the scoped handoff. The candidate corpus names its exact committed
 producing revision; coordinator acceptance and Desk integration remain separate.

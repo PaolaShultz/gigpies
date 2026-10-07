@@ -694,6 +694,24 @@ impl Mixer {
     }
 }
 #[cfg(test)]
+mod send_reservation_tests {
+    use super::*;
+    #[test]
+    fn tap_storage_fits_existing_coefficient_reservation() {
+        // Live ramp + tap state + admitted and retiring change matrices.
+        // Every send is already included in the existing coefficient count.
+        let bytes = std::mem::size_of::<Ramp>()
+            + std::mem::size_of::<TapTransition>()
+            + 2 * std::mem::size_of::<Change>();
+        assert!(
+            bytes <= 128,
+            "per-send resident and prepared storage: {bytes}"
+        );
+        eprintln!("per-send scalar storage {bytes} bytes within prior 128-byte reservation");
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     #[test]

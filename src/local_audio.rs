@@ -1818,16 +1818,19 @@ impl LocalAudio {
         let mut capture = std::mem::take(&mut self.capture_scratch);
         capture.fill(0.);
         let topology = self.topology();
+        let mut synthetic = self
+            .synthetic_fouraux
+            .then(|| SyntheticBlock::new(self.frame()));
         for f in 0..48 {
             for (i, p) in topology.inputs.iter().enumerate() {
-                capture[f * topology.capture_channels + p.capture_slot] = if self.synthetic_fouraux
-                {
-                    synthetic_sample(self.frame() + f as u64, i)
-                } else if i == 0 {
-                    0.125
-                } else {
-                    0.
-                };
+                capture[f * topology.capture_channels + p.capture_slot] =
+                    if let Some(source) = &mut synthetic {
+                        source.sample(self.frame() + f as u64, i)
+                    } else if i == 0 {
+                        0.125
+                    } else {
+                        0.
+                    };
             }
         }
         let mut playback = std::mem::take(&mut self.playback_scratch);
@@ -1844,10 +1847,13 @@ impl LocalAudio {
             return Err("legacy output shape".into());
         }
         let mut inputs = [[0.; 8]; 48];
+        let mut synthetic = self
+            .synthetic_fouraux
+            .then(|| SyntheticBlock::new(self.frame()));
         for (f, row) in inputs.iter_mut().enumerate() {
             for (i, v) in row.iter_mut().enumerate() {
-                *v = if self.synthetic_fouraux {
-                    synthetic_sample(self.frame() + f as u64, i)
+                *v = if let Some(source) = &mut synthetic {
+                    source.sample(self.frame() + f as u64, i)
                 } else if i == 0 {
                     0.125
                 } else {
@@ -2308,14 +2314,96 @@ impl LocalAudio {
     }
 }
 
-fn synthetic_sample(frame: u64, input: usize) -> f64 {
-    // Legacy fouraux samples are exact; additional channels have distinct PCM24
-    // identity and all pass through the same raw tap and channel processor.
-    let block = crate::analysis_stream::synthetic_inputs(frame - frame % 48);
-    if input < 8 {
-        f64::from(block[(frame % 48) as usize][input]) / 8_388_608.
-    } else {
-        (((frame as i64 * 17 + input as i64 * 7919) % 65537) - 32768) as f64 / 8_388_608.
+// Generate each containing legacy block once per provider tick, including a
+// possible second block after unaligned source recovery. Extra logical inputs
+// retain their original independent PCM24 mapping. No source bytes change.
+struct SyntheticBlock {
+    first: u64,
+    pcm: [[i32; 8]; 48],
+}
+impl SyntheticBlock {
+    fn new(frame: u64) -> Self {
+        let first = frame - frame % 48;
+        Self {
+            first,
+            pcm: crate::analysis_stream::synthetic_inputs(first),
+        }
+    }
+    fn sample(&mut self, frame: u64, input: usize) -> f64 {
+        if input >= 8 {
+            return (((frame as i64 * 17 + input as i64 * 7919) % 65537) - 32768) as f64
+                / 8_388_608.;
+        }
+        let first = frame - frame % 48;
+        if first != self.first {
+            *self = Self::new(frame);
+        }
+        f64::from(self.pcm[(frame % 48) as usize][input]) / 8_388_608.
+    }
+}
+
+#[cfg(test)]
+mod synthetic_source_tests {
+    use super::*;
+    // Independent scalar reference, rather than calling the block generator.
+    fn reference(frame: u64, input: usize) -> f64 {
+        let pcm = if input < 8 {
+            ((frame % 4096) as i32 - 2048) * (input as i32 + 1) * 32
+        } else {
+            (((frame as i64 * 17 + input as i64 * 7919) % 65537) - 32768) as i32
+        };
+        f64::from(pcm) / 8_388_608.
+    }
+    #[test]
+    fn exact_raw_source_across_channels_blocks_and_capture_permutation() {
+        for first in [0, 1, 47, 48, 49, 4080, 4095, 4096, 65520] {
+            let mut source = SyntheticBlock::new(first);
+            for frame in first..first + 96 {
+                for input in 0..48 {
+                    assert_eq!(
+                        source.sample(frame, input).to_bits(),
+                        reference(frame, input).to_bits(),
+                        "frame={frame} input={input}"
+                    );
+                }
+            }
+        }
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("gp04-raw-equivalence-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let mut topology = crate::topology::EngineTopology::software(16, 3, 0).unwrap();
+        for (i, port) in topology.inputs.iter_mut().enumerate() {
+            port.capture_slot = 15 - i;
+        }
+        let mut audio = LocalAudio::bind_configured(
+            &dir,
+            "audio.sock",
+            "11111111-1111-4111-8111-111111111111",
+            Counter(9),
+            topology,
+        )
+        .unwrap();
+        audio.enable_synthetic_fouraux().unwrap();
+        for tick in 0..88 {
+            let first = audio.frame();
+            audio.tick(tick).unwrap();
+            for f in 0..48 {
+                for input in 0..16 {
+                    let expected = reference(first + f as u64, input);
+                    assert_eq!(
+                        audio.raw_scratch[f * 16 + input].to_bits(),
+                        expected.to_bits()
+                    );
+                    assert_eq!(
+                        audio.capture_scratch[f * 16 + 15 - input].to_bits(),
+                        expected.to_bits()
+                    );
+                }
+            }
+        }
+        drop(audio);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
 

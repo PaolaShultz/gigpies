@@ -6,7 +6,11 @@ unqualified. Legacy `legacy8-2` keeps GP07-processing:2 and its original raw
 monitor behavior. GP18 refuses that topology with `unsupported_topology`, including
 reads: use the configured engine to enable selectable taps. Dimensions come from
 validated topology, with finite memory/work/snapshot admission rather than a
-product monitor count.
+product monitor count. The existing 128-byte reservation per coefficient is
+preserved. Each send adds at most 32 bytes of tap state; a normal regression
+checks live ramp/tap state plus both prepared/retiring change matrices against
+that reservation. The admission work count measures coefficient visits across
+the maximum block, not processor instructions, execution time or deadline proof.
 
 ## Exact signal positions
 
@@ -114,7 +118,23 @@ separate EQ center gain, compressor attack/static reduction, fader/pan, common
 mute/global safety, independent send levels/destinations, exact default output,
 transition partitions/endpoints, refusal/dedup/expiry and disarmed persistence.
 Allocation/deallocation guards cover success, invalid shape, fault and quiescence.
-Actual Unix and mutual-TLS tests use bounded synthetic software only.
+Actual Unix and mutual-TLS tests use bounded synthetic software only. Mixed
+provider tests cover cancellation in both ownership orders, unrelated writer
+revocation, cached final retries while another tap is pending, and final-ticket
+identity. Composed LocalAudio save/restore retains independent nondefault taps
+and rejects authority replay while staying disarmed. A configured 16-input,
+40-monitor Unix read exercises the actual oversized immutable GP18 reply and
+production client assembly; its byte size and page count are measured by the test.
+GP15 pending refusal and subsequent release remain covered by atomic_control.
+
+The synthetic provider generates each containing fouraux block once per tick,
+including a second block if source recovery starts unaligned. An independent
+scalar reference checks the exact original PCM24 bytes across channels and block
+boundaries, including extra-input mapping and permuted capture slots. GP04 child
+failures label descriptor/window and prefix/body stages, retain a bounded stderr
+tail and always kill/wait the child. Its 100 ms freshness limit and two-second
+read timeout are unchanged. These tests establish software reliability and source
+equivalence; they do not qualify physical synchronization or realtime deadlines.
 
 The optional actual-owner regression
 `actual_monitor_taps_feed_owner_matrix_after_send_gain_without_reprocessing_foh`
