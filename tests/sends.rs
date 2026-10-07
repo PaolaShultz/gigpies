@@ -884,6 +884,8 @@ fn verify_sends_producer_corpus() {
             }
         } else if name == "intent-v2.json" {
             EngineIntent::decode(&bytes).unwrap();
+        } else if value["capability"] == "GP03-rendered" && value.get("context").is_some() {
+            gigpies::mixer_control::RenderedReply::decode_assembled(&bytes).unwrap();
         } else if value["capability"] == "GP03-rendered" {
             let snapshot: gigpies::mixer_control::RenderedSnapshot =
                 serde_json::from_slice(&bytes).unwrap();
@@ -892,7 +894,15 @@ fn verify_sends_producer_corpus() {
     }
     for (name, hash) in manifest["source_sha256"].as_object().unwrap() {
         assert_eq!(
-            format!("{:x}", Sha256::digest(std::fs::read(name).unwrap())),
+            {
+                let revision = manifest["source_revision"].as_str().unwrap();
+                let blob = std::process::Command::new("git")
+                    .args(["show", &format!("{revision}:{name}")])
+                    .output()
+                    .unwrap();
+                assert!(blob.status.success());
+                format!("{:x}", Sha256::digest(blob.stdout))
+            },
             hash.as_str().unwrap()
         );
     }

@@ -204,12 +204,89 @@ fn actual_unix_dispatch_freshness_completions_retry_disconnect_and_recovery() {
         server.engine_mut().mixer().send_observations()[16][2].1,
         Tap::ProcessedPostFader
     );
+    // A canceled Unix owner must not steal the next remote producer completion.
+    let grant = Request {
+        contract: "C-AUDIO".into(),
+        version: 2,
+        show_id: SHOW.into(),
+        module: "audio".into(),
+        epoch: Counter(9),
+        writer: Some("remote-after-uds".into()),
+        lease: None,
+        request_id: Some(Counter(1)),
+        expected_revision: Some(Counter(1)),
+        command: Command::Grant {
+            scope: Scope::Monitor(3),
+        },
+    };
+    let lease = server
+        .engine_mut()
+        .handle(&grant, now)
+        .unwrap()
+        .outcome
+        .unwrap()
+        .body
+        .granted_lease
+        .unwrap();
+    let mut remote = change.clone();
+    remote.writer = Some("remote-after-uds".into());
+    remote.lease = Some(lease);
+    remote.request_id = Some(Counter(2));
+    assert_eq!(
+        server
+            .engine_mut()
+            .handle_sends(&remote, now)
+            .unwrap()
+            .state,
+        "pending"
+    );
+    server.revoke_writer("unrelated-writer");
+    for _ in 0..2 {
+        now += 1;
+        server.tick(now).unwrap();
+    }
+    let completions = server.take_remote_completions();
+    assert!(
+        completions.iter().any(|v| v["contract"] == "GP18-sends"
+            && v["state"] == "final"
+            && v["context"]["writer"] == "remote-after-uds"),
+        "{completions:?}"
+    );
+    assert_eq!(
+        server
+            .engine_mut()
+            .handle_sends(&remote, now)
+            .unwrap()
+            .revision,
+        Counter(2)
+    );
+    // Actual composed persistence restores settled committed taps and stays disarmed.
+    let intent = server.persisted_intent().unwrap();
+    let restored_dir = dir.join("restored");
+    std::fs::create_dir(&restored_dir).unwrap();
+    std::fs::set_permissions(&restored_dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut restored = LocalAudio::bind_configured(
+        &restored_dir,
+        "send.sock",
+        SHOW,
+        Counter(10),
+        EngineTopology::software(17, 3, 0).unwrap(),
+    )
+    .unwrap();
+    restored.restore_composed_intent(&intent).unwrap();
+    assert!(restored.engine_mut().outputs_quiesced());
+    assert_eq!(
+        restored.engine_mut().mixer().send_observations()[16][2].1,
+        Tap::RawPostMute
+    );
+    drop(restored);
+    std::fs::remove_dir_all(restored_dir).unwrap();
     server.recover_source(Counter(10), 0).unwrap();
     assert!(server.engine_mut().outputs_quiesced());
     assert!(server.engine_mut().mixer().sends_ready());
     assert_eq!(
         server.engine_mut().mixer().send_observations()[16][2].1,
-        Tap::ProcessedPostFader
+        Tap::RawPostMute
     );
     drop(server);
     std::fs::remove_dir_all(dir).unwrap();

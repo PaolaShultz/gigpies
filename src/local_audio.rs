@@ -1470,7 +1470,13 @@ impl LocalAudio {
         {
             self.brain_pending = None;
         }
+        let cancelled_send = self.engine.pending_sends_ticket_for(writer);
         self.engine.revoke_writer(writer);
+        if cancelled_send
+            .is_some_and(|ticket| self.sends_owner.is_some_and(|owner| owner.0 == ticket))
+        {
+            self.sends_owner = None;
+        }
         if self
             .structural_pending
             .as_ref()

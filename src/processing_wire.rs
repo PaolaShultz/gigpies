@@ -102,7 +102,7 @@ impl ProcessingRequest {
                 "body",
             ],
         )?;
-        if v["contract"] != CONTRACT || !matches!(v["version"].as_u64(), Some(2 | 3 | 4)) {
+        if v["contract"] != CONTRACT || !matches!(v["version"].as_u64(), Some(2..=4)) {
             return Err("version".into());
         }
         let r: Self = serde_json::from_value(v).map_err(|e| e.to_string())?;

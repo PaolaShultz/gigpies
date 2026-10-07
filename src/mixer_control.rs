@@ -714,6 +714,12 @@ impl OfflineEngine {
         self.clock.rearm().map_err(String::from)?;
         self.mixer.rearm().map_err(|e| format!("{e:?}"))
     }
+    pub(crate) fn pending_sends_ticket_for(&self, writer: &str) -> Option<u64> {
+        self.sends_pending
+            .as_ref()
+            .filter(|p| p.request.writer.as_deref() == Some(writer))
+            .map(|p| p.ticket)
+    }
     pub fn revoke_writer(&mut self, writer: &str) {
         self.authority.revoke_writer(writer);
         if self
