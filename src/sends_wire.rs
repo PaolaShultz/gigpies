@@ -222,6 +222,7 @@ impl SendsSnapshot {
                 return Err("inventory".into());
             }
         }
+        let mut fading = false;
         for (i, c) in self.channels.iter().enumerate() {
             if input_index(&c.input)? != i || c.sends.len() != self.monitors.len() {
                 return Err("inventory".into());
@@ -233,6 +234,19 @@ impl SendsSnapshot {
                     || (send.ready && send.current != send.target)
                 {
                     return Err("transition".into());
+                }
+                if send.transition_remaining_frames != 0 {
+                    let endpoint = self
+                        .frame
+                        .0
+                        .checked_add(u64::from(send.transition_remaining_frames));
+                    if send.current == send.target
+                        || fading
+                        || endpoint.is_none_or(|end| end % crate::mixer::BOUNDARY_FRAMES != 0)
+                    {
+                        return Err("transition".into());
+                    }
+                    fading = true;
                 }
             }
         }

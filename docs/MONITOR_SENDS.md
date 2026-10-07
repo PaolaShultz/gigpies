@@ -89,6 +89,7 @@ each row has exactly one ordered `{monitor,current,target,
 transition_remaining_frames,ready}` per advertised monitor. Current is the last
 settled tap, target the committed target; during transition output is a blend.
 Remaining is 0..240 at the next-sample frame; ready iff zero, then current=target.
+Readback rejects same-tap fades, simultaneous fades, and overflowing or non-48-aligned endpoints; arbitrary midfade read frames remain valid.
 Snapshots share provider sequence/revision/frame and immutable GP14 paging
 (64 KiB frames, 8 KiB pages, 1 MiB assembly, two-second assembly deadline).
 
@@ -145,7 +146,10 @@ and physical endpoints remain opt-in.
 
 Producer corpus generation is a focused ignored test `write_sends_producer_corpus`.
 Its output must name an exact committed source revision, with fixture SHA256
-manifest, before consumer freeze. Coordinator acceptance of the actual diff and
+manifest, before consumer freeze. The original `tests/fixtures/gp18/v1` corpus
+and its producing revision remain historical evidence. Corrected-source output
+is generated separately under `tests/fixtures/gp18/v1-corrected`; verifier selection
+uses `GP18_FIXTURES` (defaulting to the historical directory). Coordinator acceptance of the actual diff and
 corpus is required before Desk implementation. Consumers pair GP03/GP18 revisions,
 keep draft/pending/confirmed state distinct, label current/target blends, review
 levels and taps separately, refresh original-context observations before sending,

@@ -292,6 +292,65 @@ fn tap_transition_exact_endpoints_partition_equivalence_and_backpressure() {
     );
 }
 #[test]
+fn producer_midfade_snapshots_reject_impossible_transition_states() {
+    let mut e = engine();
+    let lease = grant(&mut e, Scope::Monitor(3));
+    e.handle_sends(&set(lease, 2, 0, Tap::ProcessedPostFader), 1)
+        .unwrap();
+    render(&mut e, 49, 2);
+    let reply = e.handle_sends(&read(), 2).unwrap();
+    let snapshot = reply.snapshot.as_ref().unwrap();
+    // Real producer reads are legal at arbitrary sample positions during a fade.
+    assert_eq!(snapshot.frame, Counter(49));
+    assert_eq!(
+        snapshot.channels[16].sends[2].transition_remaining_frames,
+        239
+    );
+    SendsReply::decode(&serde_json::to_vec(&reply).unwrap()).unwrap();
+    let reject = |snapshot: gigpies::sends_wire::SendsSnapshot| {
+        let mut malformed = reply.clone();
+        malformed.snapshot = Some(snapshot);
+        assert!(SendsReply::decode(&serde_json::to_vec(&malformed).unwrap()).is_err());
+    };
+    let mut equal = snapshot.clone();
+    equal.channels[16].sends[2].current = Tap::ProcessedPostFader;
+    reject(equal);
+    let mut unaligned = snapshot.clone();
+    unaligned.channels[16].sends[2].transition_remaining_frames = 238;
+    reject(unaligned);
+    let mut overflow = snapshot.clone();
+    overflow.frame = Counter(u64::MAX - 238);
+    reject(overflow);
+    let mut simultaneous = snapshot.clone();
+    simultaneous.channels[0].sends[0].target = Tap::ProcessedPreFader;
+    simultaneous.channels[0].sends[0].transition_remaining_frames = 239;
+    simultaneous.channels[0].sends[0].ready = false;
+    reject(simultaneous);
+    // Completed and no-op mutations settle immediately; no manufactured fade.
+    assert_eq!(e.take_sends_completions().len(), 1);
+    render(&mut e, 239, 3);
+    assert_eq!(
+        e.handle_sends(&set(lease, 3, 1, Tap::ProcessedPostFader), 4)
+            .unwrap()
+            .state,
+        "pending"
+    );
+    render(&mut e, 49, 5);
+    let settled = e.handle_sends(&read(), 5).unwrap();
+    assert!(
+        settled
+            .snapshot
+            .as_ref()
+            .unwrap()
+            .channels
+            .iter()
+            .flat_map(|c| &c.sends)
+            .all(|s| s.ready && s.current == s.target && s.transition_remaining_frames == 0)
+    );
+    SendsReply::decode(&serde_json::to_vec(&settled).unwrap()).unwrap();
+}
+
+#[test]
 fn legacy_default_is_bit_exact_with_processing_and_v1_migration() {
     let mut legacy = Mixer::new(0);
     let mut configured =
@@ -861,7 +920,9 @@ fn write_sends_producer_corpus() {
 #[ignore = "producer corpus verification after explicit generation; no output mutations"]
 fn verify_sends_producer_corpus() {
     use sha2::{Digest, Sha256};
-    let root = std::path::Path::new("tests/fixtures/gp18/v1");
+    let root_path =
+        std::env::var("GP18_FIXTURES").unwrap_or_else(|_| "tests/fixtures/gp18/v1".into());
+    let root = std::path::Path::new(&root_path);
     let manifest: serde_json::Value =
         serde_json::from_slice(&std::fs::read(root.join("providers.json")).unwrap()).unwrap();
     assert_eq!(manifest["source_revision"].as_str().unwrap().len(), 40);
