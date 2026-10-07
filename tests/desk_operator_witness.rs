@@ -36,9 +36,12 @@ fn hash_file(path: &Path) -> String {
     format!("{:x}", digest.finalize())
 }
 fn provenance(manifest: &Path, fixture: &Path) -> Value {
-    let revision = option_env!("GP_DESK_WITNESS_SOURCE").expect(
-        "build this explicit witness with GP_DESK_WITNESS_SOURCE=<reviewed full Git revision>",
-    );
+    let revision = match option_env!("GP_DESK_WITNESS_SOURCE") {
+        Some(revision) => revision,
+        None => panic!(
+            "build this explicit witness with GP_DESK_WITNESS_SOURCE=<reviewed full Git revision>"
+        ),
+    };
     assert!(revision.len() == 40 && revision.bytes().all(|b| b.is_ascii_hexdigit()));
     let module: Value = serde_json::from_slice(&fs::read(manifest).unwrap()).unwrap();
     let mut libraries = serde_json::Map::new();
