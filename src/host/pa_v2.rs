@@ -55,7 +55,89 @@ type Apply = unsafe extern "C" fn(*mut Handle, Handle, *mut Handle, u64, u64) ->
 type Process = unsafe extern "C" fn(Handle, *const f64, *mut f64, u32, u32, u32, u64, u64) -> i32;
 type Query = unsafe extern "C" fn(Handle, *mut Status, u32, u32) -> i32;
 type Destroy = unsafe extern "C" fn(Handle);
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EqStatus {
+    pub version: u32,
+    pub size: u32,
+    pub eligible: u32,
+    pub retirement_occupied: u32,
+    pub graph_generation: u64,
+    pub eq_generation: u64,
+    pub epoch: u64,
+    pub next_frame: u64,
+    pub remaining: u64,
+    pub instance: u64,
+}
+#[repr(C)]
+#[derive(Default)]
+struct EqCapabilities {
+    version: u32,
+    size: u32,
+    status_size: u32,
+    max_json_bytes: u32,
+    sections_per_input: u32,
+    selected_inputs: u32,
+    extra_work_units: u32,
+    reserved: u32,
+}
+struct EqApi {
+    status: unsafe extern "C" fn(Handle, *mut EqStatus, u32, u32) -> i32,
+    prepare: unsafe extern "C" fn(Handle, *const u8, u32, u32, u64, u64, u64, u64) -> Handle,
+    apply: unsafe extern "C" fn(Handle, *mut Handle, u64, u64) -> i32,
+    retire: unsafe extern "C" fn(Handle, *mut Handle) -> i32,
+    destroy: Destroy,
+    readback: unsafe extern "C" fn(Handle, u32, u32, *mut u8, u32) -> i32,
+}
+impl EqApi {
+    unsafe fn load(l: &Library) -> Option<Self> {
+        // Missing, partial and incompatible extensions all retain legacy loading.
+        unsafe {
+            let caps = *l
+                .get::<unsafe extern "C" fn(*mut EqCapabilities, u32, u32) -> i32>(
+                    b"shr_pa_eq_v1_capabilities",
+                )
+                .ok()?;
+            let mut c = EqCapabilities::default();
+            if caps(&mut c, 1, 32) != 0
+                || c.version != 1
+                || c.size != 32
+                || c.status_size != 64
+                || c.max_json_bytes != 32768
+                || c.sections_per_input != 39
+                || c.selected_inputs != 2
+                || c.extra_work_units != 80
+                || c.reserved != 0
+            {
+                return None;
+            }
+            Some(Self {
+                status: *l.get(b"shr_pa_eq_v1_status").ok()?,
+                prepare: *l.get(b"shr_pa_eq_v1_prepare").ok()?,
+                apply: *l.get(b"shr_pa_eq_v1_apply").ok()?,
+                retire: *l.get(b"shr_pa_eq_v1_retire").ok()?,
+                destroy: *l.get(b"shr_pa_eq_v1_destroy").ok()?,
+                readback: *l.get(b"shr_pa_eq_v1_readback").ok()?,
+            })
+        }
+    }
+}
+pub struct PreparedEq {
+    handle: Handle,
+    api: Arc<Api>,
+}
+impl Drop for PreparedEq {
+    fn drop(&mut self) {
+        if let Some(eq) = &self.api.eq {
+            unsafe {
+                (eq.destroy)(self.handle);
+            }
+        }
+    }
+}
 struct Api {
+    eq: Option<EqApi>,
     prepare: Prepare,
     validate: Validate,
     apply: Apply,
@@ -128,6 +210,7 @@ impl Pa {
                 return Err("SHR PA v2 capabilities mismatch".into());
             }
             Arc::new(Api {
+                eq: EqApi::load(&library),
                 prepare: *library.get::<Prepare>(b"shr_pa_v2_prepare")?,
                 validate: *library.get::<Validate>(b"shr_pa_v2_validate")?,
                 apply: *library.get::<Apply>(b"shr_pa_v2_apply")?,
@@ -148,6 +231,90 @@ impl Pa {
             outputs: 0,
             max_block: 0,
         })
+    }
+    pub fn eq_status(&self) -> std::result::Result<EqStatus, i32> {
+        let eq = self.api.eq.as_ref().ok_or(-5)?;
+        let mut s = EqStatus::default();
+        let code = unsafe { (eq.status)(self.active, &mut s, 1, 64) };
+        if code != 0 {
+            return Err(code);
+        }
+        if s.version != 1 || s.size != 64 || s.eligible > 1 || s.retirement_occupied > 1 {
+            return Err(-5);
+        }
+        Ok(s)
+    }
+    pub fn prepare_eq(&self, json: &[u8], expected: EqStatus, frame: u64) -> Result<PreparedEq> {
+        if json.is_empty() || json.len() > 32768 {
+            return Err("EQ JSON bound".into());
+        }
+        let eq = self.api.eq.as_ref().ok_or("live EQ unavailable")?;
+        let current = self.eq_status().map_err(|e| format!("EQ status {e}"))?;
+        if current.instance != expected.instance
+            || current.graph_generation != expected.graph_generation
+            || current.eq_generation != expected.eq_generation
+            || current.epoch != expected.epoch
+        {
+            return Err("stale EQ identity".into());
+        }
+        let handle = unsafe {
+            (eq.prepare)(
+                self.active,
+                json.as_ptr(),
+                json.len() as u32,
+                1,
+                expected.graph_generation,
+                expected.eq_generation,
+                expected.epoch,
+                frame,
+            )
+        };
+        if handle.is_null() {
+            return Err("EQ owner preparation refused".into());
+        }
+        Ok(PreparedEq {
+            handle,
+            api: Arc::clone(&self.api),
+        })
+    }
+    /// Narrow boundary operation; preserves buffers and PA hold/arm state.
+    pub fn commit_eq(&mut self, p: &mut PreparedEq, epoch: u64, frame: u64) -> i32 {
+        if !Arc::ptr_eq(&self.api, &p.api) || p.handle.is_null() {
+            return -1;
+        }
+        let Some(eq) = &self.api.eq else {
+            return -5;
+        };
+        unsafe { (eq.apply)(self.active, &mut p.handle, epoch, frame) }
+    }
+    /// Controller-only explicit disposal after endpoint/fault.
+    pub fn retire_eq(&mut self) {
+        if let Some(eq) = &self.api.eq {
+            let mut raw = std::ptr::null_mut();
+            if unsafe { (eq.retire)(self.active, &mut raw) } == 0 {
+                unsafe {
+                    (eq.destroy)(raw);
+                }
+            }
+        }
+    }
+    pub fn eq_readback(&self, indices: [usize; 2]) -> Result<String> {
+        let eq = self.api.eq.as_ref().ok_or("live EQ unavailable")?;
+        let mut bytes = vec![0; 65536];
+        let code = unsafe {
+            (eq.readback)(
+                self.active,
+                indices[0] as u32,
+                indices[1] as u32,
+                bytes.as_mut_ptr(),
+                bytes.len() as u32,
+            )
+        };
+        if code <= 0 {
+            return Err(format!("EQ readback {code}").into());
+        }
+        bytes.truncate(code as usize);
+        String::from_utf8(bytes).map_err(Into::into)
     }
     pub fn capabilities(&self) -> Capabilities {
         self.api.capabilities

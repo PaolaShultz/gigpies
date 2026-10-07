@@ -17,6 +17,15 @@ use serde::{Deserialize, Serialize};
 )]
 pub enum Command {
     StructuralSnapshot {},
+    MasterEqSnapshot {},
+    MasterEqSet {
+        patch_json: String,
+        program_buses: Vec<usize>,
+        owner_instance: Counter,
+        graph_generation: Counter,
+        eq_generation: Counter,
+        map_revision: Counter,
+    },
     PaSet {
         configuration_json: String,
         program_buses: Vec<usize>,
@@ -66,11 +75,33 @@ impl Request {
         Ok(request)
     }
     pub fn validate(&self) -> Result<()> {
-        if self.contract != "GP14-structure" || self.version != 1 {
+        let eq = matches!(
+            self.command,
+            Command::MasterEqSnapshot {} | Command::MasterEqSet { .. }
+        );
+        if self.version != 1
+            || (eq && self.contract != crate::master_eq_wire::CONTRACT)
+            || (!eq && self.contract != "GP14-structure")
+        {
             return Err("structural version".into());
         }
         self.authority_request().encode()?;
         match &self.command {
+            Command::MasterEqSet {
+                patch_json,
+                program_buses,
+                owner_instance,
+                graph_generation,
+                ..
+            } if patch_json.is_empty()
+                || patch_json.len() > 32768
+                || program_buses.is_empty()
+                || program_buses.len() > 4096
+                || owner_instance.0 == 0
+                || graph_generation.0 == 0 =>
+            {
+                Err("live EQ request bound/identity".into())
+            }
             Command::PaSet {
                 configuration_json,
                 program_buses,
@@ -98,7 +129,10 @@ impl Request {
             lease: self.lease,
             request_id: self.request_id,
             expected_revision: self.expected_revision,
-            command: if matches!(self.command, Command::StructuralSnapshot {}) {
+            command: if matches!(
+                self.command,
+                Command::StructuralSnapshot {} | Command::MasterEqSnapshot {}
+            ) {
                 AudioCommand::Snapshot {}
             } else {
                 AudioCommand::Renew {}
@@ -107,7 +141,7 @@ impl Request {
     }
     pub fn scope(&self) -> Option<Scope> {
         match self.command {
-            Command::StructuralSnapshot {} => None,
+            Command::StructuralSnapshot {} | Command::MasterEqSnapshot {} => None,
             Command::OutputPatch { .. } => Some(Scope::OutputRoutes),
             _ => Some(Scope::PaConfiguration),
         }
@@ -152,6 +186,8 @@ pub struct Reply {
     pub effective_frame: Option<Counter>,
     pub revision: Counter,
     pub snapshot: Option<Snapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_eq: Option<crate::master_eq_wire::Snapshot>,
 }
 impl Reply {
     pub fn new(
@@ -171,6 +207,7 @@ impl Reply {
             effective_frame: frame.map(Counter),
             revision,
             snapshot,
+            master_eq: None,
         }
     }
 }

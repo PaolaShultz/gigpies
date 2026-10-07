@@ -60,3 +60,6 @@ mod held_proof_tests;
 
 #[cfg(all(test, target_os = "linux", feature = "hardware-host"))]
 mod atomic_control_tests;
+
+#[cfg(all(test, target_os = "linux", feature = "hardware-host"))]
+mod master_eq_tests;

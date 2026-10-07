@@ -72,6 +72,7 @@ pub struct HostAuthority {
     provider: LocalAudio,
     reads: BTreeMap<u64, ReadState>,
     structural_reads: BTreeMap<u64, u64>,
+    master_eq_reads: BTreeMap<u64, u64>,
     brain_reads: BTreeMap<u64, u64>,
     held_queries: BTreeMap<u64, u64>,
     paired_queries: BTreeMap<u64, u64>,
@@ -165,6 +166,7 @@ impl HostAuthority {
             provider,
             reads: BTreeMap::new(),
             structural_reads: BTreeMap::new(),
+            master_eq_reads: BTreeMap::new(),
             brain_reads: BTreeMap::new(),
             held_queries: BTreeMap::new(),
             paired_queries: BTreeMap::new(),
@@ -1130,7 +1132,11 @@ impl AuthorityEndpoint for HostAuthority {
                 .dispatch_module(request, now_ms, None)
                 .map(Some);
         }
-        if payload.get("contract").and_then(Value::as_str) == Some("GP14-structure") {
+        if matches!(
+            payload.get("contract").and_then(Value::as_str),
+            Some("GP14-structure" | "GP18-master-eq")
+        ) {
+            let eq = payload["contract"] == crate::master_eq_wire::CONTRACT;
             let request = crate::structural_control::Request::decode(&super::encode(&payload)?)?;
             if let Some(scope) = request.scope() {
                 context.require(&scope_permission(scope))?;
@@ -1143,19 +1149,27 @@ impl AuthorityEndpoint for HostAuthority {
                     return Err("structural scoped lease required".into());
                 }
             }
-            let fresh = self
-                .structural_reads
-                .get(&context.session())
-                .is_some_and(|t| now_ms >= *t && now_ms - *t <= 250);
+            let fresh = (if eq {
+                &self.master_eq_reads
+            } else {
+                &self.structural_reads
+            })
+            .get(&context.session())
+            .is_some_and(|t| now_ms >= *t && now_ms - *t <= 250);
             let snapshot = matches!(
                 request.command,
                 crate::structural_control::Command::StructuralSnapshot {}
+                    | crate::structural_control::Command::MasterEqSnapshot {}
             );
             let reply = self
                 .provider
                 .structural_request(request, now_ms, fresh, None)?;
-            if snapshot && reply.snapshot.is_some() {
-                self.structural_reads.insert(context.session(), now_ms);
+            if snapshot {
+                if eq && reply.master_eq.is_some() {
+                    self.master_eq_reads.insert(context.session(), now_ms);
+                } else if reply.snapshot.is_some() {
+                    self.structural_reads.insert(context.session(), now_ms);
+                }
             }
             return serde_json::to_value(reply)
                 .map(Some)
@@ -1354,6 +1368,7 @@ impl AuthorityEndpoint for HostAuthority {
         self.provider.revoke_writer(context.writer());
         self.reads.remove(&context.session());
         self.structural_reads.remove(&context.session());
+        self.master_eq_reads.remove(&context.session());
         self.completions.retain(|r| {
             r.get("context")
                 .and_then(|c| c.get("writer"))

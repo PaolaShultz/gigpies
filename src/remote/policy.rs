@@ -211,6 +211,7 @@ impl AuthenticatedContext {
                 | "clock_snapshot"
                 | "pa_snapshot"
                 | "structural_snapshot"
+                | "master_eq_snapshot"
                 | "brain_snapshot"
                 | "device_snapshot"
         ) {

@@ -1049,3 +1049,62 @@ fn atomic_namespaces_are_independent_and_maintenance_never_refreshes_brain_admis
     // The old outcome survives the same-lease failed staged commit; no renewal.
     assert_eq!(f.send(&r, 1006), maintained);
 }
+
+#[test]
+fn master_eq_remote_permission_freshness_maintenance_completion_and_disconnect() {
+    use crate::structural_control::{Command as S, Request as R};
+    let mut f = Fixture::new("master-eq", 17);
+    let maintenance = f.grant(Scope::PaConfiguration);
+    let read = R {
+        contract: crate::master_eq_wire::CONTRACT.into(),
+        version: 1,
+        show_id: SHOW.into(),
+        module: "audio".into(),
+        epoch: Counter(1),
+        writer: None,
+        lease: None,
+        request_id: None,
+        expected_revision: None,
+        command: S::MasterEqSnapshot {},
+    };
+    let reply = f.send(&read, 0);
+    assert_eq!(reply["master_eq"]["live_available"], false);
+    let command = |revision| R {
+        writer: Some(f.context.writer().into()),
+        lease: Some(maintenance.lease),
+        request_id: Some(Counter(2)),
+        expected_revision: Some(revision),
+        command: S::MasterEqSet {
+            patch_json: "{}".into(),
+            program_buses: vec![0, 1],
+            owner_instance: Counter(1),
+            graph_generation: Counter(1),
+            eq_generation: Counter(0),
+            map_revision: Counter(1),
+        },
+        ..read.clone()
+    };
+    let r = command(f.host.provider_mut().engine_mut().revision());
+    assert_eq!(f.send(&r, 0)["state"], "pending");
+    assert_eq!(f.send(&maintenance, 0)["reason"], "unavailable");
+    let inputs = vec![0.; 17 * 48];
+    let mut output = vec![0.; 7 * 48];
+    f.host
+        .process_source(1, 1, 0, &inputs, &mut output)
+        .unwrap();
+    f.host
+        .process_source(2, 1, 48, &inputs, &mut output)
+        .unwrap();
+    let final_reply = f.host.poll_reply(&f.context, 2).unwrap().unwrap();
+    assert_eq!(final_reply["contract"], crate::master_eq_wire::CONTRACT);
+    assert_eq!(final_reply["reason"], "live EQ unavailable");
+    assert_eq!(f.send(&r, 2)["reason"], "live EQ unavailable"); // cached final never acquires a pending owner
+    f.host.disconnect(&f.context);
+    assert!(
+        f.host
+            .provider_mut()
+            .engine_mut()
+            .external_boundary()
+            .is_none()
+    );
+}

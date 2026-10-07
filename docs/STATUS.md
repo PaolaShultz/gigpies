@@ -1,5 +1,15 @@
 # Status and next steps
 
+## Live master EQ — task0018 candidate
+
+The optional owner extension and GP18-master-eq:1 provider path are implemented
+in isolated package C worktrees. Narrow stereo admission, independent lifetime/
+generation/map pins, retained metadata, shared authority/reservation and disarmed
+recovery are described in [the producer contract](MASTER_EQ_PRODUCER.md).
+Actual old-library fallback and new-owner synthetic integration passed; final
+normal/release gates and coordinator acceptance remain required before Desk freeze.
+No physical audio, listening or measured deadline acceptance is claimed.
+
 ## Monitor/aux tap routing — task0018 producer
 
 Configured engines implement independent raw post-mute, processed pre-fader and

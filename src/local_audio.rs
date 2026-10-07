@@ -93,6 +93,7 @@ struct Client {
     sends_snapshot_ms: Option<u64>,
     processing_snapshot_ms: Option<u64>,
     structural_snapshot_ms: Option<u64>,
+    master_eq_snapshot_ms: Option<u64>,
     brain_snapshot_ms: Option<u64>,
     writer: Option<String>,
     lease: Option<Counter>,
@@ -150,7 +151,10 @@ impl Client {
         let value: serde_json::Value = crate::show::decode(bytes)?;
         let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP15-brain") {
             Incoming::Brain(crate::brain_control::Request::decode(bytes)?)
-        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure") {
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure")
+            || value.get("contract").and_then(|v| v.as_str())
+                == Some(crate::master_eq_wire::CONTRACT)
+        {
             Incoming::Structural(crate::structural_control::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP05-modules") {
             Incoming::Modules(crate::module_wire::ModuleRequest::decode(bytes)?)
@@ -419,6 +423,8 @@ impl EpochOwner {
 enum StructuralAction {
     #[cfg(feature = "hardware-host")]
     Pa(crate::module_graph::GraphPaPrepared),
+    #[cfg(feature = "hardware-host")]
+    MasterEq(crate::module_graph::GraphEqPrepared),
     Patch(crate::mixer::PreparedOutputPatch),
     Mute,
     Rearm,
@@ -1114,6 +1120,82 @@ impl LocalAudio {
     }
     /// Control-side preparation; exact identity, scopes, retry history and final
     /// revision remain owned by the same engine authority as channel controls.
+    pub fn master_eq_snapshot(&self) -> Result<crate::master_eq_wire::Snapshot> {
+        let mut snapshot = crate::master_eq_wire::Snapshot {
+            show_id: self.show.clone(),
+            epoch: self.epoch,
+            revision: self.engine.revision(),
+            frame: Counter(self.frame()),
+            map_revision: Counter(self.topology().map_revision),
+            live_supported: false,
+            live_available: false,
+            fault_latched: false,
+            source_recovery_required: false,
+            settled: false,
+            unavailable_reason: Some("live EQ unavailable".into()),
+            owner_instance: Counter(0),
+            graph_generation: Counter(0),
+            eq_generation: Counter(0),
+            program_buses: Vec::new(),
+            master_input_indices: None,
+            transition_remaining_frames: Counter(0),
+            retirement_occupied: false,
+            owner_json: None,
+        };
+        #[cfg(feature = "hardware-host")]
+        if let Some(g) = &self.modules {
+            snapshot.program_buses = g.pa_program_buses().to_vec();
+            if let Some(Ok(base)) = g.pa_v2_status() {
+                snapshot.graph_generation = Counter(base.generation);
+            }
+            if let Ok(status) = g.master_eq_status() {
+                snapshot.live_supported = true;
+                snapshot.source_recovery_required = g.master_eq_source_recovery_required()
+                    || self.engine.clock_status().fault.is_some()
+                    || self.engine.clock_status().state
+                        == crate::clock_domain::ClockState::Quiesced;
+                let base_status = g.pa_v2_status().and_then(|s| s.ok());
+                let base_valid = base_status.is_some_and(|s| {
+                    s.version == 2
+                        && s.size == 80
+                        && s.committed == 1
+                        && s.epoch == status.epoch
+                        && s.generation == status.graph_generation
+                });
+                snapshot.fault_latched = !base_valid
+                    || base_status.is_some_and(|s| s.fault_latched != 0)
+                    || snapshot.source_recovery_required;
+                snapshot.settled = status.remaining == 0 && !snapshot.fault_latched;
+                snapshot.owner_instance = Counter(status.instance);
+                snapshot.graph_generation = Counter(status.graph_generation);
+                snapshot.eq_generation = Counter(status.eq_generation);
+                snapshot.transition_remaining_frames = Counter(status.remaining);
+                snapshot.retirement_occupied = status.retirement_occupied != 0;
+                match g.master_eq_indices() {
+                    Ok(indices) => {
+                        snapshot.master_input_indices = Some(indices);
+                        snapshot.owner_json = Some(g.master_eq_readback()?);
+                        if snapshot.source_recovery_required {
+                            snapshot.unavailable_reason = Some("source recovery required".into());
+                        } else if !base_valid {
+                            snapshot.unavailable_reason = Some("PA status unavailable".into());
+                        } else if snapshot.fault_latched {
+                            snapshot.unavailable_reason = Some("PA fault latched".into());
+                        } else if status.eligible != 0 {
+                            snapshot.live_available = true;
+                            snapshot.unavailable_reason = None;
+                        } else {
+                            snapshot.unavailable_reason = Some("live EQ resource budget".into());
+                        }
+                    }
+                    Err(e) => snapshot.unavailable_reason = Some(e),
+                }
+            }
+        }
+        #[cfg(not(feature = "hardware-host"))]
+        let _ = &mut snapshot;
+        Ok(snapshot)
+    }
     pub fn structural_request(
         &mut self,
         r: crate::structural_control::Request,
@@ -1125,6 +1207,11 @@ impl LocalAudio {
         r.validate()?;
         if r.show_id != self.show || r.epoch != self.epoch {
             return Err("structural attachment identity".into());
+        }
+        if matches!(r.command, S::MasterEqSnapshot {}) {
+            let mut reply = Reply::new(&r, "snapshot", None, None, self.engine.revision(), None);
+            reply.master_eq = Some(self.master_eq_snapshot()?);
+            return Ok(reply);
         }
         if matches!(r.command, S::StructuralSnapshot {}) {
             return Ok(Reply::new(
@@ -1196,6 +1283,46 @@ impl LocalAudio {
                 return Err("fresh_structural_snapshot_required".into());
             }
             match &r.command {
+                S::MasterEqSet {
+                    patch_json,
+                    program_buses,
+                    owner_instance,
+                    graph_generation,
+                    eq_generation,
+                    map_revision,
+                } => {
+                    if map_revision.0 != self.topology().map_revision {
+                        return Err("stale output map revision".into());
+                    }
+                    #[cfg(feature = "hardware-host")]
+                    {
+                        let g = self.modules.as_mut().ok_or("live EQ unavailable")?;
+                        let expected = crate::host::pa_v2::EqStatus {
+                            instance: owner_instance.0,
+                            graph_generation: graph_generation.0,
+                            eq_generation: eq_generation.0,
+                            epoch: self.epoch.0,
+                            ..Default::default()
+                        };
+                        Ok(StructuralAction::MasterEq(g.prepare_master_eq(
+                            patch_json.as_bytes(),
+                            expected,
+                            program_buses,
+                            frame,
+                        )?))
+                    }
+                    #[cfg(not(feature = "hardware-host"))]
+                    {
+                        let _ = (
+                            patch_json,
+                            program_buses,
+                            owner_instance,
+                            graph_generation,
+                            eq_generation,
+                        );
+                        Err("live EQ unavailable".into())
+                    }
+                }
                 S::OutputMute {} => Ok(StructuralAction::Mute),
                 S::OutputRearm {} => Ok(StructuralAction::Rearm),
                 S::OutputPatch { outputs } => {
@@ -1252,7 +1379,7 @@ impl LocalAudio {
                         Err("modules unavailable".into())
                     }
                 }
-                S::StructuralSnapshot {} => unreachable!(),
+                S::StructuralSnapshot {} | S::MasterEqSnapshot {} => unreachable!(),
             }
         })();
         self.structural_pending = Some((
@@ -1316,6 +1443,16 @@ impl LocalAudio {
                         g.rearm_pa()?;
                     }
                     engine.rearm_outputs()
+                }
+                #[cfg(feature = "hardware-host")]
+                StructuralAction::MasterEq(prepared) => {
+                    let g = modules.as_mut().ok_or("live EQ unavailable")?;
+                    let code = g.commit_master_eq(prepared, epoch, frame);
+                    if code == 0 {
+                        Ok(())
+                    } else {
+                        Err(format!("EQ commit {code}"))
+                    }
                 }
                 #[cfg(feature = "hardware-host")]
                 StructuralAction::Pa(prepared) => {
@@ -2004,6 +2141,7 @@ impl LocalAudio {
                         sends_snapshot_ms: None,
                         processing_snapshot_ms: None,
                         structural_snapshot_ms: None,
+                        master_eq_snapshot_ms: None,
                         brain_snapshot_ms: None,
                         writer: None,
                         lease: None,
@@ -2052,23 +2190,32 @@ impl LocalAudio {
                     }
                 }
                 Ok(Some(Incoming::Structural(request))) => {
+                    let eq = request.contract == crate::master_eq_wire::CONTRACT;
                     let read = matches!(
                         request.command,
                         crate::structural_control::Command::StructuralSnapshot {}
+                            | crate::structural_control::Command::MasterEqSnapshot {}
                     );
                     let c = &self.clients[index];
                     let authorized = read
                         || (c.snapshot && c.writer == request.writer && c.lease == request.lease);
-                    let fresh = c
-                        .structural_snapshot_ms
-                        .is_some_and(|t| now.saturating_sub(t) <= 250);
+                    let fresh = (if eq {
+                        c.master_eq_snapshot_ms
+                    } else {
+                        c.structural_snapshot_ms
+                    })
+                    .is_some_and(|t| now >= t && now - t <= 250);
                     if !authorized {
                         keep = false;
                     } else {
                         let owner = Some(c.id);
                         let reply = self.structural_request(request, now, fresh, owner)?;
-                        if read && reply.snapshot.is_some() {
-                            self.clients[index].structural_snapshot_ms = Some(now);
+                        if read {
+                            if eq && reply.master_eq.is_some() {
+                                self.clients[index].master_eq_snapshot_ms = Some(now);
+                            } else if reply.snapshot.is_some() {
+                                self.clients[index].structural_snapshot_ms = Some(now);
+                            }
                         }
                         if self.clients[index].queue_module(&reply, now).is_err() {
                             keep = false;

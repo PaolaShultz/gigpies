@@ -280,3 +280,23 @@ All 29 normal tests passed (including the focused silence regression), with Clip
 auditions remain intentionally skipped. A fresh full-song render checks both PCM
 peaks and finite output. Raw float samples are identical to the preceding pass;
 processed differs by at most 1.5e-8 after JSON settings reload (floating rounding).
+
+## Optional live master EQ candidate
+
+Normal admission/fallback tests: `cargo test --locked --test master_eq`.
+Authenticated endpoint regressions are in the hardware-host normal library suite.
+Bounded actual owner opt-ins require explicitly hash-verified GP_EQ_MANIFEST,
+GP_EQ_OLD_MANIFEST, GP_PA_V2_FIXTURES and private GP_EQ_CORPUS:
+
+```sh
+cargo test --locked --features hardware-host --test master_eq -- --include-ignored --test-threads=1
+cargo test --locked --features hardware-host --lib actual_new_owner_unix_remote_success_cancellation_completion_and_cached_final_ownership -- --ignored --test-threads=1
+```
+
+These selected campaigns use synthetic exact PCM24 source samples, local Unix
+frames and the actual authenticated receive codec/policy/endpoint, never physical
+PCM or external network load. Historical owner/corpus/physical classes remain
+independent opt-ins. Follow [the contract](MASTER_EQ_PRODUCER.md) and pin actual
+source/library/header/fixture hashes before consumer freeze. Final full default
+and hardware-host suites, both Clippy/release variants and publication checks
+remain mandatory; focused success does not replace those gates.

@@ -75,3 +75,5 @@ pub mod paired_readback;
 
 /// GP18 per-destination monitor tap control.
 pub mod sends_wire;
+
+pub mod master_eq_wire;

@@ -258,6 +258,12 @@ impl GraphPaPrepared {
         self.storage.as_ref().map_or(0, |s| s.output.len() / FRAMES)
     }
 }
+/// Owner token and complete retained metadata, both prepared offRT.
+pub struct GraphEqPrepared {
+    owner: crate::host::pa_v2::PreparedEq,
+    metadata: String,
+    expected_map: Vec<usize>,
+}
 pub struct ModuleGraph {
     manifest: Manifest,
     fx: Dsp,
@@ -710,6 +716,95 @@ impl ModuleGraph {
         }
         self.pa_hold = true;
         Ok(())
+    }
+    pub fn master_eq_indices(&self) -> Result<[usize; 2]> {
+        let map = self.pa_program_buses();
+        let mut result = [0; 2];
+        for (bus, index) in result.iter_mut().enumerate() {
+            let mut matches = map.iter().enumerate().filter(|(_, b)| **b == bus);
+            *index = matches.next().ok_or("master bus absent")?.0;
+            if matches.next().is_some() {
+                return Err("ambiguous master bus".into());
+            }
+        }
+        Ok(result)
+    }
+    pub fn master_eq_source_recovery_required(&self) -> bool {
+        self.source_fault != 0
+    }
+    pub fn master_eq_status(&self) -> std::result::Result<crate::host::pa_v2::EqStatus, i32> {
+        self.pa_v2.as_ref().ok_or(-5)?.eq_status()
+    }
+    pub fn master_eq_readback(&self) -> Result<String> {
+        self.pa_v2
+            .as_ref()
+            .ok_or("PA unavailable")?
+            .eq_readback(self.master_eq_indices()?)
+            .map_err(|e| e.to_string())
+    }
+    pub fn prepare_master_eq(
+        &mut self,
+        json: &[u8],
+        expected: crate::host::pa_v2::EqStatus,
+        expected_map: &[usize],
+        frame: u64,
+    ) -> Result<GraphEqPrepared> {
+        if expected_map != self.pa_program_buses() {
+            return Err("stale PA bus map".into());
+        }
+        let indices = self.master_eq_indices()?;
+        let pa = self.pa_v2.as_mut().ok_or("live EQ unavailable")?;
+        pa.retire_eq(); // controller-only, explicit retirement before admission
+        let owner = pa
+            .prepare_eq(json, expected, frame)
+            .map_err(|e| e.to_string())?;
+        // The actual owner has already strictly validated this narrow patch.
+        let patch: serde_json::Value = serde_json::from_slice(json).map_err(|e| e.to_string())?;
+        let edits = patch["inputs"].as_array().ok_or("EQ inputs")?;
+        let actual: Vec<_> = edits
+            .iter()
+            .map(|e| e["input_index"].as_u64().map(|n| n as usize))
+            .collect();
+        if actual.len() != 2 || !indices.iter().all(|i| actual.contains(&Some(*i))) {
+            return Err("master stereo identity".into());
+        }
+        let storage = self.pa_storage.as_ref().ok_or("PA metadata unavailable")?;
+        let mut metadata: serde_json::Value =
+            serde_json::from_str(&storage.configuration_json).map_err(|e| e.to_string())?;
+        for edit in edits {
+            let index = edit["input_index"].as_u64().ok_or("EQ index")? as usize;
+            for key in ["eq_enabled", "eq", "geq_enabled", "geq_db"] {
+                metadata["inputs"][index][key] = edit[key].clone();
+            }
+        }
+        let metadata = serde_json::to_string(&metadata).map_err(|e| e.to_string())?;
+        if metadata.len() > 48 * 1024 {
+            return Err("retained PA metadata bound".into());
+        }
+        Ok(GraphEqPrepared {
+            owner,
+            metadata,
+            expected_map: expected_map.to_vec(),
+        })
+    }
+    pub fn commit_master_eq(&mut self, p: &mut GraphEqPrepared, epoch: u64, frame: u64) -> i32 {
+        if self.source_fault != 0 {
+            return -2;
+        }
+        if epoch != self.epoch || frame != self.next || p.expected_map != self.pa_program_buses() {
+            return -4;
+        }
+        let Some(storage) = self.pa_storage.as_mut() else {
+            return -5;
+        };
+        let Some(pa) = self.pa_v2.as_mut() else {
+            return -5;
+        };
+        let code = pa.commit_eq(&mut p.owner, epoch, frame);
+        if code == 0 {
+            std::mem::swap(&mut storage.configuration_json, &mut p.metadata);
+        }
+        code
     }
     pub fn pa_configuration_json(&self) -> Option<&str> {
         self.pa_storage
