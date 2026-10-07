@@ -1,6 +1,6 @@
 # Status and next steps
 
-## Live master EQ — task0018 candidate
+## Live master EQ — task0018 software validation
 
 The optional owner extension and GP18-master-eq:1 provider path are implemented
 in isolated package C worktrees. Narrow stereo admission, independent lifetime/
@@ -9,7 +9,12 @@ recovery are described in [the producer contract](MASTER_EQ_PRODUCER.md).
 Actual old-library fallback and new-owner synthetic integration passed. Complete
 normal suites passed (411 default / 487 hardware-host), and both all-target Clippy
 configurations passed with warnings denied on the unchanged producing source.
-Release gates and coordinator acceptance remain required before Desk freeze.
+Both release variants passed. The normal PA library was restored through Cargo
+and matches the artifact used by actual producer tests. The ignored actual-provider
+Desk witness compiled with warning-denied focused Clippy; its muted baseline
+captured 528 exact-zero playback samples with quiesced/disarmed actual owner state.
+Producer software validation is complete; coordinator acceptance and contract freeze
+remain required before the separate Desk Frontend driver.
 No physical audio, listening or measured deadline acceptance is claimed.
 
 ## Monitor/aux tap routing — task0018 producer

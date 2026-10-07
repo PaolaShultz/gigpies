@@ -1,4 +1,4 @@
-# Live master EQ producer — task0018 candidate
+# Live master EQ producer — task0018 software validated
 
 GP18-master-eq:1 is independent of GP18-sends:1 and GP14-structure:1. Its outer
 JSON remains integer-only. Fractional EQ settings and owner normalized coefficient
@@ -97,3 +97,34 @@ its exact source/library pins; the producing source and historical corpora are
 unchanged. Release gates remain pending at this checkpoint. Coordinator acceptance
 and consumer fixture freeze are separate; this checkpoint does not authorize Desk
 integration or establish physical output/deadline qualification.
+
+
+## Completed producer software gates — C3, 2026-10-07
+
+The remaining hardware-host release passed with Rust 1.97.1, locked dependencies,
+one build job, no incremental compilation, canonical target and parent-held shared
+build lock. Default release and complete default/hardware normal suites and
+all-target warning-denied Clippy retain their passing C2 evidence (411 / 487 tests,
+17 / 35 ignored). PA 91 and the actual old/new-owner, Unix and policy-authenticated
+endpoint campaigns retain C1 evidence at unchanged protected-source/library pins.
+No successful unchanged full suite was repeated. Both release variants are retained
+separately before same-path feature builds. Cargo restored the public normal PA
+library without the allocation-guard feature; its SHA-256 matches the normal
+library used for fixture generation and actual integration. The private guarded
+artifact and historical A/B releases/corpora remain separate and unchanged.
+
+The explicitly ignored `tests/desk_operator_witness.rs` adds no production API,
+contract or dependency. Its labeled executable is retained by source and binary
+hash plus build command. A focused optional-label correction passed compilation
+and warning-denied Clippy; no-label checks cover ordinary ignored-test builds.
+One muted baseline capture passed with actual libraries/provider: one 48-frame block,
+11 playback channels and 528 exact-zero samples, unchanged epoch/revision and
+quiesced/disarmed state. A private checker failure before capture is retained as a
+failed trial. This is startup/sample/provenance smoke, not Frontend integration.
+
+Producer software validation is complete. Coordinator review of actual diffs,
+evidence and exact fixture contracts remains required before DeskD uses them.
+The final private C3 manifest records full source/binary/library/fixture hashes,
+old/new manifest paths, exact commands, retained failed trials and handoff ownership.
+No physical synchronization, outputs, listening, acoustic protection, deadlines,
+whole-host hard realtime or new TLS handshake acceptance is claimed.

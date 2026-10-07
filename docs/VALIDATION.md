@@ -343,10 +343,10 @@ owned mode0700 directory), selecting only
 `--ignored --exact serve_desk_operator_witness --nocapture --test-threads=1`.
 Keep stdout/stderr outside the initial directory. Check ready provenance before
 requests. Atomically publish strict `capture-request.json` containing a unique
-alphanumeric/hyphen ID (at most32 characters) and `blocks` in1..32. Wait for
-`capture-ID.json` before another request. Up to16 captures and180 wall seconds
+alphanumeric/hyphen ID (at most 32 characters) and `blocks` in 1..32. Wait for
+`capture-ID.json` before another request. Up to 16 captures and 180 wall seconds
 are allowed. Stop only after the final response by creating an empty `stop`;
-require exit0 and `summary.json`. Preserve every failed trial and `failure.json`,
+require exit 0 and `summary.json`. Preserve every failed trial and `failure.json`,
 including any retained partial PCM. Completion capture remains owned until
 successful publication; timeout assertions run inside the panic catcher.
 
@@ -357,3 +357,47 @@ later Desk Frontend driver owns actual controls and affected/unaffected sample
 assertions. This harness is not physical, acoustic, listening, deadline or full
 Frontend integration acceptance; allocation evidence remains owner/narrow commit
 scope and authenticated endpoint evidence does not add a TLS handshake.
+
+
+### Task0018 C3 completion — 2026-10-07
+
+The sole remaining production gate passed:
+`cargo +1.97.1 build --release --locked -j1 --features hardware-host` (16m54s,
+exit 0). Four hardware-feature executables and the passing C2 default executable
+are preserved separately. The unchanged production code retains C2's complete
+411-test default  / 487-test hardware suites (17 / 35 ignored), both all-target
+warning-denied Clippy runs and default release; C1 retains PA 91, PA Clippy/releases,
+PA 5 / GP 50 Python checks, C callers, owner allocation guards and selected actual
+old/new-owner 3 and Unix/policy-authenticated endpoint 1 campaigns. Protected source,
+consumer fixtures, twelve owner goldens and accepted historical A/B artifact pins
+were rechecked. These unchanged successful campaigns were intentionally not rerun.
+
+`cargo +1.97.1 build --release --locked -j1 --lib` in the PA owner, without
+`owner-allocation-guard`, restored the canonical public target to the exact normal
+library used by actual tests (SHA-256
+`7bd1cfcb950961d8106dcdcaa21c2ed05abc7afe052d628e81f06fa85b087e91`). All seven
+optional EQ symbols are present; the separately retained private guarded library
+is unchanged. No Cargo output was overwritten manually.
+
+The new ignored witness passed focused labeled compilation and hardware-host
+Clippy with `-D warnings`; its provenance label is optional for ordinary builds
+and mandatory when running the explicit witness. After preserving the labeled
+executable, the same focused compile/Clippy commands with the label absent verify
+normal test-build compatibility. The initial Clippy rejection and corrected source
+pin/binary remain recorded. The muted smoke passed one capture (48 source frames,
+11 playback channels, 528 exact-zero samples), strict source/binary/owner manifest/
+library/fixture hashes, stable identities/maps/intent and quiesced/disarmed actual
+owner/provider state, followed by explicit stop, summary and exit 0. One preceding
+private-checker trial failed before capture and remains retained with no PCM claim.
+No grant, rearm or Frontend action was performed. Capture publication ownership and
+caught timeout behavior remain in the installed harness.
+
+All new Cargo checks use Rust 1.97.1, `--locked -j1`, `CARGO_INCREMENTAL=0`,
+`CARGO_BUILD_JOBS=1`, canonical targets and parent-held shared build lock. Historical,
+private-media, exhaustive/load, physical audio/MIDI/DMX, listening and hardware
+qualification campaigns were intentionally skipped. Full default/hardware suite
+counts above refer to the unchanged producer before addition of the explicit ignored
+external-driver witness; no duplicate full suite is claimed for the harness.
+Final complete-index and outgoing-range publication guards cover scoped local commits.
+Coordinator review/fixture freeze and later DeskD actual Frontend/sample integration
+remain separate from completed producer SOFTWARE validation and muted baseline smoke.
