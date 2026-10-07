@@ -220,7 +220,10 @@ fn actual_monitor_taps_feed_owner_matrix_after_send_gain_without_reprocessing_fo
     for block in 0..32u64 {
         for f in 0..48 {
             let frame = block * 48 + f as u64;
-            raw[f * 17] = 0.25 * (std::f64::consts::TAU * 2000. * frame as f64 / 48000.).sin();
+            // Actual REC/raw-source ownership admits exact signed PCM24, not
+            // arbitrary float sine samples. Both references use these same bytes.
+            let sample = 0.25 * (std::f64::consts::TAU * 2000. * frame as f64 / 48000.).sin();
+            raw[f * 17] = (sample * 8_388_608.).round() / 8_388_608.;
         }
         actual.process_interleaved(&raw, &mut buses).unwrap();
         legacy.process_interleaved(&raw, &mut original).unwrap();
