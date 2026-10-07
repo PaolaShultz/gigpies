@@ -6,8 +6,10 @@ The optional owner extension and GP18-master-eq:1 provider path are implemented
 in isolated package C worktrees. Narrow stereo admission, independent lifetime/
 generation/map pins, retained metadata, shared authority/reservation and disarmed
 recovery are described in [the producer contract](MASTER_EQ_PRODUCER.md).
-Actual old-library fallback and new-owner synthetic integration passed; final
-normal/release gates and coordinator acceptance remain required before Desk freeze.
+Actual old-library fallback and new-owner synthetic integration passed. Complete
+normal suites passed (411 default / 487 hardware-host), and both all-target Clippy
+configurations passed with warnings denied on the unchanged producing source.
+Release gates and coordinator acceptance remain required before Desk freeze.
 No physical audio, listening or measured deadline acceptance is claimed.
 
 ## Monitor/aux tap routing — task0018 producer

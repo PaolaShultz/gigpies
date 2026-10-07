@@ -300,3 +300,20 @@ independent opt-ins. Follow [the contract](MASTER_EQ_PRODUCER.md) and pin actual
 source/library/header/fixture hashes before consumer freeze. Final full default
 and hardware-host suites, both Clippy/release variants and publication checks
 remain mandatory; focused success does not replace those gates.
+
+### Task0018 C2 normal-gate checkpoint — 2026-10-07
+
+At unchanged producer/corpus tip `f5e7da51628208ce456af6976d93738cfb958765`,
+`cargo +1.97.1 test --locked -j1 --all-targets -- --test-threads=1` passed
+411 tests across 59 binaries (17 ignored); the same command with
+`--features hardware-host` passed 487 across 62 binaries (35 ignored). Both
+`cargo +1.97.1 clippy --locked -j1 --all-targets` configurations, default and
+hardware-host, passed with `-- -D warnings`. Both complete normal suites reported
+zero failures. All used `CARGO_INCREMENTAL=0`, one build job, canonical target
+and the parent-held shared build lock.
+
+C1 owner91, owner Clippy/releases/allocation/ABI/goldens and selected actual
+old/new-owner/Unix/policy-authenticated endpoint campaigns are retained with
+unchanged protected-source and artifact pins. Historical/private-media/load and
+physical campaigns were intentionally skipped. Release gates and coordinator
+acceptance remain pending; complete software validation is not yet claimed.

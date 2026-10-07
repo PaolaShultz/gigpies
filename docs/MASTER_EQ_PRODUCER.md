@@ -83,3 +83,17 @@ These existing orchestration allocations and control I/O are outside the guarded
 owner kernel; no whole-host hard realtime or physical deadline claim is made.
 Actual transport evidence here uses Unix sockets and a policy-authenticated test
 context through the receive codec/endpoint. It adds no TLS/QUIC handshake campaign.
+
+## Producer validation checkpoint — 2026-10-07
+
+The unchanged producing source at GigPies `06e0485324590a2ccb29897a180afa8be4eacbc5`
+and corpus/provenance tip `f5e7da51628208ce456af6976d93738cfb958765` passed complete
+normal suites: 411 default tests with 17 documented opt-ins ignored, and 487
+hardware-host tests with 35 documented opt-ins ignored. Both all-target Clippy
+configurations passed with warnings denied. Tests ran serially on Pi4 with Rust
+1.97.1, locked dependencies, no incremental compilation and the shared build lock.
+Previously validated owner and selected actual producer evidence is retained at
+its exact source/library pins; the producing source and historical corpora are
+unchanged. Release gates remain pending at this checkpoint. Coordinator acceptance
+and consumer fixture freeze are separate; this checkpoint does not authorize Desk
+integration or establish physical output/deadline qualification.
