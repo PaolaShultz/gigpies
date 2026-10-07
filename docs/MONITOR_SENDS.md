@@ -119,6 +119,13 @@ separate EQ center gain, compressor attack/static reduction, fader/pan, common
 mute/global safety, independent send levels/destinations, exact default output,
 transition partitions/endpoints, refusal/dedup/expiry and disarmed persistence.
 Allocation/deallocation guards cover success, invalid shape, fault and quiescence.
+Final task0018 software gates passed 409 default and 484 hardware-host normal
+tests (17/33 opt-ins skipped), both release variants, both warning-denied Clippy
+configurations, formatting and 50 Python tests. The explicitly selected actual-owner
+send regression and two Brain/provider regressions passed against supplied
+hash-verified PA/FX/REC artifacts and synthetic PCM24 samples. These results await
+coordinator review; they establish no physical or sustained deadline qualification.
+
 Actual Unix and mutual-TLS tests use bounded synthetic software only. Mixed
 provider tests cover cancellation in both ownership orders, unrelated writer
 revocation, cached final retries while another tap is pending, and final-ticket

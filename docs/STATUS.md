@@ -10,12 +10,16 @@ disarmed recovery. Configured processing explicitly advances to GP07:4; legacy
 This remains a provisional producer, pending coordinator acceptance. The corrective
 pass repaired synthetic-source block reuse without changing source bytes or deadlines,
 added mixed transport ownership, nondefault composed restore, oversized paging and
-strict transition validation. Final default validation passed 409 tests; hardware-host
-library validation passed 108. Both Clippy configurations passed with warnings denied.
-The full hardware-host all-target suite and both release variants remain required
-before freeze; the bounded handoff records exact commands, evidence and remaining gates.
+strict transition validation. Final normal validation passed 409 default and 484
+hardware-host tests, with 17/33 explicit opt-ins skipped. Three separately selected
+actual-owner send/Brain/provider tests passed against hash-verified PA/FX/REC
+artifacts and synthetic samples. Both release variants, warning-denied Clippy
+configurations, formatting, 50 Python tests and publication checks passed.
 Historical corpus provenance is retained; the separate corrected corpus pins its
-committed producing source. Desk integration remains separate.
+committed producing source. Both corpora retain their original hashes and pass
+explicit decoder/source-hash verification. Exact commands, counts and private
+evidence are recorded in the bounded handoff. Coordinator review and producer
+freeze remain required before Desk integration.
 No physical mapping, listening, audio-clock lock or sustained hardware deadline claim.
 
 ## Control-capacity and CI review fixes — 2026-10-06
