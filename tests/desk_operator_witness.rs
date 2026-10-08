@@ -9,9 +9,11 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs,
-    io::{Read, Write},
+    io::{BufWriter, Read, Write},
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
+    sync::mpsc::{SyncSender, sync_channel},
+    thread::{JoinHandle, spawn},
     time::{Duration, Instant},
 };
 
@@ -83,20 +85,44 @@ struct Capture {
     before: Value,
     blocks: Vec<Value>,
 }
+
+type Publication = (String, Value);
+
+// One publication in flight and one queued. The driver requests the next capture
+// only after observing the previous durable file. Never wait for storage in the
+// provider loop; unexpected backlog is an explicit failed witness, not lost data.
+fn start_publisher(
+    mut write: impl FnMut(Publication) + Send + 'static,
+) -> (SyncSender<Publication>, JoinHandle<usize>) {
+    let (sender, receiver) = sync_channel(1);
+    let worker = spawn(move || {
+        let mut count = 0;
+        for publication in receiver {
+            write(publication);
+            count += 1;
+        }
+        count
+    });
+    (sender, worker)
+}
+
 fn publish(directory: &Path, name: &str, value: &Value) {
     let final_path = directory.join(name);
     let temporary = directory.join(format!(".{name}.tmp"));
-    let mut file = fs::OpenOptions::new()
+    let file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&temporary)
         .expect("new private evidence file");
+    let mut file = BufWriter::new(file);
     serde_json::to_writer(&mut file, value).unwrap();
     file.write_all(b"\n").unwrap();
-    file.sync_all().unwrap();
+    file.flush().unwrap();
+    file.get_ref().sync_all().unwrap();
     // Publish without replacing an existing unique capture or following a symlink.
     fs::hard_link(&temporary, &final_path).expect("unique evidence destination");
     fs::remove_file(temporary).unwrap();
+    fs::File::open(directory).unwrap().sync_all().unwrap();
 }
 fn state(provider: &mut LocalAudio) -> Value {
     let raw = provider.snapshot().unwrap();
@@ -165,12 +191,17 @@ fn serve_desk_operator_witness() {
         }),
     );
     let start = Instant::now();
+    let publication_directory = directory.clone();
+    let (publications, publisher) = start_publisher(move |(name, value)| {
+        publish(&publication_directory, &name, &value);
+    });
     let mut active: Option<Capture> = None;
     let mut completed = BTreeMap::<String, CaptureRequest>::new();
     let mut blocks = 0_u64;
     let mut stopped = false;
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         while start.elapsed() < Duration::from_secs(180) {
+            assert!(!publisher.is_finished(), "evidence publisher failed");
             if directory.join("stop").exists() {
                 assert!(active.is_none(), "stop during incomplete capture");
                 stopped = true;
@@ -224,15 +255,16 @@ fn serve_desk_operator_witness() {
                 if capture.blocks.len() == capture.request.blocks {
                     let capture = active.as_ref().unwrap();
                     let after = state(&mut provider);
-                    publish(
-                        &directory,
-                        &format!("capture-{}.json", capture.request.id),
-                        &json!({
-                            "schema_version":1,"id":capture.request.id,"channels":outputs,
-                            "before":capture.before,"blocks":capture.blocks,"after":after,
-                            "hardware_opened":false
-                        }),
-                    );
+                    publications
+                        .try_send((
+                            format!("capture-{}.json", capture.request.id),
+                            json!({
+                                "schema_version":1,"id":capture.request.id,"channels":outputs,
+                                "before":capture.before,"blocks":capture.blocks,"after":after,
+                                "hardware_opened":false
+                            }),
+                        ))
+                        .expect("bounded evidence publisher unavailable/backlogged");
                     let capture = active.take().unwrap();
                     completed.insert(capture.request.id.clone(), capture.request);
                 }
@@ -245,6 +277,10 @@ fn serve_desk_operator_witness() {
         );
         assert!(!completed.is_empty(), "driver completed no sample witness");
     }));
+    drop(publications);
+    let publication_result = publisher.join();
+    let published = publication_result.as_ref().copied().unwrap_or(0);
+    let outcome = outcome.and(publication_result.map(|_| ()));
     if let Err(payload) = outcome {
         let reason = payload
             .downcast_ref::<String>()
@@ -270,7 +306,8 @@ fn serve_desk_operator_witness() {
         "summary.json",
         &json!({
             "schema_version":1,"stopped_by_driver":stopped,"captured":completed.len(),
-            "rendered_blocks":blocks,"final":state(&mut provider),"hardware_opened":false
+            "rendered_blocks":blocks,"published":published,
+            "final":state(&mut provider),"hardware_opened":false
         }),
     );
     assert!(
@@ -278,4 +315,69 @@ fn serve_desk_operator_witness() {
         "bounded witness expired before explicit driver stop"
     );
     assert!(!completed.is_empty(), "driver completed no sample witness");
+    assert_eq!(
+        published,
+        completed.len(),
+        "every accepted capture is durable"
+    );
+}
+
+#[test]
+fn witness_storage_backpressure_is_bounded_and_failure_is_observable() {
+    let (entered, active) = sync_channel(0);
+    let (release, released) = sync_channel(0);
+    let (sender, worker) = start_publisher(move |_| {
+        entered.send(()).unwrap();
+        released.recv().unwrap();
+    });
+    sender.try_send(("first".into(), json!(1))).unwrap();
+    active.recv().unwrap();
+    sender.try_send(("second".into(), json!(2))).unwrap();
+    assert!(matches!(
+        sender.try_send(("third".into(), json!(3))),
+        Err(std::sync::mpsc::TrySendError::Full(_))
+    ));
+    release.send(()).unwrap();
+    active.recv().unwrap();
+    drop(sender);
+    release.send(()).unwrap();
+    assert_eq!(worker.join().unwrap(), 2);
+
+    let (sender, worker) = start_publisher(|_| panic!("injected storage failure"));
+    sender.try_send(("failed".into(), Value::Null)).unwrap();
+    assert!(worker.join().is_err());
+    assert!(matches!(
+        sender.try_send(("later".into(), Value::Null)),
+        Err(std::sync::mpsc::TrySendError::Disconnected(_))
+    ));
+}
+
+#[test]
+fn witness_publication_drains_exact_data_without_overwriting() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let directory =
+        std::env::temp_dir().join(format!("gp-witness-{}-{unique}", std::process::id()));
+    fs::create_dir(&directory).unwrap();
+    let target = directory.clone();
+    let (sender, worker) = start_publisher(move |(name, value)| publish(&target, &name, &value));
+    let expected = json!({"samples":[0.0,-0.125,0.25],"epoch":"1","frame":"48"});
+    sender
+        .try_send(("capture.json".into(), expected.clone()))
+        .unwrap();
+    drop(sender);
+    assert_eq!(worker.join().unwrap(), 1);
+    let actual: Value =
+        serde_json::from_slice(&fs::read(directory.join("capture.json")).unwrap()).unwrap();
+    assert_eq!(actual, expected);
+    assert!(!directory.join(".capture.json.tmp").exists());
+    assert!(
+        std::panic::catch_unwind(|| publish(&directory, "capture.json", &Value::Null)).is_err()
+    );
+    let actual: Value =
+        serde_json::from_slice(&fs::read(directory.join("capture.json")).unwrap()).unwrap();
+    assert_eq!(actual, expected);
+    fs::remove_dir_all(directory).unwrap();
 }

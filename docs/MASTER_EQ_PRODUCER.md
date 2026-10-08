@@ -122,6 +122,18 @@ One muted baseline capture passed with actual libraries/provider: one 48-frame b
 quiesced/disarmed state. A private checker failure before capture is retained as a
 failed trial. This is startup/sample/provenance smoke, not Frontend integration.
 
+The Desk integration run exposed observer interference in that witness: capture
+JSON was written directly to an unbuffered file and flushed on the provider loop.
+Completed evidence now uses a separate publisher with one queued item, explicit
+backpressure failure and buffered serialization. Provider deadlines and captured
+sample/context values are unchanged. Explicit stop drains the publisher; successful
+summary counts must match durable captures. Focused tests cover queue capacity,
+publisher failure, exact data and refusal to overwrite evidence. This correction
+affects only software acceptance scaffolding, not the production provider or owner.
+File contents and the containing directory are synced before publisher completion.
+The 180-second provider-loop bound does not bound an OS storage call or thread
+join; the external driver must retain its whole-process timeout and cleanup.
+
 Producer software validation is complete. Coordinator review of actual diffs,
 evidence and exact fixture contracts remains required before DeskD uses them.
 The final private C3 manifest records full source/binary/library/fixture hashes,
