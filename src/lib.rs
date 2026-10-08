@@ -77,3 +77,5 @@ pub mod paired_readback;
 pub mod sends_wire;
 
 pub mod master_eq_wire;
+
+pub mod fx_wire;
