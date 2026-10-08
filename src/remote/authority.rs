@@ -208,6 +208,7 @@ pub fn scope_permission(scope: Scope) -> Permission {
         Scope::Monitor2 => Permission::Monitor(2),
         Scope::Monitor(n) => Permission::Monitor(u32::from(n)),
         Scope::PaConfiguration => Permission::PaConfiguration,
+        Scope::FxConfiguration => Permission::FxConfiguration,
         Scope::OutputRoutes => Permission::OutputRoutes,
         Scope::LocalOperatorMonitor => Permission::LocalOperatorMonitor,
         Scope::TalkbackDestinations => Permission::TalkbackDestinations,

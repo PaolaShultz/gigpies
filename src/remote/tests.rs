@@ -1101,3 +1101,7 @@ async fn sends_actual_mutual_tls_provider_boundary_and_policy_revocation() {
     .await
     .expect("bounded authenticated sends test");
 }
+
+#[cfg(all(target_os = "linux", feature = "hardware-host"))]
+#[path = "gp21_tests.rs"]
+mod gp21_tests;

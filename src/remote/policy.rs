@@ -16,6 +16,7 @@ pub enum Permission {
     OutputRoutes,
     Analysis,
     Fx,
+    FxConfiguration,
     LocalOperatorMonitor,
     TalkbackDestinations,
     TalkbackFoh,
@@ -214,6 +215,7 @@ impl AuthenticatedContext {
                 | "master_eq_snapshot"
                 | "brain_snapshot"
                 | "device_snapshot"
+                | "fx_snapshot"
         ) {
             if !writer.is_null() {
                 return Err("snapshot writer".into());

@@ -82,6 +82,7 @@ impl Request {
             Scope::Foh
             | Scope::Monitor1
             | Scope::Monitor2
+            | Scope::FxConfiguration
             | Scope::PaConfiguration
             | Scope::OutputRoutes
             | Scope::LocalOperatorMonitor

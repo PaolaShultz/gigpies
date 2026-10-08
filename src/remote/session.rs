@@ -405,11 +405,24 @@ impl ServerSession {
 
 /// A client must explicitly create a fresh connection. There is no automatic
 /// reconnect/replay, grant resurrection, output rearm or saved command queue.
+/// Dropping a worker aborts its independent reader without joining or leaking a
+/// task waiting for a first control byte. No receiver exists on legacy media.
+pub struct FxReplyReader(tokio::task::JoinHandle<()>);
+impl FxReplyReader {
+    pub fn abort(&self) {
+        self.0.abort();
+    }
+}
+impl Drop for FxReplyReader {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
 pub struct RemoteClient {
     _endpoint: quinn::Endpoint,
     connection: quinn::Connection,
     send: quinn::SendStream,
-    recv: quinn::RecvStream,
+    recv: Option<quinn::RecvStream>,
     context: AuthenticatedContext,
     policy: PolicyStore,
     hello: Response,
@@ -482,7 +495,7 @@ impl RemoteClient {
             _endpoint: endpoint,
             connection,
             send,
-            recv,
+            recv: Some(recv),
             context,
             policy,
             hello,
@@ -618,7 +631,8 @@ impl RemoteClient {
         // Drain the final reliable boundary result even if QUIC has subsequently
         // closed after acknowledging it. New sends/media still require a live connection.
         self.policy.check(&self.context)?;
-        let response: Response = read_response(&mut self.recv).await?;
+        let response: Response =
+            read_response(self.recv.as_mut().ok_or("control receiver moved")?).await?;
         self.policy.check(&self.context)?;
         let session = match &response {
             Response::Reply { session, .. }
@@ -658,6 +672,41 @@ impl RemoteClient {
             self.media_taken = false;
         }
         Ok(response)
+    }
+    /// Move an already-negotiated FX control reader to one bounded task. Reading
+    /// complete frames is never cancelled by the media select loop.
+    pub fn take_fx_replies(
+        &mut self,
+    ) -> Result<(tokio::sync::mpsc::Receiver<Result<Response>>, FxReplyReader)> {
+        if !self.media_taken {
+            return Err("FX media must be admitted first".into());
+        }
+        let mut recv = self.recv.take().ok_or("control reader already moved")?;
+        let context = self.context.clone();
+        let (tx, rx) = tokio::sync::mpsc::channel(16);
+        let task = tokio::spawn(async move {
+            loop {
+                let result = match context.check_current() {
+                    Err(e) => Err(e),
+                    Ok(()) => read_response(&mut recv).await.and_then(|r| {
+                        context.check_current()?;
+                        match &r {
+                            Response::Reply { session, .. } | Response::Refused { session, .. }
+                                if session.0 == context.session() =>
+                            {
+                                Ok(r)
+                            }
+                            _ => Err("FX control response identity".into()),
+                        }
+                    }),
+                };
+                let failed = result.is_err();
+                if tx.send(result).await.is_err() || failed {
+                    break;
+                }
+            }
+        });
+        Ok((rx, FxReplyReader(task)))
     }
     pub async fn negotiate(&mut self, descriptor: MediaDescriptor) -> Result<()> {
         self.check()?;
