@@ -1,32 +1,37 @@
 # Status and next steps
 
-## Software measurement provider — task0020 B2
+## Task0020 module integration — software acceptance
+
+Configured [C-ANALYSIS:2](CONFIGURED_ANALYSIS.md) binds four named raw sources to
+explicit admitted topology inputs. Lux and Lightdesk consume the frozen producer
+contract with source/map/lifetime and freshness checks. Actual configured-chain
+software acceptance passed; legacy v1 remains separate. Physical configured
+publication remains unavailable pending capture-age qualification.
 
 The opt-in [GP20 measurement provider](MEASUREMENT_PRODUCER.md) borrows bounded
-raw reference/reserved setup-microphone pairs from the existing source tick.
-A startup-created worker delegates H1/phase/coherence, conservative multi-position
-proposals and exact candidate validation to the hash-pinned SHR PA owner; GigPies
-contains no duplicate estimator. Same-connection PA configuration authority,
-source/map/graph identity, cancellation and terminal result retention fence work.
-The independent Desk consumer reviews the resulting candidate through existing
-GP14 muted configuration; rearm remains separate.
+raw reference/reserved microphone-slot samples from the existing source tick.
+The hash-pinned SHR PA owner performs analysis, multi-position proposals and
+exact candidate validation off the render path. Desk's actual software episode
+passed capture/cancellation, proposal, unchanged-result and stale-basis handling,
+and the existing muted GP14 whole-configuration review. Rearm remains separate.
 
-Focused default safety/wire/allocation tests and actual PA two-position software
-acceptance are provided. Batch integration owns the complete combined default and
-hardware-host suites, Clippy and release gates. Physical runners expose no enable
-option; acoustic timing qualification and microphone/output sessions remain pending.
+[GP21 remote FX control](REMOTE_FX_CONTROL.md) reaches one actual Brain stereo
+owner through prepare, permit, applied and settled observations. Dedicated
+authority and exact source/lifetime/ticket identity protect atomic stereo edits,
+tail-preserving bypass and selected/both history reset. Actual Desk controls,
+old-owner fallback and post-permit owner-loss episodes passed. Independent sample
+checks cover selected wet response, PA composition and unchanged raw REC.
 
-## Configured named analysis — task0020 producer
-
-The additive [C-ANALYSIS:2 path](CONFIGURED_ANALYSIS.md) binds the existing four
-semantic sources to explicit raw strips in the admitted topology. It no longer
-requires the synthetic-fouraux attachment mode. Strict startup configuration,
-version-separated subscription requests, topology/source invalidation and honest
-PCM failure closure preserve the original v1 path. Focused tests cover exact raw
-samples through a permuted 17-input capture map and 32/48-input inventories.
-Full producer validation and Lux/Lightdesk integration remain pending at this
-candidate checkpoint. Physical configured publication is deliberately refused
-until capture acquisition age can be propagated; no hardware is opened.
+Combined normal suites cover 431 default and 513 hardware-host tests. A repaired
+panic-fixture scheduling test passed separately under both features; all other
+normal tests passed on identical production inputs. Both all-target warning-denied
+Clippy configurations, both release builds, Python and index guards passed. Seven
+selected actual-owner integration cases passed on Pi4, including exact PA dry+wet
+composition, 16 unchanged raw recording tracks, two-position measurement and the
+PA replacement allocation boundary. Private exact synchronization and its receiving
+receipt are recorded in the batch ledger. Historical campaigns remain opt-in.
+No physical playback, microphone capture, MIDI/DMX output, acoustic alignment or
+hardware timing qualification is claimed.
 
 ## Live master EQ — task0018 software validation
 
