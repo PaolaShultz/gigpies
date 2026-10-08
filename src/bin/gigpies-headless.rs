@@ -26,6 +26,7 @@ fn run() -> Result<(), String> {
     let mut ticks = None;
     let mut analysis = false;
     let mut analysis_map = None;
+    let mut measurement_owner = None;
     let mut fouraux = false;
     let mut modules: Option<String> = None;
     let mut topology = None;
@@ -34,7 +35,7 @@ fn run() -> Result<(), String> {
     while let Some(arg) = args.next() {
         if arg == "--help" {
             println!(
-                "Usage: gigpies-headless --directory ABS_PRIVATE_0700_DIR --show UUID --epoch POSITIVE_INTEGER [--ticks COUNT] [--synthetic-source fouraux] [--analysis | --analysis-map ABS_JSON] [--modules ABS_HASH_MANIFEST] [--topology ABS_JSON] [--arm-synthetic]\nSynthetic configurable engine; defaults to explicit legacy eight-input/two-monitor compatibility. Expanded topology starts disarmed. Same-UID audio.sock only; no physical devices. New show/epoch identity must be supplied explicitly."
+                "Usage: gigpies-headless --directory ABS_PRIVATE_0700_DIR --show UUID --epoch POSITIVE_INTEGER [--ticks COUNT] [--synthetic-source fouraux] [--analysis | --analysis-map ABS_JSON] [--modules ABS_HASH_MANIFEST] [--topology ABS_JSON] [--measurement-owner ABS_JSON] [--arm-synthetic]\nSynthetic configurable engine; defaults to explicit legacy eight-input/two-monitor compatibility. Expanded topology starts disarmed. Same-UID audio.sock only; no physical devices. New show/epoch identity must be supplied explicitly."
             );
             return Ok(());
         }
@@ -49,6 +50,7 @@ fn run() -> Result<(), String> {
         let value = args.next().ok_or("missing option value")?;
         match arg.as_str() {
             "--analysis-map" if analysis_map.is_none() => analysis_map = Some(value),
+            "--measurement-owner" if measurement_owner.is_none() => measurement_owner = Some(value),
             "--topology" => topology = Some(value),
             "--modules" => modules = Some(value),
             "--directory" => directory = Some(value),
@@ -128,6 +130,24 @@ fn run() -> Result<(), String> {
             let _ = manifest;
             return Err("--modules requires hardware-host build; no devices are opened".into());
         }
+    }
+    if let Some(path) = measurement_owner {
+        use std::io::Read;
+        if !std::path::Path::new(&path).is_absolute() {
+            return Err("measurement startup path must be absolute".into());
+        }
+        let mut bytes = Vec::new();
+        std::fs::File::open(path)
+            .map_err(|e| e.to_string())?
+            .take(4097)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() > 4096 {
+            return Err("measurement startup capacity".into());
+        }
+        let config: gigpies::measurement_owner::Config =
+            serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+        server.enable_software_measurement(config)?;
     }
     // SAFETY: handlers perform only an atomic store; installed in this explicit process.
     unsafe {

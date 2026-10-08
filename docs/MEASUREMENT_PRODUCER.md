@@ -106,3 +106,29 @@ Its deterministic source passes actual PA DSP with known delay/inversion into th
 reserved slot, uses two positions, checks owner proposal/candidate/cancellation and
 source isolation, and emits actual correlated producer exchanges. Signals are
 invented; no hardware endpoints, audible output or clock qualification are involved.
+
+### Bounded software interoperability driver
+
+Build the `measurement-provider` example with `--features hardware-host`; this build
+feature loads module libraries but the example opens no physical devices:
+
+```text
+measurement-provider PRIVATE_0700_DIR MODULE_MANIFEST OWNER_CONFIG GRAPH_JSON READY_JSON DURATION_MS
+```
+
+Duration is 1000..120000ms. READY_JSON must be a new file directly in the private
+directory. It reports the same-process socket, show/epoch, owner hash and graph
+basis. The fixed invented source feeds actual PA DSP; the selected PA output is
+borrowed on reserved microphone slot16 with canonical reference input-01. Capture
+selection changes before its first admitted frame. The witness follows explicit
+GP14 graph changes, independently renders the new actual PA graph, and reports
+settled output-pair differences in `READY_JSON` with extension `.final.json` on
+bounded completion or SIGTERM to its owned PID. No buffer is sent to an audio device.
+Use a graph with two assigned full-range outputs for this two-output test fixture;
+this is not a product topology limit.
+
+The source offer has a counting allocator regression including completion and
+invalidated input. Whole-host control pumping still allocates for protocol replies,
+record admission and terminal retirement. Proposal graph parsing and candidate job
+preparation occur before the command boundary. Retained capture reuse/cancellation
+requires the original writer and lease; another PA writer cannot reuse its evidence.

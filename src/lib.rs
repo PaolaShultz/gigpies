@@ -77,3 +77,10 @@ pub mod paired_readback;
 pub mod sends_wire;
 
 pub mod master_eq_wire;
+
+#[cfg(target_os = "linux")]
+pub mod measurement_owner;
+pub mod measurement_wire;
+
+#[cfg(target_os = "linux")]
+pub mod measurement_capture;

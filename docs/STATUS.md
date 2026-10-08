@@ -1,5 +1,21 @@
 # Status and next steps
 
+## Software measurement provider — task0020 B2
+
+The opt-in [GP20 measurement provider](MEASUREMENT_PRODUCER.md) borrows bounded
+raw reference/reserved setup-microphone pairs from the existing source tick.
+A startup-created worker delegates H1/phase/coherence, conservative multi-position
+proposals and exact candidate validation to the hash-pinned SHR PA owner; GigPies
+contains no duplicate estimator. Same-connection PA configuration authority,
+source/map/graph identity, cancellation and terminal result retention fence work.
+The independent Desk consumer reviews the resulting candidate through existing
+GP14 muted configuration; rearm remains separate.
+
+Focused default safety/wire/allocation tests and actual PA two-position software
+acceptance are provided. Batch integration owns the complete combined default and
+hardware-host suites, Clippy and release gates. Physical runners expose no enable
+option; acoustic timing qualification and microphone/output sessions remain pending.
+
 ## Configured named analysis — task0020 producer
 
 The additive [C-ANALYSIS:2 path](CONFIGURED_ANALYSIS.md) binds the existing four

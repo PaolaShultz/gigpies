@@ -18,6 +18,7 @@ use std::{
     },
     path::{Path, PathBuf},
 };
+mod measurement;
 pub const MAX_CLIENTS: usize = 4;
 pub const MAX_FRAME: usize = 65536;
 pub const MAX_REPLIES: usize = 32;
@@ -72,6 +73,7 @@ impl Packet {
     }
 }
 enum Incoming {
+    Measurement(crate::measurement_wire::Request),
     Audio(Request),
     Structural(crate::structural_control::Request),
     Brain(crate::brain_control::Request),
@@ -94,6 +96,7 @@ struct Client {
     processing_snapshot_ms: Option<u64>,
     structural_snapshot_ms: Option<u64>,
     master_eq_snapshot_ms: Option<u64>,
+    measurement_snapshot_ms: Option<u64>,
     brain_snapshot_ms: Option<u64>,
     writer: Option<String>,
     lease: Option<Counter>,
@@ -149,7 +152,11 @@ impl Client {
         }
         let bytes = &self.buffer[4..length + 4];
         let value: serde_json::Value = crate::show::decode(bytes)?;
-        let request = if value.get("contract").and_then(|v| v.as_str()) == Some("GP15-brain") {
+        let request = if value.get("contract").and_then(|v| v.as_str())
+            == Some(crate::measurement_wire::CONTRACT)
+        {
+            Incoming::Measurement(crate::measurement_wire::Request::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP15-brain") {
             Incoming::Brain(crate::brain_control::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure")
             || value.get("contract").and_then(|v| v.as_str())
@@ -466,6 +473,12 @@ pub struct LocalAudio {
     playback_scratch: Vec<f64>,
     pcm_scratch: Vec<i32>,
     remote_completions: VecDeque<serde_json::Value>,
+    measurement: Option<crate::measurement_capture::State>,
+    measurement_pending: Option<measurement::Pending>,
+    measurement_cache: VecDeque<(
+        crate::measurement_wire::Request,
+        crate::measurement_wire::Reply,
+    )>,
     structural_pending: Option<(
         crate::structural_control::Request,
         StructuralAction,
@@ -578,6 +591,9 @@ impl LocalAudio {
             analysis: None,
             synthetic_fouraux: false,
             remote_completions: VecDeque::with_capacity(64),
+            measurement: None,
+            measurement_pending: None,
+            measurement_cache: VecDeque::with_capacity(256),
             structural_pending: None,
             structural_cache: VecDeque::with_capacity(256),
             raw_scratch: vec![0.; 48 * ni],
@@ -1525,6 +1541,10 @@ impl LocalAudio {
         self.epoch.0
     }
     pub fn quiesce_source(&mut self, reason: &str) -> Result<()> {
+        if let Some(s) = &mut self.measurement {
+            s.invalidate_all(reason);
+        }
+        self.invalidate_pending_measurement(reason);
         self.stop_analysis();
         self.close_brain_audio();
         self.brain_pending = None;
@@ -1594,6 +1614,25 @@ impl LocalAudio {
         &self.bus_scratch
     }
     pub fn revoke_writer(&mut self, writer: &str) {
+        if let Some(s) = &mut self.measurement {
+            let ids: Vec<_> = s
+                .guards()
+                .filter(|(_, r, _)| r.writer.as_deref() == Some(writer))
+                .map(|(id, _, _)| id.to_owned())
+                .collect();
+            for id in ids {
+                s.invalidate(&id, "measurement writer revoked");
+            }
+        }
+        if self
+            .measurement_pending
+            .as_ref()
+            .is_some_and(|p| p.request.writer.as_deref() == Some(writer))
+        {
+            self.invalidate_pending_measurement("measurement writer revoked");
+        }
+        self.measurement_cache
+            .retain(|(r, _)| r.writer.as_deref() != Some(writer));
         if self
             .brain
             .hold
@@ -2093,6 +2132,7 @@ impl LocalAudio {
         let mut buses = std::mem::take(&mut self.bus_scratch);
         let result = self.tick_raw_with_brain(now, &raw, &mut buses, wet, talkback);
         if result.is_ok() {
+            self.offer_measurement(epoch, first_frame, capture);
             let topology = self.topology();
             #[cfg(feature = "hardware-host")]
             let pa = self
@@ -2147,6 +2187,7 @@ impl LocalAudio {
             return Err("clock".into());
         }
         self.last_now = now;
+        self.poll_measurement(now);
         self.ticks = self.ticks.checked_add(1).ok_or("tick exhausted")?;
         for _ in 0..MAX_CLIENTS {
             match self.listener.accept() {
@@ -2171,6 +2212,7 @@ impl LocalAudio {
                         processing_snapshot_ms: None,
                         structural_snapshot_ms: None,
                         master_eq_snapshot_ms: None,
+                        measurement_snapshot_ms: None,
                         brain_snapshot_ms: None,
                         writer: None,
                         lease: None,
@@ -2212,6 +2254,31 @@ impl LocalAudio {
                         let reply = self.brain_request(request, now, fresh, owner)?;
                         if read && reply.snapshot.is_some() {
                             self.clients[index].brain_snapshot_ms = Some(now);
+                        }
+                        if self.clients[index].queue_module(&reply, now).is_err() {
+                            keep = false;
+                        }
+                    }
+                }
+                Ok(Some(Incoming::Measurement(request))) => {
+                    let read = request.read();
+                    let c = &self.clients[index];
+                    let authorized = read
+                        || (c.snapshot && c.writer == request.writer && c.lease == request.lease);
+                    let fresh = c
+                        .measurement_snapshot_ms
+                        .is_some_and(|t| now >= t && now - t <= 250);
+                    if !authorized {
+                        keep = false;
+                    } else {
+                        let owner = Some(c.id);
+                        let snapshot = matches!(
+                            request.command,
+                            crate::measurement_wire::Command::MeasurementSnapshot {}
+                        );
+                        let reply = self.measurement_request(request, now, fresh, owner)?;
+                        if snapshot && reply.snapshot.is_some() {
+                            self.clients[index].measurement_snapshot_ms = Some(now);
                         }
                         if self.clients[index].queue_module(&reply, now).is_err() {
                             keep = false;
@@ -2319,6 +2386,7 @@ impl LocalAudio {
         self.module_completions(now)?;
         self.commit_brain(now)?;
         self.commit_structure(now)?;
+        self.commit_measurement(now)?;
         output.fill(0.);
         let source_frame = self.frame();
         let ni = self.topology().inputs.len();

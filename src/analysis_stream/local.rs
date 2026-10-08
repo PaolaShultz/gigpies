@@ -130,10 +130,7 @@ impl LocalAnalysis {
                     Ok(n) => c.used += n,
                     Err(e)
                         if e.kind() == ErrorKind::WouldBlock
-                            || e.kind() == ErrorKind::Interrupted =>
-                    {
-                        ()
-                    }
+                            || e.kind() == ErrorKind::Interrupted => {}
                     Err(_) => return false,
                 }
                 if c.used >= 4 {
