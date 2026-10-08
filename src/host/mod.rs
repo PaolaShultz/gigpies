@@ -291,3 +291,6 @@ pub mod duplex;
 /// Brain owner effects follow source frames, independently of network arrival.
 #[cfg(feature = "hardware-host")]
 pub mod brain_fx;
+
+#[cfg(feature = "hardware-host")]
+pub mod fx_v2;

@@ -118,7 +118,18 @@ pub struct BrainStats {
 }
 /// A caller may consume analysis packets through `step` while FX remains backed
 /// by the independent owner. Analysis consumers cannot mutate the source cursor.
+struct FxTicket {
+    ticket: u64,
+    apply_frame: u64,
+    deadline: std::time::Instant,
+    permitted: bool,
+    applied: bool,
+    panic_mask: Option<u32>,
+}
 pub struct BrainWorker {
+    fx_binding: Option<crate::fx_wire::Binding>,
+    fx_ticket: Option<FxTicket>,
+    fx_refused: Option<(u64, &'static str)>,
     media: MediaChannel,
     receiver: GroupedReceiver,
     fx: crate::host::brain_fx::BrainFx,
@@ -126,6 +137,7 @@ pub struct BrainWorker {
     pub stats: BrainStats,
     returned_hash: Sha256,
     nonzero_return_samples: u64,
+    fx_library_file: Option<std::fs::File>,
 }
 impl BrainWorker {
     pub fn prepare(media: MediaChannel, fx_library: &Path) -> Result<Self> {
@@ -148,6 +160,9 @@ impl BrainWorker {
         )
         .map_err(|e| e.to_string())?;
         Ok(Self {
+            fx_binding: None,
+            fx_ticket: None,
+            fx_refused: None,
             media,
             receiver: GroupedReceiver::new(descriptor, MediaRole::FxSend)?,
             fx,
@@ -155,7 +170,276 @@ impl BrainWorker {
             stats: BrainStats::default(),
             returned_hash: Sha256::new(),
             nonzero_return_samples: 0,
+            fx_library_file: None,
         })
+    }
+    pub fn enable_fx_control(&mut self, path: &Path, expected_sha256: &str) -> Result<bool> {
+        let d = self.media.descriptor();
+        if ![MediaRole::FxSend, MediaRole::WetReturn]
+            .iter()
+            .all(|role| {
+                d.streams
+                    .iter()
+                    .filter(|s| s.role == *role)
+                    .flat_map(|s| s.channel_ids.iter())
+                    .map(String::as_str)
+                    .eq(["foh-left", "foh-right"])
+            })
+        {
+            return Err("FX control requires ordered FOH pair".into());
+        }
+        if self.fx_binding.is_some() {
+            return Err("FX owner already configured".into());
+        }
+        use std::io::Read;
+        let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        let actual = format!("{:x}", Sha256::digest(&bytes));
+        if actual != expected_sha256 {
+            return Err("FX library hash mismatch".into());
+        }
+        // On Linux dlopen the same open inode whose bytes were hashed, so a
+        // concurrent artifact rename cannot substitute a different owner.
+        #[cfg(target_os = "linux")]
+        let load_path = {
+            use std::os::fd::AsRawFd;
+            std::path::PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()))
+        };
+        #[cfg(not(target_os = "linux"))]
+        let load_path = path.to_path_buf();
+        if !self.fx.enable_configured(&load_path)? {
+            return Ok(false);
+        }
+        self.fx_library_file = Some(file);
+        self.fx_binding = Some(crate::fx_wire::Binding {
+            session: d.session,
+            source_epoch: d.source_epoch,
+            capability_generation: d.capability_generation,
+            map_generation: d.map_generation,
+            owner_instance: crate::show::Counter(1),
+            library_sha256: actual,
+            abi_version: 2,
+            config_size: 104,
+            status_size: 168,
+            capabilities_size: 128,
+            channels: ["foh-left".into(), "foh-right".into()],
+        });
+        Ok(true)
+    }
+    pub(crate) fn fx_observation(&mut self) -> Result<crate::fx_wire::Observation> {
+        use crate::show::Counter;
+        let binding = self.fx_binding.clone().ok_or("FX controls unavailable")?;
+        let s = self
+            .fx
+            .configured_owner()
+            .ok_or("FX owner unavailable")?
+            .status()?;
+        Ok(crate::fx_wire::Observation {
+            binding,
+            generation: Counter(s.applied_generation),
+            settled_generation: Counter(s.settled_generation),
+            applied_source_frame: Counter(s.applied_source_frame),
+            settled_source_frame: Counter(s.settled_source_frame),
+            next_source_frame: Counter(s.next_source_frame),
+            reset_count: Counter(s.reset_count),
+            remaining_frames: s.remaining_frames,
+            owner_json: serde_json::to_string(&s.configuration()).map_err(|e| e.to_string())?,
+        })
+    }
+    /// Control-worker entry. No token allocation/retirement occurs in process.
+    pub fn fx_command(
+        &mut self,
+        command: crate::fx_wire::OwnerCommand,
+    ) -> Result<Option<crate::fx_wire::OwnerMessage>> {
+        use crate::fx_wire::{Configuration, OwnerCommand as C, OwnerMessage as M};
+        match command {
+            C::Prepare {
+                ticket,
+                mutation,
+                apply_frame,
+            } => {
+                mutation.validate()?;
+                if self.fx.next_source_frame().is_none() {
+                    return Ok(Some(M::Refused {
+                        ticket,
+                        reason: "FX source continuity not initialized".into(),
+                    }));
+                }
+                if self.fx_ticket.is_some() || self.fx_refused.is_some() {
+                    return Ok(Some(M::Refused {
+                        ticket,
+                        reason: "FX owner busy".into(),
+                    }));
+                }
+                let o = self.fx_observation()?;
+                if mutation.binding != o.binding
+                    || mutation.expected_generation != o.generation
+                    || mutation.expected_reset_count != o.reset_count
+                    || o.remaining_frames != [0, 0]
+                    || apply_frame.0 <= o.next_source_frame.0
+                    || !apply_frame.0.is_multiple_of(48)
+                    || apply_frame.0 - o.next_source_frame.0 > 48_000
+                {
+                    return Ok(Some(M::Refused {
+                        ticket,
+                        reason: "FX stale preparation".into(),
+                    }));
+                }
+                if let Some(text) = &mutation.configuration_json {
+                    let config = Configuration::decode(text)?;
+                    if let Err(reason) = self
+                        .fx
+                        .configured_owner()
+                        .unwrap()
+                        .prepare(&config, o.generation.0)
+                    {
+                        return Ok(Some(M::Refused { ticket, reason }));
+                    }
+                }
+                self.fx_ticket = Some(FxTicket {
+                    ticket: ticket.0,
+                    apply_frame: apply_frame.0,
+                    deadline: std::time::Instant::now()
+                        + std::time::Duration::from_millis(crate::fx_wire::PREPARE_MS),
+                    permitted: false,
+                    applied: false,
+                    panic_mask: mutation.panic_mask,
+                });
+                Ok(Some(M::Prepared {
+                    ticket,
+                    binding: o.binding,
+                    generation: o.generation,
+                    configuration_json: mutation.configuration_json,
+                    panic_mask: mutation.panic_mask,
+                }))
+            }
+            C::Permit {
+                ticket,
+                binding,
+                apply_frame,
+            } => {
+                let next = self.fx.next_source_frame();
+                let p = self
+                    .fx_ticket
+                    .as_mut()
+                    .ok_or("FX permit without preparation")?;
+                if p.ticket != ticket.0
+                    || self.fx_binding.as_ref() != Some(&binding)
+                    || p.apply_frame != apply_frame.0
+                    || p.permitted
+                    || std::time::Instant::now() >= p.deadline
+                    || next.is_some_and(|f| f > apply_frame.0)
+                {
+                    return Err("FX invalid/late permit".into());
+                }
+                p.permitted = true;
+                Ok(None)
+            }
+            C::Cancel { ticket } => {
+                if self
+                    .fx_ticket
+                    .as_ref()
+                    .is_some_and(|p| p.ticket == ticket.0 && !p.permitted)
+                {
+                    self.fx_ticket = None;
+                    self.fx.configured_owner().unwrap().retire();
+                }
+                Ok(None)
+            }
+        }
+    }
+    /// Called after processing or on the control timer. Status/JSON and token
+    /// retirement are deliberately outside the owner process/commit boundary.
+    pub fn poll_fx_observation(&mut self) -> Result<Option<crate::fx_wire::OwnerMessage>> {
+        use crate::{fx_wire::OwnerMessage as M, show::Counter};
+        if self.fx_binding.is_none() {
+            return Ok(None);
+        }
+        if let Some((ticket, reason)) = self.fx_refused.take() {
+            self.fx.configured_owner().unwrap().retire();
+            return Ok(Some(M::Refused {
+                ticket: Counter(ticket),
+                reason: reason.into(),
+            }));
+        }
+        if self
+            .fx_ticket
+            .as_ref()
+            .is_some_and(|p| !p.applied && std::time::Instant::now() >= p.deadline)
+        {
+            let p = self.fx_ticket.take().unwrap();
+            self.fx.configured_owner().unwrap().retire();
+            return Ok(Some(M::Refused {
+                ticket: Counter(p.ticket),
+                reason: "FX preparation deadline".into(),
+            }));
+        }
+        let observation = self.fx_observation()?;
+        if self.fx_ticket.as_ref().is_some_and(|p| p.applied) {
+            let p = self.fx_ticket.as_ref().unwrap();
+            let ticket = Counter(p.ticket);
+            let effective_source_frame = Counter(p.apply_frame);
+            let panic_mask = p.panic_mask;
+            if observation.remaining_frames == [0, 0]
+                && observation.generation == observation.settled_generation
+            {
+                self.fx_ticket = None;
+                self.fx.configured_owner().unwrap().retire();
+            }
+            return Ok(Some(M::Completed {
+                ticket,
+                effective_source_frame,
+                panic_mask,
+                observation,
+            }));
+        }
+        Ok(Some(M::Observe { observation }))
+    }
+    fn fx_boundary(&mut self, frame: u64, input: &[f64]) {
+        let Some(p) = self.fx_ticket.as_mut() else {
+            return;
+        };
+        if p.applied {
+            return;
+        }
+        let gap = self
+            .fx
+            .next_source_frame()
+            .is_some_and(|next| next != frame);
+        if gap
+            || frame > p.apply_frame
+            || std::time::Instant::now() >= p.deadline
+            || input.iter().any(|s| !s.is_finite() || s.abs() > 16.)
+        {
+            self.fx_refused = Some((p.ticket, "FX source gap/late boundary"));
+            self.fx_ticket = None;
+            return;
+        }
+        if frame != p.apply_frame {
+            return;
+        }
+        if !p.permitted {
+            self.fx_refused = Some((p.ticket, "FX permit absent at target"));
+            self.fx_ticket = None;
+            return;
+        }
+        let owner = self.fx.configured_owner().unwrap();
+        let rc = if let Some(mask) = p.panic_mask {
+            owner.panic(mask)
+        } else {
+            owner.commit(frame)
+        };
+        if rc != 0 {
+            self.fx_refused = Some((p.ticket, "FX owner commit refused"));
+            self.fx_ticket = None;
+        } else {
+            p.applied = true;
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn test_last_wet(&self) -> &[f64] {
+        &self.wet
     }
     pub fn returned_sha256(&self) -> String {
         format!("{:x}", self.returned_hash.clone().finalize())
@@ -185,6 +469,7 @@ impl BrainWorker {
             }
         };
         if let Some((frame, input)) = assembled {
+            self.fx_boundary(frame, &input);
             let descriptor = self.media.descriptor();
             self.fx
                 .process(descriptor.source_epoch.0, frame, &input, &mut self.wet)

@@ -391,6 +391,7 @@ impl OfflineEngine {
             || !matches!(
                 scope,
                 Scope::PaConfiguration
+                    | Scope::FxConfiguration
                     | Scope::OutputRoutes
                     | Scope::LocalOperatorMonitor
                     | Scope::TalkbackDestinations
@@ -441,6 +442,41 @@ impl OfflineEngine {
         let frame = self.mixer.next_boundary()?;
         self.external_pending = Some((history, scope, frame));
         Ok((frame, None))
+    }
+    /// Only FX preparation may hold a reservation beyond the next boundary.
+    /// It never stalls dry audio while a remote owner prepares off rendering.
+    pub fn schedule_fx_external(
+        &mut self,
+        request: &Request,
+        fingerprint: &str,
+        frame: u64,
+    ) -> Result<()> {
+        if !self.external_matches(request, fingerprint)
+            || frame < self.frame()
+            || frame
+                .checked_sub(self.frame())
+                .is_none_or(|lead| lead > 48_000)
+            || !frame.is_multiple_of(48)
+        {
+            return Err("FX reservation boundary".into());
+        }
+        let pending = self.external_pending.as_mut().ok_or("external missing")?;
+        if pending.1 != Scope::FxConfiguration {
+            return Err("FX reservation scope".into());
+        }
+        pending.2 = frame;
+        Ok(())
+    }
+    pub fn cancel_fx_external(&mut self, request: &Request, fingerprint: &str) {
+        if self.external_matches(request, fingerprint)
+            && self
+                .external_pending
+                .as_ref()
+                .is_some_and(|p| p.1 == Scope::FxConfiguration)
+        {
+            let (history, scope, _) = self.external_pending.take().unwrap();
+            self.authority.cancel_external(&history, scope);
+        }
     }
     pub fn external_matches(&self, request: &Request, fingerprint: &str) -> bool {
         let mut history = request.clone();

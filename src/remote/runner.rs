@@ -153,6 +153,8 @@ pub enum RunConfig {
         peers: Vec<Peer>,
         show_id: String,
         fx_library: PathBuf,
+        #[serde(default)]
+        fx_control_sha256: Option<String>,
         #[serde(default = "default_true")]
         verify_synthetic_source: bool,
         duration_ms: u64,
@@ -610,6 +612,7 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
             peers,
             show_id,
             fx_library,
+            fx_control_sha256,
             verify_synthetic_source,
             duration_ms,
             return_delay_frames,
@@ -675,6 +678,19 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
                 return Err("Brain media negotiation refused".into());
             }
             let mut worker = BrainWorker::prepare(client.media_channel()?, &fx_library)?;
+            let controls = if let Some(hash) = &fx_control_sha256 {
+                worker.enable_fx_control(&fx_library, hash)?
+            } else {
+                false
+            };
+            let (mut control_rx, control_task) = if controls {
+                let (rx, task) = client.take_fx_replies()?;
+                (rx, Some(task))
+            } else {
+                let (_, rx) = tokio::sync::mpsc::channel(1);
+                (rx, None)
+            };
+            let mut observation_tick = tokio::time::interval(Duration::from_millis(50));
             let started = Instant::now();
             let deadline = tokio::time::sleep(Duration::from_millis(duration_ms));
             tokio::pin!(deadline);
@@ -688,6 +704,27 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
             loop {
                 tokio::select! {
                     _=&mut deadline=>break,
+                    response=control_rx.recv(),if controls=>{
+                        match response {
+                            Some(Ok(Response::Reply{payload,..})) if payload.get("contract").and_then(serde_json::Value::as_str)==Some(crate::fx_wire::CONTRACT)=>{
+                                if let Some(command)=payload.get("command") {
+                                    let command=serde_json::from_value(command.clone()).map_err(|e|e.to_string())?;
+                                    match worker.fx_command(command) {
+                                        Ok(Some(message))=>client.send_command(serde_json::json!({"contract":crate::fx_wire::CONTRACT,"version":1,"kind":"fx_owner","writer":client.writer(),"message":message})).await?,
+                                        Ok(None)=>(),Err(error)=>{fault=Some(error);break;}
+                                    }
+                                }
+                            },
+                            Some(Ok(Response::Reply{..}))=>(),
+                            Some(Ok(Response::Refused{reason,..}))|Some(Err(reason))=>{fault=Some(reason);break;},
+                            _=>{fault=Some("FX control channel closed".into());break;}
+                        }
+                    },
+                    _=observation_tick.tick(),if controls=>{
+                        if let Some(message)=worker.poll_fx_observation()? {
+                            client.send_command(serde_json::json!({"contract":crate::fx_wire::CONTRACT,"version":1,"kind":"fx_owner","writer":client.writer(),"message":message})).await?;
+                        }
+                    },
                     result=worker.step()=>match result {
                         Ok(Some(bytes))=>{
                             let packet=crate::transport::Packet::parse(&bytes).map_err(|e|format!("analysis evidence {e:?}"))?;
@@ -706,6 +743,9 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
                     }
                 }
             }
+            if let Some(task) = control_task {
+                task.abort();
+            }
             client.close();
             if mismatches != 0 {
                 fault = Some("raw analysis sample mismatch".into());
@@ -719,7 +759,7 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
             if verify_synthetic_source && worker.nonzero_return_samples() == 0 {
                 fault = Some("functional acceptance observed no nonzero owner wet result; source may remain muted".into());
             }
-            let evidence = json!({"mode":"brain","software_only":verify_synthetic_source,"physical_io_owned":false,"physical_qualified":false,"descriptor":descriptor,"elapsed_ms":started.elapsed().as_millis(),"first_analysis_source_frame":first_source,"last_analysis_source_frame":last_source,"analysis_packets":worker.stats.analysis_packets,"synthetic_reference_checked":verify_synthetic_source,"analysis_sample_mismatches":if verify_synthetic_source {Some(mismatches)}else{None},"analysis_samples_per_channel":channel_samples,"analysis_arrival_sha256":format!("{:x}",analysis_hash.finalize()),"returned_wet_sha256":worker.returned_sha256(),"nonzero_returned_wet_samples":worker.nonzero_return_samples(),"fx_send_packets":worker.stats.send_packets,"actual_owner_fx_blocks":worker.stats.processed_blocks,"wet_packets":worker.stats.returned_packets,"incomplete_blocks":worker.stats.incomplete_blocks,"stale_groups":worker.stats.stale_groups,"fx_owner_resets":worker.owner_resets(),"fx_intentional_delay_frames":worker.intentional_delay_frames(),"fault":fault});
+            let evidence = json!({"mode":"brain","software_only":verify_synthetic_source,"physical_io_owned":false,"physical_qualified":false,"descriptor":descriptor,"elapsed_ms":started.elapsed().as_millis(),"first_analysis_source_frame":first_source,"last_analysis_source_frame":last_source,"analysis_packets":worker.stats.analysis_packets,"synthetic_reference_checked":verify_synthetic_source,"analysis_sample_mismatches":if verify_synthetic_source {Some(mismatches)}else{None},"analysis_samples_per_channel":channel_samples,"analysis_arrival_sha256":format!("{:x}",analysis_hash.finalize()),"returned_wet_sha256":worker.returned_sha256(),"nonzero_returned_wet_samples":worker.nonzero_return_samples(),"fx_send_packets":worker.stats.send_packets,"actual_owner_fx_blocks":worker.stats.processed_blocks,"wet_packets":worker.stats.returned_packets,"incomplete_blocks":worker.stats.incomplete_blocks,"stale_groups":worker.stats.stale_groups,"fx_owner_resets":worker.owner_resets(),"fx_intentional_delay_frames":if controls {None}else{Some(worker.intentional_delay_frames())},"fx_controls_available":controls,"fx_owner_observation":worker.fx_observation().ok(),"fault":fault});
             save(&report, &evidence)?;
             Ok(evidence)
         }

@@ -84,3 +84,4 @@ pub mod measurement_wire;
 
 #[cfg(target_os = "linux")]
 pub mod measurement_capture;
+pub mod fx_wire;

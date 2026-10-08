@@ -7,6 +7,7 @@ use std::path::Path;
 /// this mapping is explicit and never combines distinct source channels.
 pub struct BrainFx {
     instances: Vec<Dsp>,
+    configured: Option<super::fx_v2::Owner>,
     channels: usize,
     max_block: usize,
     input_pair: Vec<f64>,
@@ -39,6 +40,7 @@ impl BrainFx {
             .collect::<Result<Vec<_>>>()?;
         Ok(Self {
             instances,
+            configured: None,
             channels,
             max_block,
             input_pair: vec![0.; max_block * 2],
@@ -48,11 +50,32 @@ impl BrainFx {
             resets: 0,
         })
     }
+    /// Explicit opt-in only. The old fixed owner remains the fallback if the
+    /// complete extension is unavailable. Called before any source processing.
+    pub fn enable_configured(&mut self, library: &Path) -> std::result::Result<bool, String> {
+        if self.channels != 2 || self.next_frame.is_some() {
+            return Err("FX stereo startup required".into());
+        }
+        self.configured = super::fx_v2::Owner::load(library, self.max_block)?;
+        Ok(self.configured.is_some())
+    }
+    pub fn configured_owner(&mut self) -> Option<&mut super::fx_v2::Owner> {
+        self.configured.as_mut()
+    }
+    pub fn next_source_frame(&self) -> Option<u64> {
+        self.next_frame
+    }
     pub fn channels(&self) -> usize {
         self.channels
     }
     pub fn intentional_delay_frames(&self) -> u32 {
-        self.instances[0].delay
+        // v2 channels may have different echo onset; this legacy scalar is only
+        // meaningful for the fixed fallback. GP21 exposes actual per-channel delay.
+        if self.configured.is_some() {
+            0
+        } else {
+            self.instances[0].delay
+        }
     }
     /// Session replacement explicitly discards all old owner histories.
     pub fn reset_session(&mut self, epoch: u64) -> std::result::Result<(), FxError> {
@@ -61,6 +84,9 @@ impl BrainFx {
         }
         for instance in &mut self.instances {
             instance.reset();
+        }
+        if let Some(owner) = &mut self.configured {
+            owner.reset(0);
         }
         self.epoch = epoch;
         self.next_frame = None;
@@ -94,6 +120,20 @@ impl BrainFx {
         let end = frame
             .checked_add(frames as u64)
             .ok_or(FxError::FrameExhausted)?;
+        if let Some(owner) = &mut self.configured {
+            if self.next_frame != Some(frame) {
+                owner.reset(frame);
+                self.resets = self.resets.saturating_add(1);
+            }
+            let rc = owner.process(input, output, frame);
+            if rc != 0 {
+                output.fill(0.);
+                self.next_frame = None;
+                return Err(FxError::Owner(rc));
+            }
+            self.next_frame = Some(end);
+            return Ok(());
+        }
         if self.next_frame.is_some_and(|n| frame > n) {
             for instance in &mut self.instances {
                 instance.reset();

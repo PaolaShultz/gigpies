@@ -1,6 +1,8 @@
-//! The authenticated endpoint for the existing composed LocalAudio graph. It
-//! never starts a device or advances time from packet arrival. The source owner
-//! calls `process_source` with the device/fake-device epoch and first frame.
+#[path = "fx_relay.rs"]
+mod fx_relay;
+// The authenticated endpoint for the existing composed LocalAudio graph. It
+// never starts a device or advances time from packet arrival. The source owner
+// calls `process_source` with the device/fake-device epoch and first frame.
 use super::*;
 use crate::brain_audio::bridge::{Bridge, BridgeConfig, BridgeEpochs};
 use crate::{
@@ -69,6 +71,7 @@ struct DeviceRead {
 }
 
 pub struct HostAuthority {
+    fx: fx_relay::FxRelay,
     provider: LocalAudio,
     reads: BTreeMap<u64, ReadState>,
     structural_reads: BTreeMap<u64, u64>,
@@ -163,6 +166,7 @@ impl HostAuthority {
         }
         let observed_source_epoch = provider.source_epoch();
         Ok(Self {
+            fx: fx_relay::FxRelay::default(),
             provider,
             reads: BTreeMap::new(),
             structural_reads: BTreeMap::new(),
@@ -199,6 +203,7 @@ impl HostAuthority {
         })
     }
     fn clear_media_history(&mut self) {
+        self.fx_clear_media();
         self.brain = None;
         self.provider.close_brain_audio();
         self.descriptor = None;
@@ -777,6 +782,10 @@ impl HostAuthority {
             serde_json::json!({"contract":"GP15-media","version":1,"state":"accepted","descriptor":descriptor}),
         )
     }
+    #[cfg(test)]
+    pub(crate) fn test_admitted_wet(&self) -> &[f64; 96] {
+        &self.wet
+    }
     pub fn media_stats(&self) -> &HostMediaStats {
         &self.media_stats
     }
@@ -865,6 +874,7 @@ impl HostAuthority {
         }
         // Always supply the explicit external wet path, including silence after
         // disconnect. This prevents fallback to another local FX instance.
+        self.tick_fx(now_ms)?;
         self.commit_device_intent(now_ms)?;
         self.prepare_brain_block(frame);
         self.provider.tick_with_capture_and_brain(
@@ -943,6 +953,9 @@ impl AuthorityEndpoint for HostAuthority {
         now_ms: u64,
     ) -> Result<Option<Value>> {
         context.check_writer(&payload)?;
+        if payload.get("contract").and_then(Value::as_str) == Some(crate::fx_wire::CONTRACT) {
+            return self.dispatch_fx(context, payload, now_ms).map(Some);
+        }
         if payload.get("contract").and_then(Value::as_str)
             == Some(crate::lease_maintenance::CONTRACT)
         {
@@ -1189,6 +1202,9 @@ impl AuthorityEndpoint for HostAuthority {
         {
             return Err("Brain media owner already attached".into());
         }
+        if self.fx_control_attached(context.session()) {
+            return Err("FX owner replacement requires fresh session".into());
+        }
         descriptor.validate(context, &self.identity(), crate::transport::MAX_DATAGRAM)?;
         if descriptor.streams.iter().any(|s| s.frames != 48) {
             return Err("composed host currently advertises 48-frame media blocks".into());
@@ -1341,6 +1357,7 @@ impl AuthorityEndpoint for HostAuthority {
         }
     }
     fn disconnect(&mut self, context: &AuthenticatedContext) {
+        self.fx_disconnect(context);
         self.brain_reads.remove(&context.session());
         self.held_queries.remove(&context.session());
         self.paired_queries.remove(&context.session());
@@ -1391,6 +1408,9 @@ impl AuthorityEndpoint for HostAuthority {
         context: &AuthenticatedContext,
         _now_ms: u64,
     ) -> Result<Option<Value>> {
+        if let Some(value) = self.poll_fx(context) {
+            return Ok(Some(value));
+        }
         if let Some(i) = self
             .device_messages
             .iter()

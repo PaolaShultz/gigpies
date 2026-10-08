@@ -16,6 +16,7 @@ pub enum Scope {
     Monitor2,
     Monitor(u16),
     PaConfiguration,
+    FxConfiguration,
     OutputRoutes,
     LocalOperatorMonitor,
     TalkbackDestinations,
@@ -611,6 +612,11 @@ impl Authority {
             None
         }
     }
+    /// Consume a cancelled external reservation in the same bounded request
+    /// history. Expired/retired leases cannot become writable again.
+    pub(crate) fn cancel_external(&mut self, request: &Request, scope: Scope) {
+        self.scoped_transaction(request, self.now, Some("configuration_failed"), scope);
+    }
     pub(crate) fn processing_transaction(
         &mut self,
         r: &Request,
@@ -810,6 +816,7 @@ impl Authority {
                 && matches!(
                     scope,
                     Scope::PaConfiguration
+                        | Scope::FxConfiguration
                         | Scope::OutputRoutes
                         | Scope::LocalOperatorMonitor
                         | Scope::TalkbackDestinations
@@ -948,6 +955,7 @@ impl Authority {
         if matches!(
             scope,
             Scope::PaConfiguration
+                | Scope::FxConfiguration
                 | Scope::OutputRoutes
                 | Scope::LocalOperatorMonitor
                 | Scope::TalkbackDestinations
