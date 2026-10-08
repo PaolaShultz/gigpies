@@ -1,0 +1,1 @@
+{"contract":"C-ANALYSIS","version":2,"subscription":"lux.aux.v2","source_epoch":"9","stream":3,"sample_rate":48000,"first_frame":"0","sources":["kick","bass","guitar-1","guitar-2"],"inputs":["input-17","input-03","input-09","input-01"],"tap":"raw-pre-fader","clock":"linux-clock-monotonic-ms","map_revision":"1","calibration_revision":"1"}

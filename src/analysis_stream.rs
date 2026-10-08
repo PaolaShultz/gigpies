@@ -6,6 +6,41 @@ pub const PACKET_BYTES: usize = 624;
 pub const WINDOW_BYTES: usize = PACKET_BYTES * 10;
 pub const MAX_SUBSCRIBERS: usize = 8;
 pub const WIRE_BYTES: usize = WINDOW_BYTES + 40;
+/// Explicit startup binding for the four existing semantic analysis sources.
+/// Input IDs identify raw logical strips, never capture slots or screen banks.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Mapping {
+    pub version: u32,
+    pub inputs: [String; 4],
+}
+impl Mapping {
+    pub fn descriptor(
+        &self,
+        topology: &crate::topology::EngineTopology,
+        epoch: u64,
+        frame: u64,
+    ) -> Result<Descriptor, String> {
+        topology.validate(crate::topology::ResourceBudget::default())?;
+        if self.version != 1 {
+            return Err("analysis mapping version".into());
+        }
+        let mut d = Descriptor::new(epoch, frame);
+        d.version = 2;
+        d.subscription = "lux.aux.v2".into();
+        d.inputs = self.inputs.clone();
+        d.map_revision = crate::show::Counter(topology.map_revision);
+        d.calibration_revision = crate::show::Counter(1);
+        d.validate().map_err(String::from)?;
+        if d.inputs
+            .iter()
+            .any(|id| !topology.inputs.iter().any(|p| &p.id == id))
+        {
+            return Err("analysis input absent from configured topology".into());
+        }
+        Ok(d)
+    }
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Descriptor {
@@ -43,8 +78,10 @@ impl Descriptor {
     }
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.contract != "C-ANALYSIS"
-            || self.version != 1
-            || self.subscription != "lux.aux.v1"
+            || !matches!(
+                (self.version, self.subscription.as_str()),
+                (1, "lux.aux.v1") | (2, "lux.aux.v2")
+            )
             || self.source_epoch.0 == 0
             || self.stream != 3
             || self.sample_rate != 48000
@@ -58,13 +95,24 @@ impl Descriptor {
             return Err("descriptor identity/rate");
         }
         for (i, input) in self.inputs.iter().enumerate() {
-            if !(1..=8).any(|n| input == &format!("input-{n:02}"))
-                || self.inputs[..i].contains(input)
+            let index = input
+                .strip_prefix("input-")
+                .and_then(|n| n.parse::<u16>().ok());
+            if !index.is_some_and(|n| {
+                n > 0 && (self.version == 2 || n <= 8) && input == &format!("input-{n:02}")
+            }) || self.inputs[..i].contains(input)
             {
                 return Err("explicit input mapping");
             }
         }
         Ok(())
+    }
+    pub fn attach_request(&self) -> &'static [u8] {
+        if self.version == 2 {
+            br#"{"subscription":"lux.aux.v2","version":2}"#
+        } else {
+            br#"{"subscription":"lux.aux.v1","version":1}"#
+        }
     }
     pub fn spec(&self) -> StreamSpec {
         StreamSpec {

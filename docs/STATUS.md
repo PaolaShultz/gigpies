@@ -1,5 +1,17 @@
 # Status and next steps
 
+## Configured named analysis — task0020 producer
+
+The additive [C-ANALYSIS:2 path](CONFIGURED_ANALYSIS.md) binds the existing four
+semantic sources to explicit raw strips in the admitted topology. It no longer
+requires the synthetic-fouraux attachment mode. Strict startup configuration,
+version-separated subscription requests, topology/source invalidation and honest
+PCM failure closure preserve the original v1 path. Focused tests cover exact raw
+samples through a permuted 17-input capture map and 32/48-input inventories.
+Full producer validation and Lux/Lightdesk integration remain pending at this
+candidate checkpoint. Physical configured publication is deliberately refused
+until capture acquisition age can be propagated; no hardware is opened.
+
 ## Live master EQ — task0018 software validation
 
 The optional owner extension and GP18-master-eq:1 provider path are implemented

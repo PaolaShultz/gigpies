@@ -140,6 +140,8 @@ pub enum RunConfig {
         physical_device: Option<Box<PhysicalProviderConfig>>,
         #[serde(default)]
         provider_timing: bool,
+        #[serde(default)]
+        analysis_mapping: Option<crate::analysis_stream::Mapping>,
     },
     Brain {
         bind: SocketAddr,
@@ -345,6 +347,7 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
             ready,
             physical_device,
             provider_timing,
+            analysis_mapping,
         } => {
             validate_provider_run(
                 physical_device.as_deref(),
@@ -355,6 +358,9 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
                 monitors,
                 pa_outputs,
             )?;
+            if physical_device.is_some() && analysis_mapping.is_some() {
+                return Err("configured analysis requires software source until physical acquisition age is propagated".into());
+            }
             if provider_timing && (physical_device.is_some() || duration_ms > 60_000) {
                 return Err("provider timing requires finite <=60s software run".into());
             }
@@ -387,6 +393,9 @@ pub async fn run_config_authorized(config: RunConfig, physical_authorized: bool)
                 topology,
             )?;
             provider.enable_modules(&manifest)?;
+            if let Some(mapping) = analysis_mapping {
+                provider.enable_configured_analysis(&private_directory, &mapping)?;
+            }
             if let Some(path) = pa_configuration {
                 let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
                 if bytes.len() > 48 * 1024 {
@@ -1243,6 +1252,21 @@ mod output_window_tests {
                 .unwrap_err()
                 .contains("--activate-physical"),
             "must deny before nonexistent credentials, private epoch ledger, listener or PCM are touched"
+        );
+    }
+    #[tokio::test(flavor = "current_thread")]
+    async fn configured_physical_analysis_refuses_before_any_io_even_when_authorized() {
+        let mut value = provider_config_json();
+        let p = physical_fixture();
+        value["physical_device"] = json!({"device":p.device,"topology":p.topology,"acceptance":p.acceptance,"period_frames":48,"buffer_frames":192,"epoch_file":p.epoch_file});
+        value["analysis_mapping"] =
+            json!({"version":1,"inputs":["input-01","input-02","input-03","input-04"]});
+        let config: RunConfig = serde_json::from_value(value).unwrap();
+        assert!(
+            run_config_authorized(config, true)
+                .await
+                .unwrap_err()
+                .contains("physical acquisition age")
         );
     }
     #[test]

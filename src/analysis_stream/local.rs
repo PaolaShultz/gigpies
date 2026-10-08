@@ -125,18 +125,37 @@ impl LocalAnalysis {
         }
         self.clients.retain_mut(|c| {
             if !c.attached {
-                match c.stream.read(&mut c.request[c.used..]) { Ok(0)=>return false, Ok(n)=>c.used+=n, Err(e) if e.kind()==ErrorKind::WouldBlock || e.kind()==ErrorKind::Interrupted=>(), Err(_)=>return false }
-                if c.used>=4 {
-                    let n=u32::from_be_bytes(c.request[..4].try_into().unwrap()) as usize;
-                    if n==0 || n>124 || c.used>n+4 { return false; }
-                    if c.used==n+4 {
-                        if &c.request[4..c.used]!=br#"{"subscription":"lux.aux.v1","version":1}"# {return false;}
-                        c.attached=true;
-                        c.queue.push_back(Frame::new(&serde_json::to_vec(&self.descriptor).unwrap(), mono.saturating_add(2000)));
-                        c.progress=now;
+                match c.stream.read(&mut c.request[c.used..]) {
+                    Ok(0) => return false,
+                    Ok(n) => c.used += n,
+                    Err(e)
+                        if e.kind() == ErrorKind::WouldBlock
+                            || e.kind() == ErrorKind::Interrupted =>
+                    {
+                        ()
+                    }
+                    Err(_) => return false,
+                }
+                if c.used >= 4 {
+                    let n = u32::from_be_bytes(c.request[..4].try_into().unwrap()) as usize;
+                    if n == 0 || n > 124 || c.used > n + 4 {
+                        return false;
+                    }
+                    if c.used == n + 4 {
+                        if &c.request[4..c.used] != self.descriptor.attach_request() {
+                            return false;
+                        }
+                        c.attached = true;
+                        c.queue.push_back(Frame::new(
+                            &serde_json::to_vec(&self.descriptor).unwrap(),
+                            mono.saturating_add(2000),
+                        ));
+                        c.progress = now;
                     }
                 }
-                if !c.attached && now.saturating_sub(c.progress)>=2000 {return false;}
+                if !c.attached && now.saturating_sub(c.progress) >= 2000 {
+                    return false;
+                }
             }
             true
         });
@@ -285,7 +304,8 @@ impl Worker {
             .store(losses, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn alive(&self) -> bool {
-        self.alive.load(std::sync::atomic::Ordering::Acquire)
+        !self.stop.load(std::sync::atomic::Ordering::Relaxed)
+            && self.alive.load(std::sync::atomic::Ordering::Acquire)
             && self
                 .thread
                 .as_ref()

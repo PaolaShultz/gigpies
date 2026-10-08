@@ -414,6 +414,13 @@ unconfident proposals; setup mic never enters program/monitor routing.
 
 ## Analysis
 
+The additive [configured named-source contract](CONFIGURED_ANALYSIS.md) selects
+C-ANALYSIS:2/lux.aux.v2 explicitly, preserving the historical v1 contract below.
+It binds four semantic sources to actual configured raw-strip IDs, with distinct
+requests and startup-only source admission. Consumer compatibility requires the
+separately reviewed Lux/Lightdesk amendment; it is not inferred from a producer
+fixture. Physical acquisition-age propagation remains a separate gate.
+
 C-ANALYSIS reuses GPA1 role=analysis/PCM24 and source-frame identity. It does not
 make Lightdesk an audio client or duplicate Lux's source analyzer. Initial named
 subscription `lux.aux.v1` maps exactly four stable source IDs in order: kick,

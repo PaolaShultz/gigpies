@@ -488,6 +488,7 @@ pub struct LocalAudio {
     analysis: Option<(
         crate::analysis_stream::Tap,
         crate::analysis_stream::local::Worker,
+        u64,
     )>,
 }
 impl LocalAudio {
@@ -1524,6 +1525,7 @@ impl LocalAudio {
         self.epoch.0
     }
     pub fn quiesce_source(&mut self, reason: &str) -> Result<()> {
+        self.stop_analysis();
         self.close_brain_audio();
         self.brain_pending = None;
         self.brain_cache.clear();
@@ -1648,10 +1650,10 @@ impl LocalAudio {
     pub fn analysis_alive(&self) -> bool {
         self.analysis
             .as_ref()
-            .is_some_and(|(_, worker)| worker.alive())
+            .is_some_and(|(_, worker, _)| worker.alive())
     }
     pub fn stop_analysis(&self) {
-        if let Some((_, worker)) = &self.analysis {
+        if let Some((_, worker, _)) = &self.analysis {
             worker.stop();
         }
     }
@@ -1665,10 +1667,34 @@ impl LocalAudio {
             return Err("analysis already enabled".into());
         }
         let descriptor = crate::analysis_stream::Descriptor::new(self.epoch.0, self.frame());
+        self.start_analysis(directory, descriptor)
+    }
+    /// Explicit raw-strip attachment to the actual configured source path.
+    /// Selection is startup-only and never opens a second PCM owner.
+    pub fn enable_configured_analysis(
+        &mut self,
+        directory: &Path,
+        mapping: &crate::analysis_stream::Mapping,
+    ) -> Result<()> {
+        if self.frame() != 0 || self.analysis.is_some() {
+            return Err("analysis mapping requires fresh provider startup".into());
+        }
+        let descriptor = mapping.descriptor(self.topology(), self.epoch.0, self.frame())?;
+        self.start_analysis(directory, descriptor)
+    }
+    fn start_analysis(
+        &mut self,
+        directory: &Path,
+        descriptor: crate::analysis_stream::Descriptor,
+    ) -> Result<()> {
         let (tap, input) = crate::analysis_stream::Tap::new(&descriptor).map_err(String::from)?;
         let service =
             crate::analysis_stream::local::LocalAnalysis::bind(directory, descriptor, input)?;
-        self.analysis = Some((tap, crate::analysis_stream::local::Worker::start(service)?));
+        self.analysis = Some((
+            tap,
+            crate::analysis_stream::local::Worker::start(service)?,
+            self.topology().map_revision,
+        ));
         Ok(())
     }
     #[cfg(feature = "hardware-host")]
@@ -2114,6 +2140,9 @@ impl LocalAudio {
         wet: Option<&[f64]>,
         talkback: Option<&[f64]>,
     ) -> Result<()> {
+        // Preserve the receipt time of this borrowed source block across control
+        // work. This is not an ALSA converter acquisition timestamp.
+        let source_received = crate::analysis_stream::local::monotonic_ms();
         if now < self.last_now {
             return Err("clock".into());
         }
@@ -2294,14 +2323,33 @@ impl LocalAudio {
         let source_frame = self.frame();
         let ni = self.topology().inputs.len();
         let buses = self.topology().monitors + 2;
-        if let Some((tap, worker)) = &mut self.analysis
-            && let Ok(mono) = crate::analysis_stream::local::monotonic_ms()
-        {
-            for (out, v) in self.pcm_scratch.iter_mut().zip(inputs) {
-                *out = (v * 8_388_608.).round() as i32;
+        // Retain worker ownership until teardown: dropping it would join here.
+        // Stop on changed maps or unrepresentable PCM instead of keeping a live
+        // publisher with a permanently stalled source timeline.
+        let map_revision = self.topology().map_revision;
+        if let Some((tap, worker, map)) = &mut self.analysis {
+            if *map != map_revision
+                || inputs
+                    .iter()
+                    .any(|v| !v.is_finite() || *v < -1. || *v > 8_388_607. / 8_388_608.)
+            {
+                worker.stop();
+            } else if worker.alive() {
+                if let Ok(mono) = source_received {
+                    for (out, v) in self.pcm_scratch.iter_mut().zip(inputs) {
+                        *out = (v * 8_388_608.).round() as i32;
+                    }
+                    if tap
+                        .offer_interleaved(source_frame, &self.pcm_scratch, ni, mono)
+                        .is_err()
+                    {
+                        worker.stop();
+                    }
+                    worker.update_losses(tap.dropped_windows);
+                } else {
+                    worker.stop();
+                }
             }
-            let _ = tap.offer_interleaved(source_frame, &self.pcm_scratch, ni, mono);
-            worker.update_losses(tap.dropped_windows);
         }
         let completions = self.engine.process_interleaved(inputs, output, now)?;
         let rendered_frame = self.frame();

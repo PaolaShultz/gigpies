@@ -171,3 +171,161 @@ fn transport_stop_preserves_engine_and_analysis_does_not_select_source() {
     assert_eq!(audio.frame(), 4800);
     assert!(audio.snapshot().is_ok());
 }
+
+#[test]
+fn configured_capture_uses_logical_mapping_and_closes_on_patch_change() {
+    use gigpies::{analysis_stream::Mapping, topology::EngineTopology};
+    let dir = Directory::new();
+    let mut topology = EngineTopology::software(17, 3, 0).unwrap();
+    for (i, port) in topology.inputs.iter_mut().enumerate() {
+        port.capture_slot = 16 - i;
+    }
+    let mut audio = LocalAudio::bind_configured(
+        &dir.0,
+        "audio.sock",
+        "11111111-1111-4111-8111-111111111111",
+        Counter(9),
+        topology.clone(),
+    )
+    .unwrap();
+    let mapping = Mapping {
+        version: 1,
+        inputs: ["input-17", "input-03", "input-09", "input-01"].map(String::from),
+    };
+    audio.enable_configured_analysis(&dir.0, &mapping).unwrap();
+    let mut wrong_version = attach(&dir.0.join("analysis.sock"));
+    let mut prefix = [0; 4];
+    assert!(wrong_version.read_exact(&mut prefix).is_err());
+    let mut stream = UnixStream::connect(dir.0.join("analysis.sock")).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let request = mapping.descriptor(&topology, 9, 0).unwrap();
+    stream
+        .write_all(&(request.attach_request().len() as u32).to_be_bytes())
+        .unwrap();
+    stream.write_all(request.attach_request()).unwrap();
+    let descriptor: Descriptor =
+        serde_json::from_slice(&frame(&mut stream, "configured descriptor")).unwrap();
+    assert_eq!(descriptor, request);
+    let mut playback = vec![0.; topology.playback_channels * 48];
+    for block in 0..10 {
+        let mut capture = vec![0.; 17 * 48];
+        for f in 0..48 {
+            for (i, p) in topology.inputs.iter().enumerate() {
+                capture[f * 17 + p.capture_slot] = ((block * 48 + f) * 100 + i) as f64 / 8_388_608.;
+            }
+        }
+        audio
+            .tick_with_capture(block as u64, 9, block as u64 * 48, &capture, &mut playback)
+            .unwrap();
+    }
+    let window = frame(&mut stream, "configured raw samples");
+    assert_eq!(&window[..4], b"GAW1");
+    for bytes in window[40..].chunks_exact(gigpies::analysis_stream::PACKET_BYTES) {
+        let packet = gigpies::transport::Packet::parse(bytes).unwrap();
+        for f in 0..48 {
+            for (channel, index) in [16, 2, 8, 0].iter().enumerate() {
+                assert_eq!(
+                    packet.pcm(f * 4 + channel).unwrap(),
+                    ((packet.source_frame() as usize + f) * 100 + index) as i32
+                );
+            }
+        }
+    }
+    assert_eq!(audio.frame(), 480);
+    assert!(audio.enable_configured_analysis(&dir.0, &mapping).is_err());
+    let mut outputs = topology.outputs;
+    outputs[0].source = None;
+    audio.engine_mut().replace_output_patch(outputs).unwrap();
+    audio
+        .tick_with_capture(10, 9, 480, &vec![0.; 17 * 48], &mut playback)
+        .unwrap();
+    assert!(!audio.analysis_alive());
+    assert_eq!(
+        audio.frame(),
+        528,
+        "analysis loss cannot stop mixer processing"
+    );
+}
+
+#[test]
+fn configured_analysis_refuses_unrepresentable_pcm_without_stuck_publisher() {
+    use gigpies::{analysis_stream::Mapping, topology::EngineTopology};
+    for value in [-1., 8_388_607. / 8_388_608., 1., f64::NAN, f64::INFINITY] {
+        let dir = Directory::new();
+        let topology = EngineTopology::software(4, 1, 0).unwrap();
+        let mut audio = LocalAudio::bind_configured(
+            &dir.0,
+            "audio.sock",
+            "11111111-1111-4111-8111-111111111111",
+            Counter(9),
+            topology.clone(),
+        )
+        .unwrap();
+        let mapping = Mapping {
+            version: 1,
+            inputs: ["input-01", "input-02", "input-03", "input-04"].map(String::from),
+        };
+        audio.enable_configured_analysis(&dir.0, &mapping).unwrap();
+        let result = audio.tick_with_capture(
+            0,
+            9,
+            0,
+            &vec![value; 4 * 48],
+            &mut vec![0.; topology.playback_channels * 48],
+        );
+        if value.is_finite() && value < 1. {
+            result.unwrap();
+            assert!(audio.analysis_alive());
+        } else {
+            assert!(!audio.analysis_alive());
+        }
+    }
+}
+
+#[test]
+fn legacy_publisher_refuses_configured_request_and_fresh_epoch_requires_reattach() {
+    use gigpies::{analysis_stream::Mapping, topology::EngineTopology};
+    let dir = Directory::new();
+    let topology = EngineTopology::software(17, 3, 0).unwrap();
+    let mapping = Mapping {
+        version: 1,
+        inputs: ["input-17", "input-03", "input-09", "input-01"].map(String::from),
+    };
+    let mut audio = LocalAudio::bind_configured(
+        &dir.0,
+        "audio.sock",
+        "11111111-1111-4111-8111-111111111111",
+        Counter(9),
+        topology.clone(),
+    )
+    .unwrap();
+    audio.enable_synthetic_fouraux().unwrap();
+    audio.enable_analysis(&dir.0).unwrap();
+    let mut stream = UnixStream::connect(dir.0.join("analysis.sock")).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let descriptor = mapping.descriptor(&topology, 9, 0).unwrap();
+    stream
+        .write_all(&(descriptor.attach_request().len() as u32).to_be_bytes())
+        .unwrap();
+    stream.write_all(descriptor.attach_request()).unwrap();
+    assert!(stream.read_exact(&mut [0; 4]).is_err());
+    audio.quiesce_source("test_quiescence").unwrap();
+    assert!(!audio.analysis_alive());
+    audio.recover_source(Counter(10), 0).unwrap();
+    assert!(!audio.analysis_alive());
+    audio.enable_configured_analysis(&dir.0, &mapping).unwrap();
+    let mut new = UnixStream::connect(dir.0.join("analysis.sock")).unwrap();
+    new.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    new.write_all(&(descriptor.attach_request().len() as u32).to_be_bytes())
+        .unwrap();
+    new.write_all(descriptor.attach_request()).unwrap();
+    let actual: Descriptor =
+        serde_json::from_slice(&frame(&mut new, "new epoch descriptor")).unwrap();
+    assert_eq!(actual.source_epoch.0, 10);
+    assert_eq!(actual.inputs, mapping.inputs);
+    assert!(audio.engine_mut().outputs_quiesced());
+}
