@@ -67,6 +67,15 @@ v2, source-clock SHR FX and raw SHR REC. Task0014 software acceptance covers
 Desk supports authenticated control, reviewed PA configuration and output mapping.
 The [acceptance matrix](docs/MODULAR_ENGINE_ACCEPTANCE.md) records the scope.
 
+[Independent monitor taps](docs/MONITOR_SENDS.md) select raw post-mute,
+processed pre-fader or processed post-fader audio per input/send pair. All taps
+retain the shared input mute; existing sessions keep their original raw behavior.
+The [live master EQ contract](docs/MASTER_EQ_PRODUCER.md) permits narrowly scoped,
+reviewed stereo EQ changes through the optional PA owner extension. Routing and
+protection remain intact, and whole-configuration changes still require the muted
+setup/review/separate-rearm workflow. These producer paths have software acceptance;
+physical and complete operator acceptance are tracked separately in [status](docs/STATUS.md).
+
 Brain duplex talkback and operator monitoring, independent ASRC crossings and
 Desk controls passed independent review, complete offline gates and all seven
 reserved two-Pi scenarios on one frozen candidate. Atomic scoped lease maintenance,

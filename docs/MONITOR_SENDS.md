@@ -156,8 +156,10 @@ Its output must name an exact committed source revision, with fixture SHA256
 manifest, before consumer freeze. The original `tests/fixtures/gp18/v1` corpus
 and its producing revision remain historical evidence. Corrected-source output
 is generated separately under `tests/fixtures/gp18/v1-corrected`; verifier selection
-uses `GP18_FIXTURES` (defaulting to the historical directory). Coordinator acceptance of the actual diff and
-corpus is required before Desk implementation. Consumers pair GP03/GP18 revisions,
+uses `GP18_FIXTURES` (defaulting to the historical directory). Coordinator review
+accepted the producer at `f56cb48a5dd0cbfd71d5664464babaab8535a114` and froze the
+corrected corpus before Desk implementation. These acceptance descendants do not
+replace the corpus's exact generating-source pins. Consumers pair GP03/GP18 revisions,
 keep draft/pending/confirmed state distinct, label current/target blends, review
 levels and taps separately, refresh original-context observations before sending,
 and drop unsent intent on focus/connection/epoch/generation loss.

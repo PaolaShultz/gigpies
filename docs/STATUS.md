@@ -3,7 +3,7 @@
 ## Live master EQ — task0018 software validation
 
 The optional owner extension and GP18-master-eq:1 provider path are implemented
-in isolated package C worktrees. Narrow stereo admission, independent lifetime/
+and independently reviewed. Narrow stereo admission, independent lifetime/
 generation/map pins, retained metadata, shared authority/reservation and disarmed
 recovery are described in [the producer contract](MASTER_EQ_PRODUCER.md).
 Actual old-library fallback and new-owner synthetic integration passed. Complete
@@ -13,8 +13,14 @@ Both release variants passed. The normal PA library was restored through Cargo
 and matches the artifact used by actual producer tests. The ignored actual-provider
 Desk witness compiled with warning-denied focused Clippy; its muted baseline
 captured 528 exact-zero playback samples with quiesced/disarmed actual owner state.
-Producer software validation is complete; coordinator acceptance and contract freeze
-remain required before the separate Desk Frontend driver.
+Producer review and contract freeze are complete at the accepted checkpoint
+`42e038a80373fd9317692d5da770b7079d0205d0`, paired with SHR PA
+`85ed759499b5223e30a53e2dbea1e6fec03f04f9`. The later witness-only correction
+`eeb62520f3f8e3cf36d2e490da143a93364886c8` moves evidence publication off the
+provider loop; its two focused regressions, Clippy and muted actual-owner smoke
+passed without changing production code or fixtures. Desk records its complete
+Frontend, rendering and actual-provider acceptance independently of these producer
+gates.
 No physical audio, listening or measured deadline acceptance is claimed.
 
 ## Monitor/aux tap routing — task0018 producer
@@ -24,8 +30,8 @@ processed post-fader mono sends through GP18-sends:1, with shared monitor author
 revision/dedup, bounded 240-frame transitions, committed-only version2 intent and
 disarmed recovery. Configured processing explicitly advances to GP07:4; legacy
 8/2 processing2 and raw monitor bytes remain unchanged. [Contract and validation](MONITOR_SENDS.md).
-This remains a provisional producer, pending coordinator acceptance. The corrective
-pass repaired synthetic-source block reuse without changing source bytes or deadlines,
+Producer review and corpus freeze are complete. The corrective pass repaired
+synthetic-source block reuse without changing source bytes or deadlines,
 added mixed transport ownership, nondefault composed restore, oversized paging and
 strict transition validation. Final normal validation passed 409 default and 484
 hardware-host tests, with 17/33 explicit opt-ins skipped. Three separately selected
@@ -35,8 +41,8 @@ configurations, formatting, 50 Python tests and publication checks passed.
 Historical corpus provenance is retained; the separate corrected corpus pins its
 committed producing source. Both corpora retain their original hashes and pass
 explicit decoder/source-hash verification. Exact commands, counts and private
-evidence are recorded in the bounded handoff. Coordinator review and producer
-freeze remain required before Desk integration.
+evidence are recorded in the bounded handoff. Desk integration uses the reviewed
+corrected corpus; historical producing revisions and bytes remain unchanged.
 No physical mapping, listening, audio-clock lock or sustained hardware deadline claim.
 
 ## Control-capacity and CI review fixes — 2026-10-06

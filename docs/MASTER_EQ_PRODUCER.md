@@ -3,8 +3,10 @@
 GP18-master-eq:1 is independent of GP18-sends:1 and GP14-structure:1. Its outer
 JSON remains integer-only. Fractional EQ settings and owner normalized coefficient
 banks are bounded opaque JSON strings. Historical GP03/GP14/GP07 and corrected
-sends fixture bytes are unchanged. Coordinator review and fixture freeze precede
-Desk consumer integration; this document alone does not establish acceptance.
+sends fixture bytes are unchanged. Coordinator review and fixture freeze completed
+at producer checkpoint `42e038a80373fd9317692d5da770b7079d0205d0` with SHR PA
+`85ed759499b5223e30a53e2dbea1e6fec03f04f9`. Exact generating-source and artifact
+pins remain in their fixture provenance; Desk integration is a separate gate.
 
 ## Request and readback
 
@@ -134,8 +136,10 @@ File contents and the containing directory are synced before publisher completio
 The 180-second provider-loop bound does not bound an OS storage call or thread
 join; the external driver must retain its whole-process timeout and cleanup.
 
-Producer software validation is complete. Coordinator review of actual diffs,
-evidence and exact fixture contracts remains required before DeskD uses them.
+Producer software validation and coordinator review of actual diffs, evidence
+and exact fixture contracts are complete. Desk separately validates its actual
+Frontend actions and confirmed readback against these contracts; its owning
+acceptance record reports those consumer results.
 The final private C3 manifest records full source/binary/library/fixture hashes,
 old/new manifest paths, exact commands, retained failed trials and handoff ownership.
 No physical synchronization, outputs, listening, acoustic protection, deadlines,
