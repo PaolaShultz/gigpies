@@ -1,0 +1,146 @@
+{
+  "identity": "software-17-3-0",
+  "mapping_evidence": "synthetic",
+  "map_revision": 1,
+  "sample_rate": 48000,
+  "max_block_frames": 4096,
+  "capture_channels": 17,
+  "playback_channels": 5,
+  "inputs": [
+    {
+      "id": "input-01",
+      "capture_slot": 0,
+      "physical_port": "synthetic-capture-1"
+    },
+    {
+      "id": "input-02",
+      "capture_slot": 1,
+      "physical_port": "synthetic-capture-2"
+    },
+    {
+      "id": "input-03",
+      "capture_slot": 2,
+      "physical_port": "synthetic-capture-3"
+    },
+    {
+      "id": "input-04",
+      "capture_slot": 3,
+      "physical_port": "synthetic-capture-4"
+    },
+    {
+      "id": "input-05",
+      "capture_slot": 4,
+      "physical_port": "synthetic-capture-5"
+    },
+    {
+      "id": "input-06",
+      "capture_slot": 5,
+      "physical_port": "synthetic-capture-6"
+    },
+    {
+      "id": "input-07",
+      "capture_slot": 6,
+      "physical_port": "synthetic-capture-7"
+    },
+    {
+      "id": "input-08",
+      "capture_slot": 7,
+      "physical_port": "synthetic-capture-8"
+    },
+    {
+      "id": "input-09",
+      "capture_slot": 8,
+      "physical_port": "synthetic-capture-9"
+    },
+    {
+      "id": "input-10",
+      "capture_slot": 9,
+      "physical_port": "synthetic-capture-10"
+    },
+    {
+      "id": "input-11",
+      "capture_slot": 10,
+      "physical_port": "synthetic-capture-11"
+    },
+    {
+      "id": "input-12",
+      "capture_slot": 11,
+      "physical_port": "synthetic-capture-12"
+    },
+    {
+      "id": "input-13",
+      "capture_slot": 12,
+      "physical_port": "synthetic-capture-13"
+    },
+    {
+      "id": "input-14",
+      "capture_slot": 13,
+      "physical_port": "synthetic-capture-14"
+    },
+    {
+      "id": "input-15",
+      "capture_slot": 14,
+      "physical_port": "synthetic-capture-15"
+    },
+    {
+      "id": "input-16",
+      "capture_slot": 15,
+      "physical_port": "synthetic-capture-16"
+    },
+    {
+      "id": "input-17",
+      "capture_slot": 16,
+      "physical_port": "synthetic-capture-17"
+    }
+  ],
+  "measurement_slots": [],
+  "monitors": 3,
+  "pa_outputs": 0,
+  "outputs": [
+    {
+      "id": "output-01",
+      "playback_slot": 0,
+      "physical_port": "synthetic-playback-1",
+      "source": {
+        "kind": "main",
+        "channel": 0
+      }
+    },
+    {
+      "id": "output-02",
+      "playback_slot": 1,
+      "physical_port": "synthetic-playback-2",
+      "source": {
+        "kind": "main",
+        "channel": 1
+      }
+    },
+    {
+      "id": "output-03",
+      "playback_slot": 2,
+      "physical_port": "synthetic-playback-3",
+      "source": {
+        "kind": "monitor",
+        "index": 0
+      }
+    },
+    {
+      "id": "output-04",
+      "playback_slot": 3,
+      "physical_port": "synthetic-playback-4",
+      "source": {
+        "kind": "monitor",
+        "index": 1
+      }
+    },
+    {
+      "id": "output-05",
+      "playback_slot": 4,
+      "physical_port": "synthetic-playback-5",
+      "source": {
+        "kind": "monitor",
+        "index": 2
+      }
+    }
+  ]
+}

@@ -14,6 +14,11 @@ fn mapping() -> Mapping {
 #[test]
 fn configured_mapping_is_admitted_against_real_inventory_and_preserves_v1() {
     let topology = EngineTopology::software(17, 3, 0).unwrap();
+    assert_eq!(
+        serde_json::to_value(&topology).unwrap(),
+        serde_json::from_str::<serde_json::Value>(include_str!("fixtures/gp04/v2/topology.json"))
+            .unwrap()
+    );
     let d = mapping().descriptor(&topology, 9, 0).unwrap();
     assert_eq!(d.version, 2);
     assert_eq!(d.map_revision.0, topology.map_revision);
