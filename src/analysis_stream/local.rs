@@ -336,10 +336,14 @@ mod tests {
             losses: Arc::new(AtomicU64::new(0)),
             thread: Some(std::thread::spawn(|| panic!("invented transport failure"))),
         };
-        for _ in 0..100 {
-            if !worker.alive() {
-                break;
-            }
+        // Wait for the injected failure itself before checking the observer.
+        // Panic hooks and concurrent tests may outlive a fixed 100ms sleep loop.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while !worker.thread.as_ref().unwrap().is_finished() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "panic fixture did not finish"
+            );
             std::thread::sleep(std::time::Duration::from_millis(1));
         }
         assert!(!worker.alive());
