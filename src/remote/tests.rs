@@ -901,3 +901,103 @@ async fn scoped_controllers_workers_and_reconnect_share_bounded_tls_admission() 
     .await
     .unwrap();
 }
+#[cfg(all(target_os = "linux", feature = "hardware-host"))]
+#[tokio::test(flavor = "current_thread")]
+async fn mutual_tls_meter_reads_actual_host_and_revocation_without_control_admission() {
+    tokio::time::timeout(Duration::from_secs(5), async {
+        let directory = PrivateTestDirectory::new();
+        let topology = EngineTopology::software(48, 7, 0).unwrap();
+        let mut provider = crate::local_audio::LocalAudio::bind_configured(
+            &directory.0,
+            "meter.sock",
+            SHOW,
+            Counter(9),
+            topology.clone(),
+        )
+        .unwrap();
+        provider.rearm().unwrap();
+        let capture = vec![0.5; 48 * topology.capture_channels];
+        let mut playback = vec![0.; 48 * topology.playback_channels];
+        for block in 0..40 {
+            provider
+                .tick_with_capture(block, 9, block * 48, &capture, &mut playback)
+                .unwrap();
+        }
+        let mut host = HostAuthority::new(provider, 1).unwrap();
+        let (server_credentials, client_credentials) = credentials();
+        let policy = PolicyStore::new(vec![peer(
+            client_credentials.certificate_chain[0].as_ref(),
+            &[],
+        )])
+        .unwrap();
+        let paired = PolicyStore::new(vec![peer(
+            server_credentials.certificate_chain[0].as_ref(),
+            &[],
+        )])
+        .unwrap();
+        let server = RemoteServer::bind(
+            "127.0.0.1:0".parse().unwrap(),
+            &server_credentials,
+            policy.clone(),
+        )
+        .unwrap();
+        let address = server.local_addr().unwrap();
+        let endpoint =
+            client_endpoint("127.0.0.1:0".parse().unwrap(), &client_credentials).unwrap();
+        let server_task = async move {
+            let session = server.accept().await.unwrap();
+            let _ = session.run(&mut host).await;
+            assert_eq!(host.provider_mut().engine_mut().revision(), Counter(0));
+        };
+        let client_task = async move {
+            let mut client = RemoteClient::connect(endpoint, address, "stagebox.test", paired)
+                .await
+                .unwrap();
+            let request = crate::meter_wire::Request::new(SHOW, 9, 1, 1);
+            client
+                .send_command(serde_json::to_value(&request).unwrap())
+                .await
+                .unwrap();
+            let Response::Reply { payload, .. } = client.receive().await.unwrap() else {
+                panic!("actual meter reply required")
+            };
+            let s = crate::meter_wire::Snapshot::decode(&serde_json::to_vec(&payload).unwrap())
+                .unwrap();
+            assert!(s.valid);
+            assert_eq!(s.taps[94].peak_millidbfs, Some(-6021));
+            assert_eq!(s.taps.len(), 105);
+            // No render ticks run while this authenticated control session stays
+            // alive. Another read must retain the original acquisition age/window.
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let mut repeat = request.clone();
+            repeat.query_id = Counter(2);
+            client
+                .send_command(serde_json::to_value(&repeat).unwrap())
+                .await
+                .unwrap();
+            let Response::Reply { payload, .. } = client.receive().await.unwrap() else {
+                panic!("stopped source still has bounded observational readback")
+            };
+            let stale = crate::meter_wire::Snapshot::decode(&serde_json::to_vec(&payload).unwrap())
+                .unwrap();
+            assert_eq!(stale.sequence, s.sequence);
+            assert_eq!(stale.first_frame, s.first_frame);
+            assert_eq!(stale.taps, s.taps);
+            assert!(stale.acquisition_age_ms.unwrap().0 > 250);
+            policy.replace(vec![]).unwrap();
+            let mut request = request;
+            request.query_id = Counter(3);
+            let _ = client
+                .send_command(serde_json::to_value(&request).unwrap())
+                .await;
+            assert!(!matches!(
+                client.receive().await,
+                Ok(Response::Reply { .. })
+            ));
+            client.close();
+        };
+        tokio::join!(server_task, client_task);
+    })
+    .await
+    .unwrap();
+}

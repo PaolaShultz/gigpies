@@ -72,3 +72,7 @@ pub mod held_proof;
 /// Atomic scoped lease maintenance and committed paired observation.
 pub mod lease_maintenance;
 pub mod paired_readback;
+
+pub mod metering;
+
+pub mod meter_wire;

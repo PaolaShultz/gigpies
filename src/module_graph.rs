@@ -413,6 +413,9 @@ impl ModuleGraph {
     ) -> std::result::Result<(), ProcessError> {
         self.process_interleaved_brain(epoch, frame, raw, mixed, buses, external_wet, None)
     }
+    pub fn meter_main_pre_pa(&self) -> &[f64; FRAMES * 2] {
+        &self.sum
+    }
     pub fn program_before_talkback(&self) -> &[f64; FRAMES * 2] {
         &self.program
     }
