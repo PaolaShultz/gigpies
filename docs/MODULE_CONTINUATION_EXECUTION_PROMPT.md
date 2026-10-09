@@ -1,3 +1,8 @@
+> Historical brief/coordination record. Its old task states, twelve-repository scope
+> and launch instructions are retired. Use [the integration plan](MODULE_IMPLEMENTATION_PLAN.md)
+> and [current planning brief](INTEGRATION_PLANNING_PROMPT.md). This file grants no
+> new worker, build, publication or physical-session authorization.
+
 # Coordinated continuation and publication prompt
 
 Paste the prompt below into a new coordinator thread rooted at

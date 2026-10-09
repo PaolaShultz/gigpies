@@ -1,51 +1,9 @@
-# Next session: separate physical Brain audio qualification
+# Next session
 
-Recover [status](STATUS.md), [Brain audio acceptance](BRAIN_AUDIO_ACCEPTANCE.md)
-and the current private task0015 checkpoint before acting. The production software
-passed independent review, complete owner/consumer gates and seven same-candidate
-two-Pi scenarios: 16/32/48-input coexistence, duplex stall/restart, controller stall
-and Stagebox restart. Earlier failed trials remain evidence, not current acceptance.
-The historical execution prompts and consumed reservation slots are not reusable
-launch authority. Source synchronization is not deployment.
-
-Brain owns one local duplex endpoint with a separate device clock; two bounded
-ASRC crossings connect talkback and operator playback to Stagebox. Stagebox keeps
-DSP, PA, raw REC and FX/analysis on its source timeline. See the acceptance record
-for exact software scope and remaining physical limits. Unchanged historical
-research/audition cases need not be rerun after documentation-only work.
-
-The next physical increment requires a separate authorized session: read-only card
-and socket inventory first, then deliberate duplex activation at conservative
-levels, channel/direct-monitor mapping, independent-clock and sustained-deadline
-measurements, release/failure behavior, and acoustic/output-path qualification.
-Do not infer physical clock lock or safe feedback behavior from fake PCM.
-The prior handoff is [archived](archive/brain-audio-before-2026-10-05/NEXT_SESSION.md).
-
-Read the [local integration instructions](HEADLESS_INTEGRATION.md),
-[implementation map](MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
-[architecture](ARCHITECTURE.md) and [ownership map](COMPONENTS.md). The intended
-Brain hosts two 1920×1080 monitors and two independently assigned MIDI controllers:
-Desk for audio and Lightdesk for lighting. Manual operation remains independent;
-ASSIST proposes, and AUTO requires explicit bounded authority.
-
-| Owner | Accepted software foundation | Next separate increment |
-|---|---|---|
-| GigPies | Configurable source engine, four-band strip processing, actual PA v2/FX/REC and authenticated QUIC at16/32/48 | Separately authorized physical mapping, drift, deadline and acoustic gates |
-| SHR Desk | Native frontend, dynamic high-channel processing and reviewed PA/output configuration | Physical duplex/device, dual-display/controller/LED acceptance remains separate |
-| SHR Lightdesk | LD-01..04 including native software frontend and read-only LX05 compatibility | Physical role/display/controller acceptance; later analysis controls only as an explicit increment |
-| SHR Lux | LX-01..05 null-output authority, release/recovery and named source automation | LX-06 fixture output only with known patch, explicit arming and hardware reservation |
-| SHR REC / FX / PA | Actual raw REC, source-clock FX and configurable PA v2 consumed by the modular graph | Owner algorithm extensions and acoustic acceptance; no duplicate algorithms in GigPies |
-
-Read each owner's instructions and current acceptance before changes. Console
-software rendering and injected descriptors do not verify actual display/controller
-identity, MIDI or LED ownership. Real enumeration and dual-device acceptance remain
-GP-H2. Missing or ambiguous identities must remain unbound.
-
-Physical fixture output, acoustic protection and combined CPU/GPU/memory/scheduler
-acceptance require their own authorized sessions and reservations. Preserve human
-holds and current looks through loss/reconnect until explicit release. Lighting
-failure must not block audio control or recording. No physical operation follows
-from the completed software publication.
+For current tasks and progress, use [the integration plan](MODULE_IMPLEMENTATION_PLAN.md).
+The next software action is GP-METER planning; use [the planning brief](INTEGRATION_PLANNING_PROMPT.md).
+The procedures below are references for separately authorized physical/listening
+sessions, not a competing task queue or launch authorization.
 
 ## Qualified stereo hardware handoff
 

@@ -1,4 +1,8 @@
-# Status and next steps
+# Dated implementation evidence
+
+Task plans and current progress live only in [the owning plan](MODULE_IMPLEMENTATION_PLAN.md).
+The dated records below preserve acceptance and failures for their original scope;
+they are not an active backlog. Later accepted evidence supersedes partial handoffs.
 
 ## Control-capacity and CI review fixes — 2026-10-06
 

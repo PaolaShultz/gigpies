@@ -60,3 +60,7 @@ Unchanged Markdown snapshots retain their original relative-link context under
 
 - `brain-audio-before-final-2026-10-06/BRAIN_AUDIO_ACCEPTANCE.md` preserves the
   detailed pre-final task0015 trial chronology before concise acceptance reconciliation.
+
+- [Tracking before the single-owner reconciliation](tracking-before-2026-10-09/MODULE_IMPLEMENTATION_PLAN.md)
+  preserves old plan/implementation tables. The companion map and console snapshot
+  retain their original link context. Current tasks live only in the owning plan.

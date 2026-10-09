@@ -60,3 +60,13 @@ the processing reference; Brain local I/O has a separate device epoch/timeline.
 Both new crossings require bounded ASRC. Keep FX, raw REC and source analysis on
 Stagebox frames. Desk controls the owner without opening PCM. Physical activation,
 clock lock, socket mapping and acoustic qualification remain separate acceptance.
+
+## GigPies task tracking
+
+Use `docs/MODULE_IMPLEMENTATION_PLAN.md` for GigPies work owned here. Keep each task plan,
+implementation state, acceptance checklist, evidence and next action in the same
+card; update it with the change. Shared integration tasks have one card in
+GigPies, linked from contributor plans. STATUS, maps, handoffs and knowledge notes
+route to task owners or preserve dated evidence; never mirror current task state.
+Archive closed cards once; keep the active queue limited to open work. Reference
+projects do not become GigPies runtime modules merely because code is reused.
