@@ -313,6 +313,26 @@ impl EngineTopology {
             sample_operations,
         })
     }
+    /// Independent telemetry admission. Audio remains admitted when this fails;
+    /// legacy resource/readback contracts remain byte/schema compatible.
+    pub fn meter_admission(&self, budget: ResourceBudget) -> Result<usize> {
+        let audio = self.validate(budget)?;
+        let taps =
+            crate::metering::capacity(self.inputs.len(), self.monitors).ok_or("meter capacity")?;
+        let bytes = taps
+            .checked_mul(std::mem::size_of::<crate::metering::Accumulator>() * 3 + 512)
+            .and_then(|n| n.checked_add(self.inputs.len().checked_mul(48 * 8)?))
+            .and_then(|n| n.checked_add(8192))
+            .ok_or("meter resource overflow")?;
+        if audio
+            .estimated_bytes
+            .checked_add(bytes)
+            .is_none_or(|n| n > budget.bytes)
+        {
+            return Err("meter memory capacity".into());
+        }
+        Ok(bytes)
+    }
     pub fn is_legacy(&self) -> bool {
         self.identity == "legacy8-2"
             && self.inputs.len() == 8

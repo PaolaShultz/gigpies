@@ -11,8 +11,11 @@ raw recording branches before FX. Hardware acceptance remains separate.
 
 The Brain runner's optional `fx_control_sha256` is the lowercase SHA256 of its
 explicit `fx_library`. Omit it for existing media-only behavior. Resolve every
-SHR FX v2 symbol and exact capability/layout before advertising controls; old,
+`shr_fx_delay_v2_*` symbol and exact capability/layout before advertising controls; old,
 partial or incompatible extensions retain v1 media with unavailable GP21.
+The published generic `shr_fx_v2_*` API has different signatures and is never
+called through this source-timeline stereo-delay adapter. A library exposing
+only that generic API retains v1 media; it does not advertise GP21 controls.
 On Linux the loaded inode is the open file that was hashed. A replacement owner
 needs a fresh authenticated media session. Media negotiation does not grant FX
 write authority. Pair the actual owner and operator separately with explicit

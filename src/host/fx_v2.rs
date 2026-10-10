@@ -1,4 +1,4 @@
-//! Optional complete SHR FX v2 ABI. Library, handle and tokens share one serialized owner.
+//! Optional SHR FX source-timeline delay ABI. Library, handle and tokens share one owner.
 use crate::fx_wire::{Channel, Configuration};
 use libloading::Library;
 use std::{ffi::c_void, path::Path};
@@ -122,7 +122,9 @@ impl Owner {
             return Err("FX block capacity".into());
         }
         let library = unsafe { Library::new(path) }.map_err(|e| e.to_string())?;
-        // Missing ANY optional symbol means complete legacy fallback, never partial ABI.
+        // This dedicated namespace is distinct from the published generic v2 ABI,
+        // whose signatures/layouts are incompatible. Never probe or call those
+        // symbols as a delay owner. Missing ANY delay symbol retains v1 media.
         macro_rules! sym {
             ($name:literal,$ty:ty) => {
                 match unsafe { library.get::<$ty>(concat!($name, "\0").as_bytes()) } {
@@ -132,19 +134,19 @@ impl Owner {
             };
         }
         let create = sym!(
-            "shr_fx_v2_create",
+            "shr_fx_delay_v2_create",
             unsafe extern "C" fn(u32, u32) -> *mut c_void
         );
-        let prepare = sym!("shr_fx_v2_prepare", Prepare);
-        let commit = sym!("shr_fx_v2_commit", Commit);
-        let retire = sym!("shr_fx_v2_retire", Retire);
-        let process = sym!("shr_fx_v2_process", Process);
-        let panic = sym!("shr_fx_v2_panic", Panic);
-        let reset = sym!("shr_fx_v2_reset", Reset);
-        let query = sym!("shr_fx_v2_status", Query);
-        let destroy = sym!("shr_fx_v2_destroy", Retire);
+        let prepare = sym!("shr_fx_delay_v2_prepare", Prepare);
+        let commit = sym!("shr_fx_delay_v2_commit", Commit);
+        let retire = sym!("shr_fx_delay_v2_retire", Retire);
+        let process = sym!("shr_fx_delay_v2_process", Process);
+        let panic = sym!("shr_fx_delay_v2_panic", Panic);
+        let reset = sym!("shr_fx_delay_v2_reset", Reset);
+        let query = sym!("shr_fx_delay_v2_status", Query);
+        let destroy = sym!("shr_fx_delay_v2_destroy", Retire);
         let caps = sym!(
-            "shr_fx_v2_capabilities",
+            "shr_fx_delay_v2_capabilities",
             unsafe extern "C" fn(*mut Capabilities, u32, u32) -> i32
         );
         let mut c = Capabilities::default();

@@ -19,7 +19,8 @@
 GigPies is an experimental live-band sound and lighting system built in **Rust for Raspberry Pi**.
 Version **0.2.3** brings together offline processing, transport and qualified stereo
 USB bench work, with the dual-console integration plan. The complete live system
-is still in development. Its intended live core needs no Internet or external AI service.
+is still in development. [The integration plan](docs/development/MODULE_IMPLEMENTATION_PLAN.md)
+owns active tasks and their implementation progress. Its intended live core needs no Internet or external AI service.
 
 GigPies is the complete system, with human-operated audio and lighting consoles.
 Automation is one operating mode within those consoles. The vision combines

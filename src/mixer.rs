@@ -208,6 +208,8 @@ pub struct PreparedOutputPatch {
 }
 #[derive(Debug)]
 pub struct Mixer {
+    meter_processed: Vec<f64>,
+    meter_valid: [bool; 48],
     operator_source: crate::brain_control::MonitorSource,
     operator_samples: [f64; 96],
     clock: u64,
@@ -245,6 +247,15 @@ impl Mixer {
         ];
         row.extend((0..monitors).map(|i| Ramp::fixed(if i == 0 { 1.0 } else { 0.001 })));
         Ok(Self {
+            meter_processed: if topology
+                .meter_admission(crate::topology::ResourceBudget::default())
+                .is_ok()
+            {
+                vec![0.; inputs * 48]
+            } else {
+                Vec::new()
+            },
+            meter_valid: [false; 48],
             operator_source: crate::brain_control::MonitorSource::None,
             operator_samples: [0.; 96],
             clock: frame,
@@ -465,6 +476,9 @@ impl Mixer {
             .map(|s| s.observation(self.clock, self.fault))
             .collect()
     }
+    pub fn meter_samples(&self) -> (&[f64], &[bool; 48]) {
+        (&self.meter_processed, &self.meter_valid)
+    }
     pub fn processing_ready(&self) -> bool {
         self.processing
             .iter()
@@ -613,6 +627,10 @@ impl Mixer {
             out.fill(0.);
             let tap = (self.clock % 48) as usize * 2;
             self.operator_samples[tap..tap + 2].fill(0.);
+            let meter_frame = (self.clock % 48) as usize;
+            if !self.meter_processed.is_empty() {
+                self.meter_processed[meter_frame * inputs..(meter_frame + 1) * inputs].fill(0.);
+            }
             if sources.iter().any(|s| !s.is_finite()) {
                 self.fault = true;
             }
@@ -629,6 +647,9 @@ impl Mixer {
                     }
                     let shared = sample * row[3].at(self.clock);
                     let processed = strip.tick(*sample, self.clock);
+                    if !self.meter_processed.is_empty() {
+                        self.meter_processed[meter_frame * inputs + channel] = processed;
+                    }
                     if !processed.is_finite() {
                         self.fault = true;
                         break;
@@ -688,6 +709,7 @@ impl Mixer {
                     }
                 }
             }
+            self.meter_valid[meter_frame] = !self.fault && self.armed;
             self.clock += 1;
         }
         Ok(())
@@ -723,5 +745,99 @@ mod tests {
         assert_eq!(output, [[0.0; 4]; 2]);
         assert!(mixer.faulted());
         assert_eq!(mixer.frame(), 2);
+    }
+}
+#[cfg(test)]
+mod meter_tap_tests {
+    use super::*;
+    #[test]
+    fn disabled_saturated_and_lost_meter_workers_leave_every_audio_and_operator_sample_exact() {
+        for (inputs, monitors) in [(16, 3), (17, 1), (32, 5), (48, 7)] {
+            let topology = crate::topology::EngineTopology::software(inputs, monitors, 0).unwrap();
+            let mut reference = Mixer::from_topology(0, topology.clone()).unwrap();
+            reference.meter_processed.clear();
+            let mut actual = Mixer::from_topology(0, topology).unwrap();
+            let (mut tap, latest) = crate::metering::prepare(inputs, monitors, 48000).unwrap();
+            drop(latest);
+            let edits = vec![
+                Edit {
+                    target: Target::Fader {
+                        input: format!("input-{inputs:02}"),
+                    },
+                    value: Value::Integer(-12000),
+                },
+                Edit {
+                    target: Target::Pan {
+                        input: "input-01".into(),
+                    },
+                    value: Value::Integer(100),
+                },
+            ];
+            for mixer in [&mut actual, &mut reference] {
+                mixer
+                    .schedule(Prepared::edits_for(inputs, monitors, &edits).unwrap(), 1)
+                    .unwrap();
+                mixer.set_operator_tap(crate::brain_control::MonitorSource::Pfl {
+                    input: inputs - 1,
+                });
+            }
+            let mut a = vec![0.; 48 * (monitors + 2)];
+            let mut b = a.clone();
+            let mut main = [0.; 96];
+            let source = vec![0.5; 48 * inputs];
+            for block in 0..100 {
+                actual.process_interleaved(&source, &mut a).unwrap();
+                reference.process_interleaved(&source, &mut b).unwrap();
+                assert_eq!(a, b);
+                assert_eq!(actual.operator_samples, reference.operator_samples);
+                for f in 0..48 {
+                    main[f * 2..f * 2 + 2]
+                        .copy_from_slice(&a[f * (monitors + 2)..f * (monitors + 2) + 2]);
+                }
+                let (processed, valid) = actual.meter_samples();
+                assert!(processed.iter().all(|v| *v == 0.5));
+                tap.offer(
+                    block * 48,
+                    block,
+                    &source,
+                    processed,
+                    valid,
+                    &main,
+                    &a,
+                    true,
+                );
+                actual.take_completion();
+                reference.take_completion();
+            }
+            assert!(tap.losses > 0);
+        }
+    }
+    #[test]
+    fn shared_mute_is_measured_zero_without_erasing_actual_pre_fader_sample() {
+        let mut m = Mixer::default();
+        m.schedule(
+            Prepared::edits(&[Edit {
+                target: Target::Mute {
+                    input: "input-01".into(),
+                },
+                value: Value::Boolean(true),
+            }])
+            .unwrap(),
+            1,
+        )
+        .unwrap();
+        let mut source = [0.; 48 * 8];
+        for f in 0..48 {
+            source[f * 8] = 0.5;
+        }
+        let mut output = [0.; 48 * 4];
+        for _ in 0..40 {
+            m.process_interleaved(&source, &mut output).unwrap();
+            m.take_completion();
+        }
+        assert!(output.iter().all(|v| *v == 0.));
+        let (processed, valid) = m.meter_samples();
+        assert!(valid.iter().all(|v| *v));
+        assert!((0..48).all(|f| processed[f * 8] == 0.5));
     }
 }

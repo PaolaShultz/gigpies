@@ -1,3 +1,8 @@
+> Historical brief/coordination record. Its old task states, twelve-repository scope
+> and launch instructions are retired. Use [the integration plan](../../development/MODULE_IMPLEMENTATION_PLAN.md)
+> and [current planning brief](INTEGRATION_PLANNING_PROMPT.md). This file grants no
+> new worker, build, publication or physical-session authorization.
+
 # Coordinating prompt: module plans and parallel implementation
 
 Run the prompt below in a new planning session rooted at `/home/shome/p/gigpies`.

@@ -1,3 +1,8 @@
+> Historical brief/coordination record. Its old task states, twelve-repository scope
+> and launch instructions are retired. Use [the integration plan](../../development/MODULE_IMPLEMENTATION_PLAN.md)
+> and [current planning brief](INTEGRATION_PLANNING_PROMPT.md). This file grants no
+> new worker, build, publication or physical-session authorization.
+
 # Review and repair the 2026-10-04 commits on Pi5
 
 Open a new session in `/home/shome/p/gigpies` on **rpi5**, select the stronger

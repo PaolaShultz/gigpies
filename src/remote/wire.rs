@@ -155,8 +155,14 @@ pub(crate) async fn write_response_diagnostic(
         }
         Ok(())
     };
+    let budget = if matches!(response, Response::Reply {payload,..} if payload.get("contract").and_then(Value::as_str)==Some(crate::meter_wire::CONTRACT))
+    {
+        100
+    } else {
+        IO_TIMEOUT_MS
+    };
     let result = tokio::time::timeout(
-        Duration::from_millis(IO_TIMEOUT_MS),
+        Duration::from_millis(budget),
         observe_write(operation, trace, token),
     )
     .await

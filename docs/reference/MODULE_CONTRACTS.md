@@ -208,6 +208,62 @@ age. `sample_peak_mdbfs` is sample peak, never true peak; silence is explicit
 Do not infer zero gain reduction, healthy recording or real FFT from absence.
 Initial snapshots preserve actual value, target, proposal and owner separately.
 
+## GP-METER:1 measured audio
+
+This independent read-only extension leaves C-AUDIO/rendered1/2 `meters: null`
+and the existing GP07 gain-reduction contract unchanged. The strict request and
+reply are specified in [meter_wire.rs](../../src/meter_wire.rs) and the producer
+[schema/corpus](../../tests/fixtures/gp-meter/v1/README.md). The sole implementation
+and acceptance record is the [GP-METER card](../development/MODULE_IMPLEMENTATION_PLAN.md#gp-meter--measured-audio-on-the-real-desk).
+
+Requests use `contract: GP-METER`, `version: 1`, `kind: meter_snapshot`, show/module,
+source epoch, query ID and expected map. Writer, lease, request ID and expected
+revision are required nulls. Local same-UID and remote authenticated readers use
+this identical payload; the latter retains the existing session envelope and
+policy revocation checks. Reads never admit control, grant/renew a lease, refresh
+paired/processing state, rearm or replay mutations. Unsupported versions receive
+a bounded unavailable result. Replies are solicited only.
+
+Each complete nonoverlapping window contains `sample_rate / 50` source frames.
+Raw and actual pre-fader strip samples are ordered `input-NN:raw`,
+`input-NN:processed`; then `main-l`, `main-r`, then each configured `monitor-N`.
+Main observes the accepted wet/FOH-talkback sum before PA; without owner modules,
+it observes the actual dry main. Monitors observe post-send/output gain and
+monitor talkback before physical patch. Physical mapping stays in structural
+readback. This is sample peak/RMS, not true peak, converter clipping, SPL or PA
+protection evidence.
+
+Peak and RMS use integer milli-dBFS, rounded with a -120000 floor. Silence has
+numeric floor values and `silent: true`; null levels mean invalid/unavailable.
+`below_floor` and `over_range` describe peak amplitude. Exactly full scale counts
+as a clip; clips and nonfinite samples are counted per window. Nonfinite samples
+invalidate that tap; downstream faults/quiescence invalidate affected taps without
+inventing measured silence. A valid shared mute produces measured zero. Scaled
+sums of squares avoid finite over-range overflow. Decimal-string u64 fields
+preserve frame, sequence, epoch, generation, age and loss identities.
+
+Two preallocated SPSC slots drop whole windows on saturation. Sample observation
+and handoff contain no allocation, locks, I/O, strings or serialization. LocalAudio
+owns reset on source/map changes; control-side draining retains only the latest
+complete window and quantizes/serializes it. Existing LocalAudio control I/O is
+not a realtime-safe callback. Independent topology meter admission includes the
+accumulators, capture scratch and serialization reservation; failure disables
+telemetry while preserving audio admission and legacy resource documents.
+
+Meter documents use the existing immutable page protocol, at most sixteen 8192-byte
+segments and 64 KiB frames, within the existing 1 MiB outer assembly bound. Prepared
+capacity reserves 512 bytes per tap plus fixed envelope space and refuses telemetry
+that cannot fit. This telemetry bound is independent of product input/bus capacity.
+The observer has one outstanding read at no more than 25 Hz, with one 100 ms
+query/assembly deadline. Provider acquisition age is from the first sample's
+monotonic timestamp; Desk adds the entire query elapsed time and time since receipt.
+Freshness expires at 250 ms from that start. Repeated windows cannot move their
+previous expiry or reduce conservative age. Source stalls remain stale even when
+control responds. Desk holds a clip for one local second only while data is fresh;
+repeated windows do not relatch it. Identity loss clears the cache and requires a
+matching topology and new complete observation. The dedicated observer adds one
+session within the unchanged deployment budget.
+
 ## Lighting
 
 C-LIGHT authority belongs only to Lux. Start with a **null-output**, static rig;

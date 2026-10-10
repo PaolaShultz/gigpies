@@ -73,6 +73,7 @@ struct DeviceRead {
 pub struct HostAuthority {
     fx: fx_relay::FxRelay,
     provider: LocalAudio,
+    meter_reads: BTreeMap<u64, u64>,
     reads: BTreeMap<u64, ReadState>,
     structural_reads: BTreeMap<u64, u64>,
     master_eq_reads: BTreeMap<u64, u64>,
@@ -168,6 +169,7 @@ impl HostAuthority {
         Ok(Self {
             fx: fx_relay::FxRelay::default(),
             provider,
+            meter_reads: BTreeMap::new(),
             reads: BTreeMap::new(),
             structural_reads: BTreeMap::new(),
             master_eq_reads: BTreeMap::new(),
@@ -956,6 +958,23 @@ impl AuthorityEndpoint for HostAuthority {
         if payload.get("contract").and_then(Value::as_str) == Some(crate::fx_wire::CONTRACT) {
             return self.dispatch_fx(context, payload, now_ms).map(Some);
         }
+        if payload.get("contract").and_then(Value::as_str) == Some(crate::meter_wire::CONTRACT) {
+            if self
+                .meter_reads
+                .get(&context.session())
+                .is_some_and(|t| now_ms.saturating_sub(*t) < 40)
+            {
+                return Err("meter observer poll bound".into());
+            }
+            let request = crate::meter_wire::Request::decode(&super::encode(&payload)?)?;
+            self.meter_reads.insert(context.session(), now_ms);
+            let reply = self
+                .provider
+                .meter_snapshot(&request, self.capability_generation)?;
+            return serde_json::to_value(reply)
+                .map(Some)
+                .map_err(|e| e.to_string());
+        }
         if payload.get("contract").and_then(Value::as_str)
             == Some(crate::lease_maintenance::CONTRACT)
         {
@@ -1383,6 +1402,7 @@ impl AuthorityEndpoint for HostAuthority {
             self.provider.close_brain_audio();
         }
         self.provider.revoke_writer(context.writer());
+        self.meter_reads.remove(&context.session());
         self.reads.remove(&context.session());
         self.structural_reads.remove(&context.session());
         self.master_eq_reads.remove(&context.session());
@@ -1972,6 +1992,58 @@ mod atomic_admission_tests {
             "snapshot"
         );
         drop(host);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+#[cfg(test)]
+mod meter_reads_tests {
+    use super::*;
+    #[test]
+    fn meter_reads_do_not_touch_paired_processing_leases_or_held_admission() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("gp-meter-authority-{}", std::process::id()));
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let show = "11111111-1111-4111-8111-111111111111";
+        {
+            let provider = LocalAudio::bind(&dir, "meter.sock", show, Counter(1)).unwrap();
+            let mut host = HostAuthority::new(provider, 1).unwrap();
+            let policy = PolicyStore::new(vec![Peer {
+                id: "reader".into(),
+                certificate_sha256: fingerprint(b"meter"),
+                permissions: Default::default(),
+            }])
+            .unwrap();
+            let ctx = policy.authenticate(b"meter", 1).unwrap();
+            let mut r = crate::meter_wire::Request::new(show, 1, 1, 1);
+            let result = host
+                .dispatch(&ctx, serde_json::to_value(&r).unwrap(), 0)
+                .unwrap()
+                .unwrap();
+            assert_eq!(result["reason"], "missing_window");
+            assert!(host.reads.is_empty());
+            assert!(host.brain_reads.is_empty());
+            assert!(host.structural_reads.is_empty());
+            assert!(host.paired_queries.is_empty());
+            assert_eq!(host.provider.engine_mut().revision(), Counter(0));
+            r.query_id = Counter(2);
+            assert!(
+                host.dispatch(&ctx, serde_json::to_value(&r).unwrap(), 39)
+                    .is_err()
+            );
+            r.version = 2;
+            assert_eq!(
+                host.dispatch(&ctx, serde_json::to_value(&r).unwrap(), 40)
+                    .unwrap()
+                    .unwrap()["reason"],
+                "unsupported"
+            );
+            policy.replace(vec![]).unwrap();
+            assert!(
+                host.dispatch(&ctx, serde_json::to_value(&r).unwrap(), 80)
+                    .is_err()
+            );
+        }
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

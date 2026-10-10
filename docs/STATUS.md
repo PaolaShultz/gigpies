@@ -9,6 +9,7 @@ This page summarizes capabilities. Detailed contracts define behavior, and
 |---|---|---|
 | Configurable engine | Channel EQ/compression, buses, monitor sends, owner-native PA, raw recording and source-clock FX; software coverage at 16/32/48 inputs and a 17-input regression | Physical UMC1820 + ADA8200 socket mapping, shared ADAT clock lock and sustained deadlines |
 | Channel and monitor control | Four-band parametric EQ, compression, authenticated control; independent raw post-mute, processed pre-fader and processed post-fader sends | Physical routing and listening acceptance |
+| Metering | GP-METER source-window peak/RMS/clip observations and dedicated Desk readback; legacy snapshots remain unchanged | Combined owner-artifact acceptance and physical qualification remain separate |
 | Brain audio | One local duplex owner, independent talkback and operator-monitor ASRC crossings, PTT expiry and safe recovery; integrated two-Pi software validation | Actual duplex device mapping, clock drift, acoustic delay and feedback/protection checks |
 | PA control | Reviewed whole-configuration/output transactions and narrowly scoped live stereo master EQ | Acoustic protection and physical output acceptance; owner DSP remains in SHR PA |
 | Measurement | Bounded raw reference/microphone-slot capture, owner analysis, multi-position proposals and exact candidate validation; Desk software integration | Actual microphone capture and acoustic alignment |

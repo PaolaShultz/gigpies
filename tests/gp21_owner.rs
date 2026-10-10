@@ -29,9 +29,11 @@ fn config() -> Configuration {
     }
 }
 #[test]
-#[ignore = "requires explicitly pinned actual SHR FX v2 library"]
+#[ignore = "requires explicitly pinned actual SHR FX delay v2 library"]
 fn gp21_actual_owner_independent_channel_transition_and_exact_frames() {
-    let mut owner = Owner::load(&library(), 48).unwrap().expect("v2 ABI");
+    let mut owner = Owner::load(&library(), 48)
+        .unwrap()
+        .expect("source-timeline delay v2 ABI");
     let initial = owner.status().unwrap();
     assert_eq!(initial.applied_generation, 0);
     owner.prepare(&config(), 0).unwrap();
@@ -63,7 +65,7 @@ fn gp21_actual_owner_independent_channel_transition_and_exact_frames() {
     );
 }
 #[test]
-#[ignore = "requires explicitly pinned actual SHR FX v2 library"]
+#[ignore = "requires explicitly pinned actual SHR FX delay v2 library"]
 fn gp21_actual_brain_opt_in_preserves_v1_and_source_order() {
     let mut fixed = BrainFx::prepare(&library(), 2, 48, 9).unwrap();
     assert_eq!(fixed.intentional_delay_frames(), 960);
@@ -93,4 +95,22 @@ fn gp21_old_library_remains_read_only_media() {
     let mut out = [0.; 96];
     old.process(9, 0, &[0.1; 96], &mut out).unwrap();
     assert_eq!(old.intentional_delay_frames(), 960);
+}
+
+#[test]
+#[ignore = "requires explicitly pinned generic SHR FX v2 library without the delay extension"]
+fn gp21_generic_v2_library_is_not_called_as_source_timeline_delay() {
+    let path = library();
+    let generic = unsafe { libloading::Library::new(&path) }.unwrap();
+    // Resolve only, never invoke a function with a foreign signature.
+    assert!(unsafe { generic.get::<unsafe extern "C" fn()>(b"shr_fx_v2_create\0") }.is_ok());
+    // A generic v2 owner uses incompatible function signatures. The loader must
+    // refuse its optional controls before calling any of those symbols, while
+    // retaining the independently supported fixed v1 media path.
+    assert!(Owner::load(&library(), 48).unwrap().is_none());
+    let mut media = BrainFx::prepare(&library(), 2, 48, 9).unwrap();
+    assert!(!media.enable_configured(&library()).unwrap());
+    let mut output = [0.; 96];
+    media.process(9, 0, &[0.1; 96], &mut output).unwrap();
+    assert!(output.iter().all(|sample| sample.is_finite()));
 }

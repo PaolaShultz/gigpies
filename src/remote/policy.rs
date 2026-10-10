@@ -204,7 +204,8 @@ impl AuthenticatedContext {
         let writer = object.get("writer").ok_or("command writer")?;
         if matches!(
             kind,
-            "snapshot"
+            "meter_snapshot"
+                | "snapshot"
                 | "processing_snapshot"
                 | "sends_snapshot"
                 | "module_status"

@@ -50,7 +50,7 @@ their on-demand command. Report run and intentionally skipped classes.
 
 Before committing inspect live Git state and staged content; preserve unrelated edits.
 Never publish private audio or state. Publication follows the user's authorized scope.
-Follow docs/PUBLICATION.md. Enable the versioned hooks when absent and run the
+Follow docs/development/PUBLICATION.md. Enable the versioned hooks when absent and run the
 publication guard against the complete index. New scripts need a reviewed entry in
 scripts/publication-policy.json; private user data and one-off runners stay ignored.
 
@@ -64,3 +64,13 @@ clock lock, socket mapping and acoustic qualification remain separate acceptance
 Keep product docs focused on current behavior, usage and limits. Use the folders
 and indexes in docs/README.md; completed plans, prompts, handoffs and study results
 belong in docs/archive/. Avoid appending work logs to current product pages.
+
+## GigPies task tracking
+
+Use `docs/development/MODULE_IMPLEMENTATION_PLAN.md` for GigPies work owned here. Keep each task plan,
+implementation state, acceptance checklist, evidence and next action in the same
+card; update it with the change. Shared integration tasks have one card in
+GigPies, linked from contributor plans. STATUS, maps, handoffs and knowledge notes
+route to task owners or preserve dated evidence; never mirror current task state.
+Archive closed cards once; keep the active queue limited to open work. Reference
+projects do not become GigPies runtime modules merely because code is reused.

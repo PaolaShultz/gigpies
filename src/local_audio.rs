@@ -74,6 +74,7 @@ impl Packet {
 }
 enum Incoming {
     Measurement(crate::measurement_wire::Request),
+    Meter(crate::meter_wire::Request),
     Audio(Request),
     Structural(crate::structural_control::Request),
     Brain(crate::brain_control::Request),
@@ -90,6 +91,8 @@ struct Client {
     started: Option<u64>,
     replies: VecDeque<Packet>,
     telemetry: Option<Packet>,
+    meter_deadline: Option<u64>,
+    meter_last_query: Option<u64>,
     last_write: u64,
     snapshot: bool,
     sends_snapshot_ms: Option<u64>,
@@ -156,6 +159,8 @@ impl Client {
             == Some(crate::measurement_wire::CONTRACT)
         {
             Incoming::Measurement(crate::measurement_wire::Request::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP-METER") {
+            Incoming::Meter(crate::meter_wire::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP15-brain") {
             Incoming::Brain(crate::brain_control::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP14-structure")
@@ -200,6 +205,9 @@ impl Client {
         Ok(())
     }
     fn flush(&mut self, now: u64) -> Result<()> {
+        if self.meter_deadline.is_some_and(|d| now >= d) {
+            return Err("meter reply deadline".into());
+        }
         // A partly sent telemetry frame cannot be interleaved with a control frame.
         let partial = self.telemetry.as_ref().is_some_and(|p| p.offset > 0);
         let packet = if partial {
@@ -230,6 +238,9 @@ impl Client {
             } else {
                 self.replies.pop_front();
             }
+        }
+        if self.replies.is_empty() && self.telemetry.is_none() {
+            self.meter_deadline = None;
         }
         Ok(())
     }
@@ -438,6 +449,9 @@ enum StructuralAction {
     Failed(String),
 }
 pub struct LocalAudio {
+    metering: Option<(crate::metering::Acquisition, crate::metering::Latest)>,
+    meter_main: [f64; 96],
+    meter_map: u64,
     brain: crate::brain_control::State,
     brain_pending: Option<(
         crate::brain_control::Request,
@@ -549,6 +563,11 @@ impl LocalAudio {
         let np = topology.pa_outputs;
         let nc = topology.capture_channels;
         let no = topology.playback_channels;
+        let meter_map = topology.map_revision;
+        let metering = topology
+            .meter_admission(crate::topology::ResourceBudget::default())
+            .ok()
+            .and_then(|_| crate::metering::prepare(ni, topology.monitors, topology.sample_rate));
         let engine = OfflineEngine::with_topology(show, epoch, Counter(0), 0, topology)?;
         let epoch_owner = EpochOwner::reserve(directory, show, epoch)?;
         let listener = UnixListener::bind(&path).map_err(|e| e.to_string())?;
@@ -562,6 +581,9 @@ impl LocalAudio {
             .map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         Ok(Self {
+            metering,
+            meter_main: [0.; 96],
+            meter_map,
             brain: crate::brain_control::State::default(),
             brain_pending: None,
             brain_cache: VecDeque::with_capacity(256),
@@ -610,6 +632,56 @@ impl LocalAudio {
             #[cfg(feature = "hardware-host")]
             module_pending: Vec::with_capacity(2),
         })
+    }
+    pub fn meter_snapshot(
+        &mut self,
+        request: &crate::meter_wire::Request,
+        generation: u64,
+    ) -> Result<crate::meter_wire::Snapshot> {
+        request.validate()?;
+        if request.show_id != self.show {
+            return Err("meter show identity".into());
+        }
+        let now = crate::analysis_stream::local::monotonic_ms()?;
+        let topology = self.topology().clone();
+        let quiesced = false; // Raw observations remain available through downstream safety zeros.
+        let s = if let Some((tap, latest)) = &mut self.metering {
+            latest.snapshot(
+                request,
+                &topology,
+                self.epoch.0,
+                generation,
+                now,
+                tap.losses,
+                quiesced,
+            )
+        } else {
+            crate::meter_wire::Snapshot {
+                contract: "GP-METER".into(),
+                version: 1,
+                kind: "meter_snapshot".into(),
+                show_id: self.show.clone(),
+                module: "audio".into(),
+                source_epoch: self.epoch,
+                query_id: request.query_id,
+                capability_generation: Counter(generation),
+                map_generation: Counter(topology.map_revision),
+                topology: topology.identity,
+                sample_rate: topology.sample_rate,
+                inputs: topology.inputs.len(),
+                monitors: topology.monitors,
+                sequence: Counter(0),
+                first_frame: None,
+                end_frame: None,
+                acquisition_age_ms: None,
+                publication_loss: Counter(0),
+                valid: false,
+                reason: Some("capacity".into()),
+                taps: Vec::new(),
+            }
+        };
+        s.validate()?;
+        Ok(s)
     }
     pub fn brain_monitor_output(&self) -> &[f64] {
         &self.brain_monitor
@@ -1546,6 +1618,10 @@ impl LocalAudio {
         }
         self.invalidate_pending_measurement(reason);
         self.stop_analysis();
+        if let Some((tap, latest)) = &mut self.metering {
+            tap.reset();
+            latest.clear();
+        }
         self.close_brain_audio();
         self.brain_pending = None;
         self.brain_cache.clear();
@@ -2183,6 +2259,7 @@ impl LocalAudio {
         // Preserve the receipt time of this borrowed source block across control
         // work. This is not an ALSA converter acquisition timestamp.
         let source_received = crate::analysis_stream::local::monotonic_ms();
+        let meter_mono = source_received.as_ref().ok().copied();
         if now < self.last_now {
             return Err("clock".into());
         }
@@ -2206,6 +2283,8 @@ impl LocalAudio {
                         started: None,
                         replies: VecDeque::with_capacity(MAX_REPLIES),
                         telemetry: None,
+                        meter_deadline: None,
+                        meter_last_query: None,
                         last_write: now,
                         snapshot: false,
                         sends_snapshot_ms: None,
@@ -2230,6 +2309,27 @@ impl LocalAudio {
             match result {
                 Err(_) => keep = false,
                 Ok(None) => (),
+                Ok(Some(Incoming::Meter(request))) => {
+                    if !self.clients[index].replies.is_empty()
+                        || self.clients[index].telemetry.is_some()
+                        || self.clients[index]
+                            .meter_last_query
+                            .is_some_and(|t| now.saturating_sub(t) < 40)
+                    {
+                        keep = false;
+                    } else {
+                        self.clients[index].meter_last_query = Some(now);
+                        self.clients[index].meter_deadline = now.checked_add(100);
+                        match self.meter_snapshot(&request, 1) {
+                            Ok(reply) => {
+                                if self.clients[index].queue_module(&reply, now).is_err() {
+                                    keep = false;
+                                }
+                            }
+                            Err(_) => keep = false,
+                        }
+                    }
+                }
                 Ok(Some(Incoming::UnsupportedProcessing(request))) => {
                     let reply = request.refusal(self.engine.revision());
                     if self.clients[index].queue_module(&reply, now).is_err() {
@@ -2419,6 +2519,16 @@ impl LocalAudio {
                 }
             }
         }
+        if self.meter_map != self.topology().map_revision {
+            if let Some((tap, latest)) = &mut self.metering {
+                tap.reset();
+                latest.clear();
+            }
+            self.meter_map = self.topology().map_revision;
+        }
+        if let Some((_, latest)) = &mut self.metering {
+            latest.drain();
+        }
         let completions = self.engine.process_interleaved(inputs, output, now)?;
         let rendered_frame = self.frame();
         self.brain_frame_times[(rendered_frame / 48 % 64) as usize] = Some((rendered_frame, now));
@@ -2446,6 +2556,11 @@ impl LocalAudio {
             };
             self.brain_monitor[f * 2..f * 2 + 2].copy_from_slice(&pair);
         }
+        for f in 0..48 {
+            self.meter_main[f * 2..f * 2 + 2].copy_from_slice(&output[f * buses..f * buses + 2]);
+        }
+        #[allow(unused_mut)]
+        let mut meter_bus_valid = true;
         #[cfg(feature = "hardware-host")]
         if let Some(graph) = &mut self.modules {
             match graph.process_interleaved_brain(
@@ -2457,7 +2572,11 @@ impl LocalAudio {
                 wet,
                 Some(&self.brain_talkback),
             ) {
-                Ok(()) | Err(crate::module_graph::ProcessError::Fx(_)) => (),
+                Ok(()) => self.meter_main.copy_from_slice(graph.meter_main_pre_pa()),
+                Err(crate::module_graph::ProcessError::Fx(_)) => {
+                    self.meter_main.copy_from_slice(graph.meter_main_pre_pa());
+                    meter_bus_valid = false;
+                }
                 Err(error) => {
                     output.fill(0.);
                     self.quiesce_source("module_processing_failure")?;
@@ -2491,6 +2610,21 @@ impl LocalAudio {
             for i in 2..buses {
                 out[i] += tb[i];
             }
+        }
+        if let Some((tap, _)) = &mut self.metering
+            && let Some(meter_mono) = meter_mono
+        {
+            let (processed, valid) = self.engine.mixer().meter_samples();
+            tap.offer(
+                source_frame,
+                meter_mono,
+                inputs,
+                processed,
+                valid,
+                &self.meter_main,
+                output,
+                meter_bus_valid,
+            );
         }
         self.brain.monitor_peak = self.brain_monitor.iter().fold(0_f64, |a, v| a.max(v.abs()));
         for reply in completions {

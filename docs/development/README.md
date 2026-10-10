@@ -11,3 +11,7 @@ Build, test, contribution and lab procedures. These documents describe developme
 - [Publication boundaries](PUBLICATION.md)
 
 Project knowledge: [Product documentation and historical evidence](notes/zfvz.md).
+
+- [Integration task owner](MODULE_IMPLEMENTATION_PLAN.md)
+- [Module task routing](MODULE_IMPLEMENTATION_MAP.md)
+- [Shared build coordination](PARALLEL_WORK_PLAN.md)
