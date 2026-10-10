@@ -102,8 +102,9 @@ fn gp21_old_library_remains_read_only_media() {
 fn gp21_generic_v2_library_is_not_called_as_source_timeline_delay() {
     let path = library();
     let generic = unsafe { libloading::Library::new(&path) }.unwrap();
+    // This symbol uniquely identifies the generic prepared-palette API.
     // Resolve only, never invoke a function with a foreign signature.
-    assert!(unsafe { generic.get::<unsafe extern "C" fn()>(b"shr_fx_v2_create\0") }.is_ok());
+    assert!(unsafe { generic.get::<unsafe extern "C" fn()>(b"shr_fx_v2_publish\0") }.is_ok());
     // A generic v2 owner uses incompatible function signatures. The loader must
     // refuse its optional controls before calling any of those symbols, while
     // retaining the independently supported fixed v1 media path.
