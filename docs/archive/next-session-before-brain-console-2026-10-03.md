@@ -2,8 +2,8 @@
 
 ## Offline handoff — unreleased summing work, 2026-10-03
 
-The [summing-engine plan](SUMMING_PLAN.md) has been implemented and offline-validated
-on top of 0.2.2. The new [delivery contract](SUMMING_DELIVERY.md) separates comparison
+The [summing-engine plan](plans/SUMMING_PLAN.md) has been implemented and offline-validated
+on top of 0.2.2. The new [delivery contract](../guides/SUMMING_DELIVERY.md) separates comparison
 gain and final limiting, observes production stages and verifies final true peaks.
 The existing f64 summer, channel choices and requested GigPies effects are retained.
 No supported new musical candidate was selected.
@@ -30,7 +30,7 @@ selected outputs. Earlier retired queues remain historical.
 
 The work is unreleased. No playback, hardware, service or sibling
 changes occurred. Publication would need its own authorized scope and the checks in
-[publication policy](PUBLICATION.md).
+[publication policy](../development/PUBLICATION.md).
 
 The unresolved Pi crash still needs separate diagnosis; zero current filesystem
 counters and boot recovery do not establish a complete offline scan. Keep siblings
@@ -72,8 +72,8 @@ control to exercise without controlling live audio.
 The user will wire the second Raspberry Pi and connect the two with a cable.
 After the physical setup is ready, inventory both devices and their interfaces,
 record clock/software versions, and agree node ownership before implementing a
-minimal protocol. Follow the Stagebox/Brain boundaries in [architecture](ARCHITECTURE.md)
-and the [component ownership map](COMPONENTS.md); sibling module code stays with its
+minimal protocol. Follow the Stagebox/Brain boundaries in [architecture](../architecture/ARCHITECTURE.md)
+and the [component ownership map](../architecture/COMPONENTS.md); sibling module code stays with its
 owner. Each Pi should run its own assigned component independently.
 
 First measurements should record the physical/link setup, address configuration,

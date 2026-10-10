@@ -2,9 +2,9 @@
 
 Planning checkpoint **2026-10-04, GP-2026-10-04.1**. Twelve owning plans are written;
 the original planning inventory is retained below. Implementation is now active;
-see the execution checkpoint at the end. Begin with this index, [contracts](../MODULE_CONTRACTS.md)
-and [parallel launch cards](../PARALLEL_WORK_PLAN.md). Product ownership remains
-[COMPONENTS.md](../COMPONENTS.md); this map records executable increments, not another
+see the execution checkpoint at the end. Begin with this index, [contracts](../reference/MODULE_CONTRACTS.md)
+and [parallel launch cards](plans/PARALLEL_WORK_PLAN.md). Product ownership remains
+[COMPONENTS.md](../architecture/COMPONENTS.md); this map records executable increments, not another
 product architecture. Source evidence was checked against actual code and owner docs.
 
 GigPies is the complete system: manual audio and lighting consoles, with ASSIST/AUTO
@@ -21,7 +21,7 @@ observations are dated, not an instruction to reset a checkout to an old revisio
 
 | Repository / classification | Owning plan and first task | Inspected HEAD / caveat |
 |---|---|---|
-| `gigpies` — Core integration / mixer host | [Plan](../MODULE_IMPLEMENTATION_PLAN.md); **GP-01** | `99eb0f08050a9a86039af9f1ba2a3541649ca7b6`; existing index edit and untracked planning prompt retained |
+| `gigpies` — Core integration / mixer host | [Plan](plans/MODULE_IMPLEMENTATION_PLAN.md); **GP-01** | `99eb0f08050a9a86039af9f1ba2a3541649ca7b6`; existing index edit and untracked planning prompt retained |
 | `shr-desk` — Core audio surface | [Plan](https://github.com/PaolaShultz/shr-desk/blob/main/docs/GIGPIES_IMPLEMENTATION.md); **DS-01** | `UNBORN; 25 original untracked source/doc files`; hash-manifest handoff required |
 | `shr-lightdesk` — Core lighting surface | [Plan](https://github.com/PaolaShultz/shr-lightdesk/blob/main/docs/GIGPIES_IMPLEMENTATION.md); **LD-01** | `94402b42aae434a158657b7de9a73f013e27e352`; clean before plan writes |
 | `shr-lux` — Core lighting engine | [Plan](https://github.com/PaolaShultz/shr-lux/blob/main/docs/notes/0027-gigpies-implementation.md); **LX-01** | `ba4ccd92656e6d2a3cbc6424cdc2a017d3e4f14d`; clean before plan writes |
@@ -124,7 +124,7 @@ instrument hosts and cross-system cues do not gate a manual band console.
 
 ## Contract decisions, unresolved gates and ownership
 
-[MODULE_CONTRACTS.md](../MODULE_CONTRACTS.md) is the coordinated definition registry.
+[MODULE_CONTRACTS.md](../reference/MODULE_CONTRACTS.md) is the coordinated definition registry.
 C-SHOW/ROLE/AUDIO/ANALYSIS belong to GigPies; C-LIGHT belongs to Lux; recorder,
 PA and FX owner ABIs remain authoritative. E01–E10 are shared semantic acceptance
 examples. Actual fixture files are provider implementation tasks, not generated

@@ -4,7 +4,7 @@ GigPies includes an **audio digital mixing surface and a lighting control surfac
 for human operation. Both run on one Brain, with a separate Full-HD screen and
 MIDI keyboard controller for each. Automation is an optional mode within them.
 
-![GigPies system and module map](assets/architecture.svg)
+![GigPies system and module map](../../assets/architecture.svg)
 
 ## Configurable processing engine
 
@@ -38,7 +38,7 @@ does not qualify the configurable16/18rig or48-channel realtime throughput.
 
 ## Implemented USB bench boundary
 
-The [hardware host](AUDIO_HARDWARE.md) now opens one explicitly selected stereo
+The [hardware host](../../acceptance/AUDIO_HARDWARE.md) now opens one explicitly selected stereo
 USB interface, runs independently built SHR PA/FX/REC libraries through versioned
 C interfaces and records real samples on the PA node. Brain follows the PA's USB
 source-frame timeline without an audio device. The render section uses bounded
@@ -55,7 +55,7 @@ Channel-1 electrical delay and reliability are measured separately in the hardwa
 record; acoustic acceptance remains open.
 
 Status: live node boundaries remain design direction. Offline soundcheck/rendering
-is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
+is implemented in `src/automix/`; see [the automixer](../../guides/AUTOMIX.md).
 The [component map](COMPONENTS.md) records module ownership across the `../shr-*`
 projects and their intended integration into GigPies.
 The [Brain console integration plan](BRAIN_CONSOLE_PLAN.md) records the developing
@@ -66,9 +66,9 @@ interfaces; GigPies owns integration/contracts and SHR Lux owns lighting authori
 Both surfaces now have optional native frontends and actual local provider
 clients. The eight-input mixer, independent monitor sends, REC/FX/PA graph, named
 analysis and null-output Lux authority are implemented and software-validated.
-See [local integration](HEADLESS_INTEGRATION.md) for the contracts and evidence.
+See [local integration](../../guides/HEADLESS_INTEGRATION.md) for the contracts and evidence.
 Physical console integration and production remote authentication remain pending.
-The [preceding architecture draft](archive/architecture-before-brain-console-2026-10-03.md)
+The [preceding architecture draft](../architecture-before-brain-console-2026-10-03.md)
 is preserved for context. The remaining sections describe the intended complete
 system; software acceptance does not establish its physical topology.
 
@@ -177,7 +177,7 @@ secondary inputs, performer, stage position and monitor output. Scanning it open
 the correct instrument and an immediately editable default monitor mix. The
 performer supplies instrument/style/tone intent and plays a soundcheck; the Brain
 measures the known sources and prepares an editable first pass, followed by a band
-context check. The offline [tone pass](TONE_PASS.md) implements the first limited
+context check. The offline [tone pass](../../guides/TONE_PASS.md) implements the first limited
 intent-to-processing step for guitar body and presence.
 
 Personal monitor sends/tone and shared source/FOH processing need distinct control
@@ -190,7 +190,7 @@ must preserve the Stagebox's last valid audio state.
 
 ### Review after soundcheck
 
-The proposed [musician review after soundcheck](PERFORMER_REVIEW.md) uses existing
+The proposed [musician review after soundcheck](../../architecture/PERFORMER_REVIEW.md) uses existing
 station connections to collect preferences for each instrument. Once everyone is
 ready, the Brain prepares a shared ensemble preview for phones/headphones. Explicit
 “keep my sound” and deterministic controls come first; optional model assistance is
@@ -199,7 +199,7 @@ This extension, like the station interface, is planned.
 
 ### Source-first preparation
 
-The [offline source-rule coordinator](SOURCE_RULES.md) can request a source
+The [offline source-rule coordinator](../../guides/SOURCE_RULES.md) can request a source
 adjustment when confident measurements imply substantial EQ, or an input-path
 review when PCM repeatedly touches full scale. For a known amp mic, distinguish
 what the player hears at the amp from what the microphone captures: compare both,

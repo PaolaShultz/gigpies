@@ -20,7 +20,7 @@ fresh-epoch recovery. GP07v4 includes baseline, real high-input EQ/compressor
 mutation, pending/boundary final/settled readback and an actual v3 refusal.
 All counters and identities are actual provider output, not hand-authored responses.
 
-Consumer instructions: [send contract](../../../../docs/MONITOR_SENDS.md).
+Consumer instructions: [send contract](../../../../docs/reference/MONITOR_SENDS.md).
 Use GP07:4 for dynamic processing; retain GP07:2 for explicit legacy8/2.
 Pair GP03/GP18 revisions, preserve current/target/remaining, and separate tap and
 level authority/review. No action replay on reconnect or identity/focus loss.

@@ -119,7 +119,7 @@ the complete pump has no qualified hardware deadline claim. A future callback
 host must retain this control/render separation and measure its scheduling budget.
 
 See [acceptance](MODULAR_ENGINE_ACCEPTANCE.md) for results and remaining gates,
-[PA ABI v2](../../shr-pa/docs/EMBEDDING_V2.md) for the owner schema and exact limits,
+[PA ABI v2](../../../../shr-pa/docs/EMBEDDING_V2.md) for the owner schema and exact limits,
 and [authenticated transport](REMOTE_PROCESSING.md) for Brain control/media.
 
 ## Output allocation examples

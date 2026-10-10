@@ -21,7 +21,8 @@
     "scripts",
     "sessions",
     "src",
-    "tests"
+    "tests",
+    ".zk"
   ],
   "scripts": [
     ".githooks/pre-commit",

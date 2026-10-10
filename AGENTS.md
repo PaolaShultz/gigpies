@@ -5,7 +5,7 @@ Build part by part, starting with offline band automixing. Ask questions when a 
 next step needs an answer; do not front-load the whole project's unknowns.
 
 The system is modular across GigPies and the related `../shr-*` projects. Follow
-the ownership map in docs/COMPONENTS.md: PA processing, measurement and alignment
+the ownership map in docs/architecture/COMPONENTS.md: PA processing, measurement and alignment
 are developed in `../shr-pa`, with the finished PA module intended for integration
 here. Keep module tasks and algorithms in their owning project; avoid parallel
 implementations in GigPies. Track integration and hardware acceptance separately.
@@ -60,3 +60,7 @@ the processing reference; Brain local I/O has a separate device epoch/timeline.
 Both new crossings require bounded ASRC. Keep FX, raw REC and source analysis on
 Stagebox frames. Desk controls the owner without opening PCM. Physical activation,
 clock lock, socket mapping and acoustic qualification remain separate acceptance.
+
+Keep product docs focused on current behavior, usage and limits. Use the folders
+and indexes in docs/README.md; completed plans, prompts, handoffs and study results
+belong in docs/archive/. Avoid appending work logs to current product pages.

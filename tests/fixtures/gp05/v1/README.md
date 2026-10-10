@@ -8,7 +8,7 @@ terminal observer progress after consuming finish. Counters are canonical decima
 strings; null durable frames means unknown. The eight-input raw mapping is shared
 with GP04, and physical acceptance remains unverified.
 
-See [standalone commands and bounds](../../../../docs/MODULE_GRAPH.md). Generate
+See [standalone commands and bounds](../../../../docs/reference/MODULE_GRAPH.md). Generate
 hashes with `sha256sum tests/fixtures/gp05/v1/*.json`. Default normal tests protect
 codec/authority/absence behavior; explicit actual-library tests additionally prove
 PCM24 stems, fixed wet+dry through PA, observer lifetime, cancellation, faults and

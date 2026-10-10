@@ -2,8 +2,8 @@
 
 Status: **future implementation; no console code or hardware acceptance yet.**
 Owner: GigPies integration and operator interface. Recorded 2026-10-03.
-This document owns the console task. [Architecture](ARCHITECTURE.md) owns node
-responsibilities; [Components](COMPONENTS.md) owns the sibling module boundaries.
+This document owns the console task. [Architecture](../architecture/ARCHITECTURE.md) owns node
+responsibilities; [Components](../architecture/COMPONENTS.md) owns the sibling module boundaries.
 The present task authorizes documentation only. The phases below are future work.
 
 ## 1. Fixed requirements
@@ -259,7 +259,7 @@ because this checkpoint changes documentation only.
 
 ## 9. Using the other Pi during future implementation
 
-Follow `/home/shome/p/AGENTS.md` and [the node lab](NODE_LAB.md). The installed
+Follow `/home/shome/p/AGENTS.md` and [the node lab](../development/NODE_LAB.md). The installed
 `/home/shome/.local/bin/gigpies-peer` launches a new bounded Codex session over
 pinned SSH and returns its final reply. It defaults to read-only and 600 seconds;
 an assigned write task uses an isolated checkout and the helper's write mode.

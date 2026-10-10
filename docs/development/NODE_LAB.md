@@ -1,0 +1,200 @@
+# Two-Pi development lab
+
+## Dual-console integration direction, 2026-10-04
+
+GigPies' intended Brain hosts the audio Desk and lighting Lightdesk, each with its
+own 1920×1080 monitor and independently assigned controller. Lux owns the lighting
+engine; Stagebox keeps essential audio, protection and recording local. The
+[console plan](../architecture/BRAIN_CONSOLES.md) owns display/controller identity, separate
+workers and combined workload targets. These targets remain unmeasured. Pi 5's
+development-coordinator role does not decide which Pi becomes the runtime Brain.
+Version 0.2.3 publishes the documented state; it grants no new hardware reservation.
+
+## USB hardware continuation, 2026-10-03
+
+Private task 0004 follows accepted synthetic task 0003. Pi 5 owns the selected
+stereo USB device and local PA/recording; Pi 4 runs source-following SHR FX.
+[The hardware record](../acceptance/AUDIO_HARDWARE.md) binds revisions, actual-device trials,
+retained failures, sample verification and peer review. Immutable peer findings
+have separate hash-verified coordinator acceptance. Exact source/binary snapshots
+identify the measured code. Task 0005 separately synchronized peer checkouts;
+this hardware task used isolated artifacts and preserved interactive sessions.
+
+H1–H3 covered the initial integration and physical return. H4–H6 lowered buffers,
+repaired transfer pacing and traced a kernel migration stall. H7 separately
+acknowledged a bounded one-key kernel comparison, with restoration after each
+trial. Current processing is 48 frames with zero silent prefill; channel-1 short
+trials measured 249 frames / 5.1875 ms. H8 passed the ten-minute USB/software/wet
+gate at 6 ms wet admission. Its
+physical delay was 249–251 frames, with two small unresolved changes. All
+resources/settings were restored and released; the hardware record and private
+ledger retain the qualification and final peer review. Earlier large-buffer
+success does not pass the user's live-latency requirement. The weak right return remains unresolved.
+
+## Transport checkpoint, 2026-10-03
+
+The [owning plan](../archive/plans/AUDIO_TRANSPORT_PLAN.md) and [protocol/results](../reference/AUDIO_TRANSPORT.md)
+record the executed baseline, synthetic audio and recovery work. Baseline
+0002 is accepted. Refresh the private ledger for task 0003 acceptance and
+resource releases before further tests. Earlier setup checkpoints below
+describe their original state, not current reservations.
+
+The installed `gigpies-peer` launched bounded review/reservation workers.
+Their sandbox allowed ordinary evidence files but blocked Git metadata and
+host networking inspection. Permissions stayed unchanged: Pi 5 performed
+explicitly assigned host orchestration; Pi 4 wrote immutable local reviews.
+Pi 5 retained their exact hashes and posted separate acceptance records.
+Existing interactive sessions and project checkouts were preserved.
+
+## Scope and ownership
+
+The first lab step is development coordination over a dedicated Ethernet cable.
+GigPies owns the Stagebox/Brain control contract and integration. The
+[component map](../architecture/COMPONENTS.md) keeps PA DSP/measurement in SHR PA, effects in
+SHR FX and lighting execution in SHR Lux; Desk and Lightdesk own the two operator
+surfaces. See the current
+[architecture](../architecture/ARCHITECTURE.md) and [hardware handoff](../archive/plans/NEXT_SESSION.md).
+
+The development channel uses SSH, Git and small result files. It does not choose
+the eventual live control or audio transport. Stagebox audio, monitors and local
+protection must continue with the last valid state when Brain communication fails.
+The Pi models' eventual Stagebox/Brain assignments remain open until profiling.
+
+## Direct peer workers — installed, 2026-10-03
+
+The current operating protocol is `/home/shome/p/AGENTS.md`. Its installed
+`/home/shome/.local/bin/gigpies-peer` helper starts a new bounded Codex worker on
+the other Pi through pinned SSH and returns the final reply. The existing peer
+authentication is used; interactive sessions are neither resumed nor interrupted.
+Local instructions and the helper were inspected for the
+[Brain console plan](../architecture/BRAIN_CONSOLES.md); no fresh peer check or dispatch was
+performed for that planning task.
+
+The initial bootstrap record accepted pinned SSH, prepared source revisions and
+software checks. Its then-queued baseline task is historical: the later transport
+and hardware records above describe completed experiments. Refresh the live ledger
+before assigning work. Old acceptance does not establish current connectivity,
+reserve a new test window or decide runtime hardware assignments.
+
+For future authorized work, the helper accepts `-p 'TASK PROMPT'` or
+`--prompt-file /absolute/path/to/task.txt`. Default execution is read-only with a
+600-second timeout. Assign writes explicitly using `--write` and `--cwd` pointing
+to an isolated checkout. Include task ID, base SHA, owned files/resources,
+deliverable, allowed commands, validation and stopping rules in every assignment.
+A read-only reply cannot append a durable acknowledgment; the coordinator records
+its review through the private ledger.
+
+One helper receiver runs per node at a time. Its lock does not reserve hardware
+or another interactive session's files. Private prompts/events/results remain in
+the receiving node's `~/.local/state/gigpies/peer-runs/`. Inspect partial work after
+a timeout before retrying; timeout does not undo writes. Never recursively launch
+peer workers. Generic dispatch grants no audio, MIDI, DMX, load or interruption
+authorization.
+
+The Git ledger supplies task states and review history. There is no graphical
+Kanban board or integration with the controller chat's built-in subagent list.
+
+## Address plan
+
+| Machine | Ethernet IPv4 | Initial responsibility |
+|---|---|---|
+| Pi 5 | `192.168.234.221/24` | Source integration and coordination repository |
+| Pi 4 | `192.168.234.222/24` | Peer setup, inventory and assigned experiments |
+
+Use no gateway or DNS on this dedicated link. Keep internet access on the existing
+Wi-Fi connection. Persist configuration in the network manager's owning files;
+when Netplan generates NetworkManager profiles, update Netplan too. An address
+added with `ip addr` alone does not survive a reboot.
+
+At the initial 2026-10-03 setup checkpoint, Pi 5's `eth0` negotiated 1000 Mb/s
+full duplex. Its static address, saved Netplan generation and Wi-Fi default route
+were checked. The Pi 4 was not
+yet configured at that checkpoint. Later bootstrap, transport and hardware evidence
+is recorded above; repeated throughput/reconnect experiments need a fresh test window.
+Pi 5 reports hardware timestamp capability; that alone does not establish
+a shared clock or PTP accuracy. Machine configuration, backups and peer keys stay
+outside published source.
+
+## Authentication and source transfer
+
+Password login on one node and key login on the other can coexist. Give each node
+its own dedicated Ed25519 client key and exchange only public keys. Verify each
+server's Ed25519 host fingerprint from its local console before pinning it. Keep
+host checking enabled. Restrict the new authorized keys to the peer's Ethernet
+source address and disable forwarding/PTY facilities with `restrict`.
+
+Clone committed project history over SSH. The Pi 5 may have local commits absent
+from GitHub, so its advertised commit manifest identifies the initial source set.
+Never use directory mirroring to overwrite an active checkout. Never copy `.ssh`,
+Codex credentials, build directories, recordings or private sessions as source.
+Pin any experiment's exact commit and record working-tree changes explicitly.
+
+The private coordination hub is a separate bare Git repository at
+`user/node-lab/exchange.git` on Pi 5. Each node uses its own working clone. Its
+README defines the message and handoff conventions. The parent project's ignore
+rules keep that lab state out of GigPies publication. No GitHub push is required.
+
+## Handoff loop
+
+1. Pull the coordination repository with `--ff-only` before starting work.
+2. Read new records for the current task. One node owns each module/file change;
+   reserve a shared hardware or link test before starting it.
+3. Post an immutable record under `nodes/rpi5/` or `nodes/rpi4/`: task ID, state,
+   exact source revision, scope, command, evidence and next owner. Use a unique
+   filename. States are `queued`, `running`, `ready-for-review`, `accepted`,
+   `failed` or `cancelled`.
+4. Commit only the named handoff files and push. A rejected concurrent push means
+   fetch/rebase, inspect, then retry; never force-push. Keep local records when
+   disconnected and retry after reconnection.
+5. The receiver acknowledges a result in its own record. A Git push only proves
+   delivery to the hub, not that the other session read or accepted the result.
+
+Post source changes as a small patch/commit with its base revision. The receiver
+reviews and applies it in its own checkout. Store concise measurements and hashes;
+transfer larger explicitly requested artifacts separately with rsync and verify
+their hashes. Do not mirror private media into the coordination repository.
+
+During a coordinated experiment, each active session checks the repository before
+work and while waiting for a peer. The coordinator can launch a new bounded worker
+directly; an existing idle interactive session is not automatically awakened.
+Timeouts retain partial work and logs. Review them, record the outcome and resume
+from the last acknowledged state without blindly repeating a mutation.
+
+## Experiment procedure and remaining gates
+
+Run one declared link experiment at a time and record both hosts' software,
+interface, MTU, CPU load and clock status. Keep machine inventory in the private
+coordination repository.
+
+1. Verify bidirectional ping, pinned SSH and a small file's SHA-256 after transfer.
+2. Record a ping RTT distribution and loss. RTT is not one-way latency.
+3. Run bounded iperf3 TCP tests in both directions, then UDP at declared rates
+   below link capacity; capture loss, jitter and CPU load. Bind the temporary
+   server to the Ethernet address and stop it after the experiment.
+4. Verify reconnect/restart recovery and repeated Git handoffs. Coordinate a
+   cable pull or interface interruption so another experiment is not disrupted.
+5. Implement a hardware-free versioned control prototype: node/session identity,
+   command ID, sequence, expected state revision, bounded values, acknowledgment,
+   heartbeat and state resynchronization. Test duplicate/stale commands, restarts,
+   malformed/oversized messages, disconnects and manual ownership before audio.
+6. Select audio transport, buffering and clock handling from measured needs.
+   Source-frame counters and audio-clock drift need explicit treatment even if
+   network time is synchronized. GPA1 and the PA sample timeline now have
+   synthetic evidence; PTP and independent-device ASRC remain separate.
+
+Steps 1–3 ran without changing link settings. Steps 4–6 have application
+restart, bounded test-control and synthetic audio evidence; physical cable
+interruptions, manual parameter ownership and hardware audio remain pending.
+
+Normal software tests stay hardware-free. Link benchmarks and interruption trials
+are explicit lab operations. Full-song studies, audio playback, MIDI and DMX are
+separate from this initial network setup.
+
+## References
+
+- [NetworkManager IPv4 settings](https://networkmanager.dev/docs/api/latest/settings-ipv4.html)
+  documents static addresses and `never-default` routing.
+- [OpenSSH manuals](https://www.openssh.org/manual.html) document key authentication,
+  host verification and authorized-key restrictions.
+- [iperf3 invocation](https://software.es.net/iperf/invoking.html) documents bound
+  servers, reverse tests, UDP load and JSON results; consult installed-version help.

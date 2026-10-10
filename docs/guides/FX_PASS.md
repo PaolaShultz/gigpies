@@ -1,0 +1,171 @@
+# Offline effects and automatic review pass
+
+**Current defaults:** `finish` observes without automatic EQ, return adjustment or
+master-dynamics relief. These require an explicit policy; a null master-reduction
+budget preserves existing dynamics. See [source preservation](SOURCE_PRESERVATION.md).
+The preset examples below describe explicitly enabled processing.
+
+## Source and generated ambience
+
+Source recordings may already contain room sound or printed effects. Disabling
+the GigPies effects rack preserves that source ambience. Enabled GigPies effects
+add wet returns from channel sends; reports and saved settings identify their
+contribution. A filename or waveform does not establish an untreated source.
+
+## Commands
+
+Old settings still render with effects disabled. New destinations are required and
+previous settings/audio are never overwritten. These commands use local ignored files:
+
+```sh
+cargo build --locked --release
+target/release/gigpies fx-preset artifacts/automix/show/prepared.json \
+  artifacts/automix/fx-pass/settings-auto.json
+target/release/gigpies finish artifacts/automix/fx-pass/settings-auto.json \
+  recordings/sessions/complainiacs-etc artifacts/automix/fx-pass/automatic-final
+target/release/gigpies compare artifacts/automix/show/processed.wav \
+  artifacts/automix/fx-pass/automatic-final/final/processed.wav \
+  artifacts/automix/fx-pass/compare-with-first
+```
+
+Use fresh paths when repeating. `fx-preset` preserves the prepared trims, original
+channel EQ/compressors and routing, and adds an editable effects rack. `render` applies
+settings exactly; `finish` performs the automatic review. An optional fifth argument
+to `finish` supplies an edited policy JSON copied from a previous run's
+`review-policy.json`. Policy values are validated; correction limits cannot be
+raised beyond the conservative implementation bounds.
+
+`finish` writes:
+
+- `before-review/`: preliminary FX mix and all normal render measurements/history.
+- `review-policy.json`: thresholds and correction budgets used for this run.
+- `spectral-before.json`: actual measured mix band energies and temporal statistics.
+- `decisions.json`: each changed parameter, old/new values and measured reason.
+- `reviewed-settings.json`: complete settings after code decisions.
+- `final/`: the new render, frozen settings, measurements and histories.
+- `spectral-after.json`, `review-result.json`: post-correction measurements,
+  remaining spectral candidates and whether the reduction budget was met.
+- `review-comparison/`: before/after **automatic review**, matched at −23 LUFS.
+
+`compare` instead compares the **previous pass to the complete new pass**. It writes
+`previous-matched.wav`, `new-matched.wav` and a report with remeasured quantized-file
+loudness, peaks and padding. It matches at −23 LUFS or lower if either file needs more
+sample-peak headroom. It applies static gain only; a shorter file receives zero tail
+padding. It does not adjust starts, mix balance or dynamics.
+
+The new render adds four seconds for effect decay. Source sample zero is unchanged.
+Both base A/B files and their listening copies have the same extended length. The
+comparison with the first pass pads that older recording to this length.
+
+## Signal path and engines
+
+Channel strip → subtle excitation → fader/pan → dry sum plus post-fader FX sends →
+wet returns → master gain → optional corrective master EQ → modest maximizer →
+existing final sample-peak protection.
+
+Every bus has its own engine state, send levels, wet return, HPF and low-pass filter.
+No dry path is added by an effect engine. Original room microphones are retained.
+These are algorithmic plate/hall/chamber treatments adapted from SHR FX, not measured
+impulse responses or physical plate emulations. Plate uses denser input/output
+allpass diffusion and shorter comb lengths than the hall. Decay/damping parameters
+are unitless engine controls, **not seconds of RT60**.
+
+| Bus | Initial settings | Intended wet/source RMS after review |
+|---|---|---:|
+| Snare plate | 12 ms predelay, decay .68, damping .40, 180 Hz HPF / 6.5 kHz LPF | −20 dB |
+| Tom chamber | 18 ms predelay, decay .58, damping .55, 140 Hz / 5.5 kHz | −22 dB |
+| Vocal hall | **45 ms predelay**, decay .52, damping .62, 200 Hz / 6 kHz | −24 dB |
+| Vocal plate | **40 ms predelay**, decay .46, damping .55, 250 Hz / 5.5 kHz | −30 dB |
+| Vocal chorus | 17 ms base, ±1.2 ms modulation, .35 Hz, stereo phase spread, 180 Hz / 7 kHz | −23 dB |
+| Vocal delay | 258.62 / 344.83 ms L/R, feedback .18, damping .60, 250 Hz / 4.5 kHz | −21 dB |
+
+The delay times approximate a dotted eighth and quarter at the source notice's 174 BPM.
+Vocal reverb predelay is validated at **30 ms minimum**, including the separate vocal
+plate. Sharing the snare's short-predelay bus with the vocal would fail validation.
+Tom sends retain their panning. Chorus and delay are restrained parallel layers.
+
+All channels receive a filtered nonlinear harmonic residual: 2.5 kHz tuning, drive .25,
+tone .35, warm mode, residual amount .25. The SHR FX engine oversamples the nonlinearity
+4× with two half-band FIR stages, filters the return and removes DC. The dry signal
+is not delayed or distorted; the small harmonic residual has the engine's FIR latency.
+The residual meter makes the actual contribution visible; low-level signals generate
+very little additional energy. This is intentionally subtle, not an automatic treble boost.
+
+Maximization applies 2.5 dB drive into a linked sample limiter at −12.5 dBFS in the
+internal bus, with 120 ms release. The threshold is low because the calibrated mix
+has substantial headroom. A later constant listening gain targets −20.5 LUFS,
+subject to the −2 dBFS sample ceiling, giving a few dB more listening level than the
+first pass's −23 LUFS target. Both the drive and the actual gain reduction are reported;
+adding gain alone is not evidence of maximization. Neither limiter measures true peaks.
+Use the −23 LUFS comparison to judge whether the altered dynamics are useful.
+
+## What the code decides
+
+`src/automix/analysis.rs` contains the analysis and policy; it uses no Python, plotting
+package, remote model or network service.
+
+1. Read the **rendered stereo mix** at native rate. Analyze 8192-sample Hann windows
+   with 50% overlap using a radix-2 FFT. Sum channel powers, not summed-channel samples,
+   so cancellation cannot hide energy. Integrate 25 third-octave bands (31.25 Hz–8 kHz).
+2. Exclude analysis windows below −60 dBFS RMS. Require at least eight seconds of
+   active hop durations before making spectral corrections.
+3. A candidate must have at least 4 dB prominence relative to the geometric mean of
+   adjacent band powers, carry at least 4% of covered-band power, recur in at least
+   40% of active windows, and occur in at least four of ten timeline segments.
+   This rejects isolated transients and broadly smooth spectra in the regression tests.
+4. Only low-mid buildup (140–500 Hz) and presence/harshness (2–6.3 kHz) ranges are
+   eligible. Protect sub/bass fundamentals and the intermediate region from this
+   simple heuristic. Rank eligible bands by prominence; add at most two Q=1.4 bell
+   cuts. Cut size is `min(1.5, 0.5 + 0.5 * (prominence - 4))` dB under the default
+   policy. Never boost, remove existing EQ or stack a cut near existing corrective EQ.
+5. If measured maximizer reduction exceeds 3 dB, lower drive by the excess, down to
+   zero. This backs off excessive dynamic control rather than adding compression to
+   satisfy a spectral target. Channel compressors retain their role presets.
+6. Measure each wet return against the post-fader source sum feeding that bus. Adjust
+   its return toward the configured wet/source target, capped at ±12 dB for this pass
+   and −60…+18 dB absolute. Ignore silent/insufficient return energy. This compensates
+   different engine transfer gains without independently normalizing source microphones.
+7. Render again and record the result. Residual prominence is allowed; the algorithm
+   does not loop until the spectrum is flat. `within_reduction_budget: false` requires
+   review, not a success claim. Listening remains necessary even when it is true.
+
+A repeated musical note can meet these criteria. Persistence is evidence for a small
+candidate correction, not proof of an unwanted resonance. The low cut limit and
+single-pass design limit damage from that ambiguity. No aesthetic conclusion or
+“better mix” verdict is generated. This whole-program review is deliberately offline;
+it does not feed future information into the causal soundcheck or claim live operation.
+
+## Optional plots
+
+`scripts/analyze_mix.py` is an optional measurement/plotting aid only. Its plots and
+local peak list never feed `finish` or determine EQ. Red/pink colors mean energy on
+a fixed shared scale, not defects. For equal-level plots, use the files from `compare`:
+
+```sh
+python3 -m venv artifacts/analysis-venv
+artifacts/analysis-venv/bin/pip install -r scripts/analysis-requirements.txt
+artifacts/analysis-venv/bin/python scripts/analyze_mix.py \
+  artifacts/automix/fx-pass/final-plots \
+  artifacts/automix/fx-pass/compare-with-first/previous-matched.wav \
+  artifacts/automix/fx-pass/compare-with-first/new-matched.wav
+```
+
+The PNG/PDF and JSON stay local. The Rust application builds without those packages.
+
+## Validation and listening
+
+The default synthetic suite tests vocal predelay enforcement, impulse decay, distinct
+reverb outputs, wet-only behavior, repeatability, silent input, linked maximizer bounds,
+oversampled exciter harmonics/alias suppression, legacy settings, automated correction
+of persistent buildup, rejection of transients/noise/silence, bounded return/dynamic
+adjustments and the complete finish/save/compare workflow.
+
+The private full-song pass is an explicit local experiment, not a default CI test.
+Old unrelated source-variation auditions are not repeated for this effects change.
+No playback or host configuration change occurs. Listen for vocal intelligibility,
+chorus detuning, delayed-word clutter, snare plate ringing, tom wash, sibilance and
+whether the small maximizer reduction preserves the drum attack.
+
+## Historical evidence
+
+The [dated study and original results](../archive/studies/FX_PASS.md) retain experiment-specific settings and validation history.

@@ -2,8 +2,8 @@
 
 ## Dual-surface handoff — 2026-10-04
 
-Read [Brain integration](BRAIN_CONSOLE_PLAN.md) and the new
-[Lightdesk status](../../shr-lightdesk/docs/STATUS.md). Brain is two Full-HD
+Read [Brain integration](../architecture/BRAIN_CONSOLES.md) and the new
+[Lightdesk status](../../../shr-lightdesk/docs/STATUS.md). Brain is two Full-HD
 monitors and two separately assigned controllers: audio Desk plus lighting
 Lightdesk. Native surface/focus work and a read-only Lux adapter are next; Lux
 still needs its own programmer/cue/fixture contracts. Do not infer physical DMX
@@ -13,7 +13,7 @@ notes below are historical and do not narrow the dual-console product.
 ## Audio surface handoff — SHR Desk, 2026-10-04
 
 The Brain surface now lives in `../shr-desk`. Read its README, status and blueprint
-through [the integration index](BRAIN_CONSOLE_PLAN.md). Its first Rust simulator
+through [the integration index](../architecture/BRAIN_CONSOLES.md). Its first Rust simulator
 and three full-HD screen drafts are offline-validated. Next implement the native
 renderer and complete controller navigation, then agree the real GigPies mixer
 control API. Native HDMI/MIDI and audio integration remain separate gates; the
@@ -21,8 +21,8 @@ historical console notes below do not supersede the new owning plan.
 
 ## Current hardware handoff
 
-Read [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md) and its
-[owning plan](AUDIO_HARDWARE_PLAN.md) before continuing. The selected USB host now
+Read [AUDIO_HARDWARE.md](../acceptance/AUDIO_HARDWARE.md) and its
+[owning plan](plans/AUDIO_HARDWARE_PLAN.md) before continuing. The selected USB host now
 uses 48-frame / 1 ms processing, independent device capacity and zero silent
 prefill, with real PA/FX/REC modules and sample-verified fault recovery. Do not
 use the historical 56 ms prefill as live acceptance or infer card latency from
@@ -48,8 +48,8 @@ and console notes below keep their original scope.
 
 ## Offline handoff — unreleased summing work, 2026-10-03
 
-The [summing-engine plan](SUMMING_PLAN.md) has been implemented and offline-validated
-on top of 0.2.2. The new [delivery contract](SUMMING_DELIVERY.md) separates comparison
+The [summing-engine plan](plans/SUMMING_PLAN.md) has been implemented and offline-validated
+on top of 0.2.2. The new [delivery contract](../guides/SUMMING_DELIVERY.md) separates comparison
 gain and final limiting, observes production stages and verifies final true peaks.
 The existing f64 summer, channel choices and requested GigPies effects are retained.
 No supported new musical candidate was selected.
@@ -76,7 +76,7 @@ selected outputs. Earlier retired queues remain historical.
 
 The work is unreleased. No playback, hardware, service or sibling
 changes occurred. Publication would need its own authorized scope and the checks in
-[publication policy](PUBLICATION.md).
+[publication policy](../development/PUBLICATION.md).
 
 The unresolved Pi crash still needs separate diagnosis; zero current filesystem
 counters and boot recovery do not establish a complete offline scan. Keep siblings
@@ -84,7 +84,7 @@ read-only and PA measurement/alignment algorithms in `../shr-pa`.
 
 ## Planned Brain console and hardware follow-up
 
-The [Brain console plan](BRAIN_CONSOLE_PLAN.md) owns the future interface task.
+The [Brain console plan](../architecture/BRAIN_CONSOLES.md) owns the future interface task.
 The Brain requires **1920 × 1080 HDMI**. The small display is for the PA unit.
 The intended interface combines a native GPU renderer, a TUI-style visual design,
 pixel analysis panels and a small MIDI keyboard/controller. PA owns the mixer,
@@ -94,7 +94,7 @@ protection and local NVMe recording; Brain owns richer FX and show services.
 dispatch, MIDI mapping or hardware operation is authorized by this document.
 The first future slice is the headless state/command contract and synthetic data,
 followed by a full-HD offline console. Live modules are separate dependencies.
-The [earlier hardware-session draft](archive/next-session-before-brain-console-2026-10-03.md)
+The [earlier hardware-session draft](next-session-before-brain-console-2026-10-03.md)
 is preserved; its small-screen Brain proposal is superseded.
 
 ### Proposed controller vocabulary
@@ -123,9 +123,9 @@ control to exercise without controlling live audio.
 
 ## Two-Pi transport: next integration gate
 
-The [transport execution plan](AUDIO_TRANSPORT_PLAN.md) now records completed
+The [transport execution plan](plans/AUDIO_TRANSPORT_PLAN.md) now records completed
 research, implementation and two-node synthetic work. The
-[protocol and evidence](AUDIO_TRANSPORT.md) select GPA1 UDP audio, separate
+[protocol and evidence](../reference/AUDIO_TRANSPORT.md) select GPA1 UDP audio, separate
 acknowledged UDP control and a PA-owned 48 kHz source-frame timeline.
 SSH/Git remains the development channel. Read the accepted private ledger
 records and obtain a new resource reservation before repeating load tests.
@@ -150,7 +150,7 @@ ready-for-review and accepted work, with explicit evidence attached to each hand
 
 The installed `gigpies-peer` helper now launches a new bounded Codex worker on the
 other Pi over pinned SSH and returns its reply. Follow `/home/shome/p/AGENTS.md`
-and [the node lab](NODE_LAB.md). The private Git ledger records task states and
+and [the node lab](../development/NODE_LAB.md). The private Git ledger records task states and
 explicit review/acceptance. There is no graphical Kanban or automatic wake-up of an
 existing interactive session. Workers receive exact scope and revisions; existing
 interactive sessions retain their ownership. No worker was dispatched for this plan.

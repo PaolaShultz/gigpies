@@ -153,4 +153,4 @@ Normal regressions cover independent EQ frequency/impulse and compressor-law/
 ballistics references, neutral/bypass, channel isolation, transitions/reset,
 partitioning, nonfinite/extreme inputs, allocation-free processing, strict schemas,
 shared IDs/authority/freshness and exact producer-fixture replay. See
-[development](DEVELOPMENT.md) for the opt-in actual-owner/frontend commands.
+[development](../development/DEVELOPMENT.md) for the opt-in actual-owner/frontend commands.

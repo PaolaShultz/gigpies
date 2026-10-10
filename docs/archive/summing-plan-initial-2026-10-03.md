@@ -1,6 +1,6 @@
 > Historical draft, preserved before the user retired all generated audio.
 > Only relative links were adjusted for this archive location. Use the current
-> [summing plan](../SUMMING_PLAN.md) and [execution prompt](../SUMMING_EXECUTION_PROMPT.md).
+> [summing plan](plans/SUMMING_PLAN.md) and [execution prompt](prompts/SUMMING_EXECUTION_PROMPT.md).
 
 # Summing mixer investigation and implementation plan
 
@@ -21,10 +21,10 @@ a listener preference. Preserve the existing selected mixes throughout the work.
 
 - GigPies owns its offline routing, rendering, export policy, observations and
   comparison workflow. Use Rust 1.97.1, edition 2024 and the committed Cargo.lock.
-- Follow [source preservation](../SOURCE_PRESERVATION.md). Existing channel tone,
+- Follow [source preservation](../guides/SOURCE_PRESERVATION.md). Existing channel tone,
   faders, pan and requested GigPies effects form the starting point. Unknown intent
   preserves settings. A failed experiment retains the baseline.
-- Follow [component ownership](../COMPONENTS.md). PA processing, measurement and
+- Follow [component ownership](../architecture/COMPONENTS.md). PA processing, measurement and
   alignment algorithms belong in SHR PA. Sibling repositories remain read-only
   unless the execution session explicitly authorizes changes there. An experiment
   here must not become a second production PA alignment implementation.
@@ -34,7 +34,7 @@ a listener preference. Preserve the existing selected mixes throughout the work.
   service changes need the applicable session authorization. An instruction to execute
   this plan covers its offline work; it does not itself request audible playback.
 - Commit, push and release follow the user's publication scope and
-  [publication policy](../PUBLICATION.md). New reusable scripts require a reviewed
+  [publication policy](../development/PUBLICATION.md). New reusable scripts require a reviewed
   entry in `scripts/publication-policy.json`. One-off runners and private evidence
   remain ignored.
 
@@ -53,7 +53,7 @@ and file identities in phase 0 because another task is changing the working tree
 | All six current expert FX FINAL reports record zero action from both master limiters | Saved `prepared.json` and `measurements.json` under `artifacts/automix/expert-fx-v1`; this excludes master gain reduction as an explanation for those particular exports |
 | Phoenix FINAL measured approximately plus 0.3 dBTP at a configured minus 0.01 dBFS sample ceiling | Fresh full-file FFmpeg 7.1.5 scan in the research task; the other five FINALs rounded to approximately zero dBTP at 0.1 dB display precision; no audible clipping was established |
 | Offline review and checkpoint preparation require unmatched minus 0.01 dBFS export | `balance::validate_baseline`, `scripts/listening_checkpoint.py` and their tests; changing only a default ceiling would break this contract |
-| Earlier processing caused measurable ensemble and export costs | [Dark Ride audit](../MULTITRACKS.md#dark-ride-source-and-processing-audit--2026-10-02) and [Complainiacs reassessment](../COMPLAINIACS_REASSESSMENT.md); these concern superseded mixes, not a fresh defect in current FINALs |
+| Earlier processing caused measurable ensemble and export costs | [Dark Ride audit](studies/MULTITRACKS.md#dark-ride-source-and-processing-audit--2026-10-02) and [Complainiacs reassessment](studies/COMPLAINIACS_REASSESSMENT.md); these concern superseded mixes, not a fresh defect in current FINALs |
 
 The research task inspected source/settings and measured existing files without
 playback or rendering. Its FFmpeg output is recorded in the conversation, not a

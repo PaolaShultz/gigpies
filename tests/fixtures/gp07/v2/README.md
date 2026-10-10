@@ -1,7 +1,7 @@
 # GP07-processing:2 producer corpus
 
 These eight synthetic JSON payloads come from the real OfflineEngine, not a
-handwritten provider simulation. [The contract](../../../../docs/CHANNEL_PROCESSING.md)
+handwritten provider simulation. [The contract](../../../../docs/reference/CHANNEL_PROCESSING.md)
 owns units, authority, timing and signal taps. `providers.json` records the exact
 producer source snapshot and fixture SHA-256 identities. No executable or media
 is included. Consumer copies retain exact bytes and this provenance.

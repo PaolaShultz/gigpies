@@ -7,9 +7,9 @@ duplex stall, duplex restart, controller stall and Stagebox restart. Final artif
 review, publication/CI and exact source/ledger receipts also remain pending. This document does not authorize physical audio activation.
 
 This record covers the Brain duplex audio integration requirements.
-[Architecture and operation](BRAIN_AUDIO.md), [control](BRAIN_AUDIO_CONTROL.md),
-[clock/device bounds](BRAIN_AUDIO_BRIDGE.md) and
-[authenticated transport](REMOTE_TRANSPORT.md) own the implemented contracts.
+[Architecture and operation](../../reference/BRAIN_AUDIO.md), [control](../../reference/BRAIN_AUDIO_CONTROL.md),
+[clock/device bounds](../../reference/BRAIN_AUDIO_BRIDGE.md) and
+[authenticated transport](../../reference/REMOTE_TRANSPORT.md) own the implemented contracts.
 Stagebox remains the processing/recording reference. Brain owns one local duplex
 endpoint with a separate clock; both new audio crossings use Rubato 5.0.1 ASRC.
 Source-clock FX and raw recording retain their original timeline.

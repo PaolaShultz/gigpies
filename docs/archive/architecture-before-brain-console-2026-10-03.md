@@ -1,8 +1,8 @@
 # Intended architecture
 
 Status: live node boundaries remain design direction. Offline soundcheck/rendering
-is implemented in `src/automix/`; see [the automixer](AUTOMIX.md).
-The [component map](COMPONENTS.md) records module ownership across the `../shr-*`
+is implemented in `src/automix/`; see [the automixer](../guides/AUTOMIX.md).
+The [component map](../architecture/COMPONENTS.md) records module ownership across the `../shr-*`
 projects and their intended integration into GigPies.
 
 ## Stagebox / Mixer
@@ -49,7 +49,7 @@ alignment require their own measurement/setup workflow.
 PA measurement and alignment are developed in SHR PA. Its pending task adds
 synchronized reference/mic capture and phase analysis to its existing generator,
 pair delay/polarity and crossover DSP. GigPies is intended to integrate the finished
-PA module; see [ownership and integration](COMPONENTS.md#pa-module-and-planned-integration).
+PA module; see [ownership and integration](../architecture/COMPONENTS.md#pa-module-and-planned-integration).
 This remains separate from artistic instrument EQ matching. Live integration is pending.
 
 ## Boundaries to grow later
@@ -67,7 +67,7 @@ secondary inputs, performer, stage position and monitor output. Scanning it open
 the correct instrument and an immediately editable default monitor mix. The
 performer supplies instrument/style/tone intent and plays a soundcheck; the Brain
 measures the known sources and prepares an editable first pass, followed by a band
-context check. The offline [tone pass](TONE_PASS.md) implements the first limited
+context check. The offline [tone pass](../guides/TONE_PASS.md) implements the first limited
 intent-to-processing step for guitar body and presence.
 
 Personal monitor sends/tone and shared source/FOH processing need distinct control
@@ -80,7 +80,7 @@ must preserve the Stagebox's last valid audio state.
 
 ### Review after soundcheck
 
-The proposed [musician review after soundcheck](PERFORMER_REVIEW.md) uses existing
+The proposed [musician review after soundcheck](../architecture/PERFORMER_REVIEW.md) uses existing
 station connections to collect preferences for each instrument. Once everyone is
 ready, the Brain prepares a shared ensemble preview for phones/headphones. Explicit
 “keep my sound” and deterministic controls come first; optional model assistance is
@@ -89,7 +89,7 @@ This extension, like the station interface, is planned.
 
 ### Source-first preparation
 
-The [offline source-rule coordinator](SOURCE_RULES.md) can request a source
+The [offline source-rule coordinator](../guides/SOURCE_RULES.md) can request a source
 adjustment when confident measurements imply substantial EQ, or an input-path
 review when PCM repeatedly touches full scale. For a known amp mic, distinguish
 what the player hears at the amp from what the microphone captures: compare both,

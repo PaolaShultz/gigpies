@@ -2,20 +2,20 @@
 
 Current handoff includes the 2026-10-05 channel-processing slice and the
 integrated software milestone of 2026-10-04. The
-[previous local-client handoff](archive/next-session-before-modules-2026-10-04.md)
-is preserved. The [continuation prompt](MODULE_CONTINUATION_EXECUTION_PROMPT.md)
+[previous local-client handoff](../next-session-before-modules-2026-10-04.md)
+is preserved. The [continuation prompt](../prompts/MODULE_CONTINUATION_EXECUTION_PROMPT.md)
 records this completed software/publication scope; recover the current source
 and acceptance before using any historical launch card.
 
-The [October 4 review and repair pass](DAILY_REVIEW_EXECUTION_PROMPT.md) is complete.
+The [October 4 review and repair pass](../prompts/DAILY_REVIEW_EXECUTION_PROMPT.md) is complete.
 Task0011 reviewed the twelve-owner daily inventory, repaired confirmed defects,
 validated the changes, published five scoped owner commits and synchronized both
 Pis. Historical launch cards do not reopen that completed assignment.
-The current task0012 increment adds [FOH channel processing](CHANNEL_PROCESSING.md);
+The current task0012 increment adds [FOH channel processing](../../reference/CHANNEL_PROCESSING.md);
 its implementation and acceptance are tracked separately from physical gates.
 
-Read the [local integration instructions](HEADLESS_INTEGRATION.md),
-[implementation map](MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
+Read the [local integration instructions](../../guides/HEADLESS_INTEGRATION.md),
+[implementation map](../plans/MODULE_IMPLEMENTATION_MAP.md), [Brain plan](BRAIN_CONSOLE_PLAN.md),
 [architecture](ARCHITECTURE.md) and [ownership map](COMPONENTS.md). The intended
 Brain hosts two 1920×1080 monitors and two independently assigned MIDI controllers:
 Desk for audio and Lightdesk for lighting. Manual operation remains independent;
@@ -42,7 +42,7 @@ from the completed software publication.
 
 ## Qualified stereo hardware handoff
 
-Read [AUDIO_HARDWARE.md](AUDIO_HARDWARE.md) and [its owning plan](AUDIO_HARDWARE_PLAN.md).
+Read [AUDIO_HARDWARE.md](../../acceptance/AUDIO_HARDWARE.md) and [its owning plan](../plans/AUDIO_HARDWARE_PLAN.md).
 The selected USB host uses 48-frame / 1 ms processing, independent device capacity
 and zero silent prefill, with real PA/FX/REC modules and sample-verified recovery.
 The final ten-minute working-channel H8 run measured **5.19–5.23 ms**, with exact
@@ -64,7 +64,7 @@ clock, multichannel mixer, UI and complete-show acceptance remain separate.
 
 ## Offline listening handoff
 
-The [summing plan](SUMMING_PLAN.md) and [delivery contract](SUMMING_DELIVERY.md)
+The [summing plan](../plans/SUMMING_PLAN.md) and [delivery contract](../../guides/SUMMING_DELIVERY.md)
 are implemented and offline-validated, now included in 0.2.3. The f64 summer,
 channel choices and selected GigPies effects remain unchanged; no supported new
 musical candidate was selected.
@@ -79,13 +79,13 @@ use static gain on the selected buses, with 0.4001 dB margin and no loudness tar
 Obtain a fresh playback go, then record preference by passage and concern. Do not
 rerender just to reopen this queue, or repeat historical planners without a new
 hypothesis and stopping rules. Preserve source recordings, frozen settings, hashes
-and useful evidence. Latest publication checks live in [VALIDATION.md](VALIDATION.md).
+and useful evidence. Latest publication checks live in [VALIDATION.md](../records/VALIDATION.md).
 The unresolved earlier Pi crash still needs separate diagnosis; boot recovery and
 zero current filesystem counters do not establish a complete offline scan.
 
 ## Peer work and resource ownership
 
-Read `/home/shome/p/AGENTS.md` and [NODE_LAB.md](NODE_LAB.md). Check the actual
+Read `/home/shome/p/AGENTS.md` and [NODE_LAB.md](../../development/NODE_LAB.md). Check the actual
 hostname and live working trees; development coordinator/worker roles do not fix
 the runtime Stagebox/Brain Pi assignment. The private ledger owns reservations,
 exact source revisions and immutable review/acceptance records.
@@ -94,5 +94,5 @@ Use bounded `gigpies-peer` workers only within the current authorized scope; nev
 resume or take over an existing interactive session. Keep one owner per file and
 resource. Shared load, hardware and restart experiments require a new explicit
 reservation. Completed synthetic transport and stereo integration are recorded in
-[transport](AUDIO_TRANSPORT_PLAN.md) and [hardware](AUDIO_HARDWARE_PLAN.md); do not
+[transport](../plans/AUDIO_TRANSPORT_PLAN.md) and [hardware](../plans/AUDIO_HARDWARE_PLAN.md); do not
 repeat them merely because an old execution prompt says to start them.

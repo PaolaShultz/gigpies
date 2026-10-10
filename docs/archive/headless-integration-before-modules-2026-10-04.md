@@ -2,7 +2,7 @@
 
 This 2026-10-04 software milestone connects the real GigPies offline mixer and
 Lux null-output engine to the independently built Desk and Lightdesk clients.
-The [implementation map](../MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+The [implementation map](plans/MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
 tracks final acceptance. Native windows/controllers and physical outputs remain
 separate work. No audio device, MIDI endpoint or DMX driver is opened here.
 
@@ -30,7 +30,7 @@ the returned transition and does not calculate a competing fade.
 ## Run an explicit local session
 
 Build each owning repository independently with Rust 1.97.1 and its Cargo.lock.
-Follow the [one-build-per-host procedure](../PARALLEL_WORK_PLAN.md#one-build-slot-per-host)
+Follow the [one-build-per-host procedure](plans/PARALLEL_WORK_PLAN.md#one-build-slot-per-host)
 before Cargo; use `CARGO_INCREMENTAL=0`, `CARGO_BUILD_JOBS=1` and `-j 1`.
 The relevant release binaries are `gigpies-headless`, `shr-desk`, `lux-service`
 and `shr-lightdesk`. No sibling path dependency or provider source copy is needed.
@@ -73,7 +73,7 @@ shr-desk --audio-local /absolute/private/audio/audio.sock \
 The fader unit is integer milli-dB. A `monitor1` or `monitor2` writer can only
 edit its named monitor send. Mode changes and release previews require explicit
 confirmation. See [Desk provider instructions](https://github.com/PaolaShultz/shr-desk/blob/main/docs/PROVIDER_CLIENT.md)
-for the full bounded script vocabulary and [audio service rules](../AUDIO_LOCAL_SERVICE.md)
+for the full bounded script vocabulary and [audio service rules](../reference/AUDIO_LOCAL_SERVICE.md)
 for lifetime, framing, restart and failure behavior.
 
 A lighting batch can contain:
@@ -137,7 +137,7 @@ private coordination handoff; provider data fixtures remain in their owners.
 Historical media, auditions, exhaustive matrices, long benchmarks, native display
 acceptance, physical audio/MIDI/DMX and combined load were intentionally skipped.
 Changed audio corpus generators were invoked explicitly, then remain opt-in.
-The [remaining task dependencies](../MODULE_IMPLEMENTATION_MAP.md#dependency-order)
+The [remaining task dependencies](plans/MODULE_IMPLEMENTATION_MAP.md#dependency-order)
 include native role binding, named analysis streams, owner PA/FX/REC integration
 and production remote control. This milestone makes no new hardware claim.
 

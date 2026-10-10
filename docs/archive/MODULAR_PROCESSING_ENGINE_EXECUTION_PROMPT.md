@@ -8,7 +8,7 @@ The execution brief below takes effect when the user explicitly invokes it.
 ## What the inspection established
 
 The original requirement was not an eight-input product. The preserved
-[blueprint, sections 3–4](archive/blueprints/blueprint-v2.md) specifies UMC1820 +
+[blueprint, sections 3–4](blueprints/blueprint-v2.md) specifies UMC1820 +
 ADA8200, **16 analog inputs / 18 analog outputs at 48 kHz**, flexible output
 allocation, no hard-coded monitor count, and roughly 4×8-style PA routing.
 The latest user direction makes 16 inputs the minimum, with 32 and 48 important
@@ -16,7 +16,7 @@ growth targets, and includes PA in the modular processing engine.
 
 The eight-input graph entered the published implementation in `b3c9f64`
 (2026-10-04), under the smaller GP-03 milestone in
-[the implementation plan](MODULE_IMPLEMENTATION_PLAN.md). It subsequently spread
+[the implementation plan](plans/MODULE_IMPLEMENTATION_PLAN.md). It subsequently spread
 into strict schemas, recorder maps and Desk decoders. Task0013's execution prompt
 explicitly retained eight inputs; that scope explains the last increment but does
 not replace the original product requirement. Existing work is still present;
@@ -31,11 +31,11 @@ its separate prototypes and restricted adapters have not been fully integrated.
 | Physical host | Separate qualified stereo USB bench with actual PA/FX/REC libraries. | One multichannel engine shared by synthetic and device adapters; 16/18 physical profile remains unqualified. |
 | Clocks | Processing-node audio device is the sample-clock reference; Brain follows source frames without a second audio device. No ASRC or device clock-control UI is implemented. | Enforce and expose one soundcard/ADAT clock domain and shared frame timeline throughout the integrated graph; test lock-loss/restart handling. The user accepts soundcard clocking; a new source selector is not required. |
 
-Sources: [architecture](ARCHITECTURE.md), [transport](AUDIO_TRANSPORT.md),
-[local provider](AUDIO_LOCAL_SERVICE.md), [module contracts](MODULE_CONTRACTS.md),
-[PA embedding](../../shr-pa/docs/EMBEDDING.md),
-[PA integration plan](../../shr-pa/docs/GIGPIES_IMPLEMENTATION.md),
-[Desk control contract](../../shr-desk/docs/CONTROL_CONTRACT.md).
+Sources: [architecture](../architecture/ARCHITECTURE.md), [transport](../reference/AUDIO_TRANSPORT.md),
+[local provider](../reference/AUDIO_LOCAL_SERVICE.md), [module contracts](../reference/MODULE_CONTRACTS.md),
+[PA embedding](../../../shr-pa/docs/EMBEDDING.md),
+[PA integration plan](../../../shr-pa/docs/GIGPIES_IMPLEMENTATION.md),
+[Desk control contract](../../../shr-desk/docs/CONTROL_CONTRACT.md).
 
 The manufacturer's [UMC1820 guide](https://www.bhphotovideo.com/lit_files/155647.pdf)
 also exposes an important mapping detail: at 48 kHz in ADAT mode, analog capture

@@ -31,3 +31,7 @@ parent-held host build lock with CARGO_BUILD_JOBS=1 CARGO_INCREMENTAL=0:
 `GP02_CORPUS_OUTPUT=/absolute/owned/output cargo +1.97.1 test --locked -j1 --test gp02 regenerate_gp02_corpus -- --ignored`
 Output directory must already exist. Retain exact requested files and update
 manifest hashes after provider review; normal tests never write fixture files.
+
+The manifest’s `docs/AUDIO_CONTROL_WIRE.md` key identifies the historical producing
+source. Its path and hash remain frozen; the current contract is
+[Audio control wire](../../../../docs/reference/AUDIO_CONTROL_WIRE.md).

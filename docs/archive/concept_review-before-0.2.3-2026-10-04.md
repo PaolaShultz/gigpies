@@ -1,6 +1,6 @@
 # Concept artwork review
 
-The supplied AI-generated [architecture image](assets/gigpies-concept.png) is preserved
+The supplied AI-generated [architecture image](../assets/gigpies-concept.png) is preserved
 unchanged. It communicates two nodes, local stage audio, a separate Brain, performer
 controls and a soundcheck-first workflow. It is conceptual artwork, not a wiring guide
 or evidence that the pictured product exists.

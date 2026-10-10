@@ -8,18 +8,18 @@ audio and one for lighting. Both consoles run on the same Brain. The small
 local display continues to serve the PA unit.
 
 The preceding single-surface integration draft is preserved
-[unchanged](archive/brain-console-before-lightdesk-2026-10-04.md); the earlier
-[pre-Desk plan](archive/brain-console-before-shr-desk-2026-10-04.md) also remains.
+[unchanged](../brain-console-before-lightdesk-2026-10-04.md); the earlier
+[pre-Desk plan](../brain-console-before-shr-desk-2026-10-04.md) also remains.
 
 ## Current software checkpoint
 
-The subsequent [integrated milestone](HEADLESS_INTEGRATION.md) implements the
+The subsequent [integrated milestone](../../guides/HEADLESS_INTEGRATION.md) implements the
 eight-input local mixer, actual owner-library graph, named analysis, Lux null-output
 authority and both provider-backed native frontends. Process-held role leases use
 injected descriptors. Physical displays/controllers, fixture output and combined
 load remain unverified. The foundation assessment and backlog below are preserved
 as the original planning baseline; use the
-[implementation map](MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
+[implementation map](../plans/MODULE_IMPLEMENTATION_MAP.md#execution-checkpoint--2026-10-04)
 for completed tasks and remaining gates.
 
 ## Original foundation checkpoint
@@ -42,14 +42,14 @@ GigPies version; the integration requirements on this page stand on their own:
 
 | SHR Desk | SHR Lightdesk |
 |---|---|
-| [README](../../shr-desk/README.md) | [README](../../shr-lightdesk/README.md) |
-| [Blueprint](../../shr-desk/docs/BLUEPRINT.md) | [Owning blueprint and dual-desk budgets](../../shr-lightdesk/docs/BLUEPRINT.md) |
-| [Console study](../../shr-desk/docs/CONSOLE_STUDY.md) | [MA/MagicQ/Titan/Eos/ONYX screen/workflow study](../../shr-lightdesk/docs/CONSOLE_STUDY.md) |
-| [Screens](../../shr-desk/docs/SCREENS.md) | [Screen map and reproducible operating loop](../../shr-lightdesk/docs/SCREENS.md) |
-| [Controller](../../shr-desk/docs/CONTROLLER.md) | [Lighting MIDI/ownership plan](../../shr-lightdesk/docs/CONTROLLER.md) |
-| [Control contract](../../shr-desk/docs/CONTROL_CONTRACT.md) | [Lighting authority/recovery contract](../../shr-lightdesk/docs/CONTROL_CONTRACT.md) |
-| [Status](../../shr-desk/docs/STATUS.md) | [Status and validation](../../shr-lightdesk/docs/STATUS.md) |
-| | [Capability matrix](../../shr-lightdesk/docs/CAPABILITIES.md) |
+| [README](../../../../shr-desk/README.md) | [README](../../../../shr-lightdesk/README.md) |
+| [Blueprint](../../../../shr-desk/docs/BLUEPRINT.md) | [Owning blueprint and dual-desk budgets](../../../../shr-lightdesk/docs/BLUEPRINT.md) |
+| [Console study](../../../../shr-desk/docs/CONSOLE_STUDY.md) | [MA/MagicQ/Titan/Eos/ONYX screen/workflow study](../../../../shr-lightdesk/docs/CONSOLE_STUDY.md) |
+| [Screens](../../../../shr-desk/docs/SCREENS.md) | [Screen map and reproducible operating loop](../../../../shr-lightdesk/docs/SCREENS.md) |
+| [Controller](../../../../shr-desk/docs/CONTROLLER.md) | [Lighting MIDI/ownership plan](../../../../shr-lightdesk/docs/CONTROLLER.md) |
+| [Control contract](../../../../shr-desk/docs/CONTROL_CONTRACT.md) | [Lighting authority/recovery contract](../../../../shr-lightdesk/docs/CONTROL_CONTRACT.md) |
+| [Status](../../../../shr-desk/docs/STATUS.md) | [Status and validation](../../../../shr-lightdesk/docs/STATUS.md) |
+| | [Capability matrix](../../../../shr-lightdesk/docs/CAPABILITIES.md) |
 
 ## Coexistence contract
 
@@ -80,7 +80,7 @@ fresh source-analysis subscriptions from GigPies rather than Lightdesk opening
 audio devices. Lighting redraw, failure and telemetry overload cannot block
 Stagebox real-time audio, protection, recording or audio control input.
 
-The [Lightdesk blueprint](../../shr-lightdesk/docs/BLUEPRINT.md#resource-and-responsiveness-targets--unverified)
+The [Lightdesk blueprint](../../../../shr-lightdesk/docs/BLUEPRINT.md#resource-and-responsiveness-targets--unverified)
 sets the proposed combined acceptance profile and measurable budgets: two active
 1080p/60 Hz surfaces, aggregate render CPU/GPU p99 ≤8 ms each per refresh,
 combined surface PSS ≤384 MiB, local MIDI dispatch p99 ≤5 ms and visible feedback

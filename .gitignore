@@ -58,3 +58,8 @@ __pycache__/
 *.[Bb][Zz]2
 *.7[zZ]
 *.[Rr][Aa][Rr]
+
+# Generated zk notebook index.
+/.zk/*
+!/.zk/config.toml
+!/.zk/templates/

@@ -1,6 +1,6 @@
 # Existing components and dependencies
 
-The 2026-10-03 [USB hardware integration](AUDIO_HARDWARE.md) adds versioned
+The 2026-10-03 [USB hardware integration](../../acceptance/AUDIO_HARDWARE.md) adds versioned
 C interfaces in SHR PA/FX/REC and an explicit GigPies host. The libraries build
 independently; their source and algorithms remain in their owning repositories.
 Stereo actual-device evidence is separate from the broader planned modules below.
@@ -11,7 +11,7 @@ delays and polarity controls. This is not a fresh implementation audit of every
 sibling. All remain in development. Their own source and status documents own
 current details. The offline automixer adapts
 narrow biquad/dynamics equations from SHR PA/DAW with preserved MIT notices; see
-[attribution](../THIRD_PARTY.md). No sibling is linked as a dependency. The PA
+[attribution](../../../THIRD_PARTY.md). No sibling is linked as a dependency. The PA
 development task below was added to SHR PA with explicit user authorization.
 
 The 2026-10-04 surface review adds SHR Desk and SHR Lightdesk and inspects relevant
@@ -46,7 +46,7 @@ are relative to the GigPies root and do not introduce build dependencies.
 | `../shr-tone-over-9000` | NAM/cabinet processing and prepared chains: `README.md` |
 | `../shr-skills` | Development workflow skills: `README.md`, `AGENTS.md`; not an audio engine |
 
-The shared media library is `../waves`; follow [local media ownership](LOCAL_MEDIA.md).
+The shared media library is `../waves`; follow [local media ownership](../../development/LOCAL_MEDIA.md).
 These local paths are ownership references, not build or CI requirements.
 
 ## Existing work and integration limits
@@ -123,7 +123,7 @@ fixture/cue/effect execution and output. Missing Lux work is recorded in the
 integration backlog, not duplicated in Lightdesk.
 The surface projects now use optional `winit` + `wgpu` native frontends;
 their renderers also export offline SVG drafts. These are not GigPies dependencies.
-See the [current software checkpoint](HEADLESS_INTEGRATION.md) for validation and
+See the [current software checkpoint](../../guides/HEADLESS_INTEGRATION.md) for validation and
 physical acceptance limits. PA DSP, FX, recorder and lighting
 algorithms retain their owners. The Stagebox/PA node's mixer graph is distinct
 from the `shr-pa` speaker processor; a future mixer-core extraction is a separate

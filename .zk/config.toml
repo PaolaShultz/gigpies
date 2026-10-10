@@ -1,0 +1,11 @@
+[note]
+filename = "{{id}}"
+template = "default.md"
+exclude = ["archive/**", "artifacts/**", "user/**", "target/**", "docs/archive/**"]
+
+[format.markdown]
+link-format = "markdown"
+link-drop-extension = false
+
+[tool]
+pager = ""

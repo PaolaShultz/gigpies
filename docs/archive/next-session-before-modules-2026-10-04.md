@@ -1,22 +1,22 @@
 # Next session: dual consoles and integration
 
 Current local handoff after **0.2.3**, 2026-10-04. The
-[pre-implementation handoff](../archive/next_session-before-headless-2026-10-04.md)
+[pre-implementation handoff](next_session-before-headless-2026-10-04.md)
 is preserved. The preceding accumulated handoff is
-[preserved unchanged](../archive/next_session-before-0.2.3-2026-10-04.md). Historical
+[preserved unchanged](next_session-before-0.2.3-2026-10-04.md). Historical
 execution prompts describe their original session scope; they do not authorize
 new hardware tests or override the current module map.
 
 For the next coordinated implementation thread, use the
-[continuation and publication prompt](../MODULE_CONTINUATION_EXECUTION_PROMPT.md).
+[continuation and publication prompt](prompts/MODULE_CONTINUATION_EXECUTION_PROMPT.md).
 It includes the accepted baseline, remaining software milestone, two independent
 Pi4 sessions, build limits and explicit final commit/push instructions.
 
 ## First: continue from the accepted local integration
 
-Read the [local integration instructions and evidence](../HEADLESS_INTEGRATION.md),
-[implementation map](../MODULE_IMPLEMENTATION_MAP.md), [Brain integration](../BRAIN_CONSOLE_PLAN.md), [architecture](../ARCHITECTURE.md)
-and [module ownership](../COMPONENTS.md). The intended Brain hosts **two 1920×1080
+Read the [local integration instructions and evidence](../guides/HEADLESS_INTEGRATION.md),
+[implementation map](plans/MODULE_IMPLEMENTATION_MAP.md), [Brain integration](../architecture/BRAIN_CONSOLES.md), [architecture](../architecture/ARCHITECTURE.md)
+and [module ownership](../architecture/COMPONENTS.md). The intended Brain hosts **two 1920×1080
 monitors and two independently assigned MIDI keyboard controllers**: SHR Desk
 for audio and SHR Lightdesk for lighting. Manual operation stands on its own;
 ASSIST proposes and AUTO requires explicit bounded authority.
@@ -41,7 +41,7 @@ explicit release. Lighting failure must not block audio control or essential aud
 
 ## Qualified stereo hardware handoff
 
-Read [AUDIO_HARDWARE.md](../AUDIO_HARDWARE.md) and [its owning plan](../AUDIO_HARDWARE_PLAN.md).
+Read [AUDIO_HARDWARE.md](../acceptance/AUDIO_HARDWARE.md) and [its owning plan](plans/AUDIO_HARDWARE_PLAN.md).
 The selected USB host uses 48-frame / 1 ms processing, independent device capacity
 and zero silent prefill, with real PA/FX/REC modules and sample-verified recovery.
 The final ten-minute working-channel H8 run measured **5.19–5.23 ms**, with exact
@@ -63,7 +63,7 @@ clock, multichannel mixer, UI and complete-show acceptance remain separate.
 
 ## Offline listening handoff
 
-The [summing plan](../SUMMING_PLAN.md) and [delivery contract](../SUMMING_DELIVERY.md)
+The [summing plan](plans/SUMMING_PLAN.md) and [delivery contract](../guides/SUMMING_DELIVERY.md)
 are implemented and offline-validated, now included in 0.2.3. The f64 summer,
 channel choices and selected GigPies effects remain unchanged; no supported new
 musical candidate was selected.
@@ -78,13 +78,13 @@ use static gain on the selected buses, with 0.4001 dB margin and no loudness tar
 Obtain a fresh playback go, then record preference by passage and concern. Do not
 rerender just to reopen this queue, or repeat historical planners without a new
 hypothesis and stopping rules. Preserve source recordings, frozen settings, hashes
-and useful evidence. Latest publication checks live in [VALIDATION.md](../VALIDATION.md).
+and useful evidence. Latest publication checks live in [VALIDATION.md](records/VALIDATION.md).
 The unresolved earlier Pi crash still needs separate diagnosis; boot recovery and
 zero current filesystem counters do not establish a complete offline scan.
 
 ## Peer work and resource ownership
 
-Read `/home/shome/p/AGENTS.md` and [NODE_LAB.md](../NODE_LAB.md). Check the actual
+Read `/home/shome/p/AGENTS.md` and [NODE_LAB.md](../development/NODE_LAB.md). Check the actual
 hostname and live working trees; development coordinator/worker roles do not fix
 the runtime Stagebox/Brain Pi assignment. The private ledger owns reservations,
 exact source revisions and immutable review/acceptance records.
@@ -93,5 +93,5 @@ Use bounded `gigpies-peer` workers only within the current authorized scope; nev
 resume or take over an existing interactive session. Keep one owner per file and
 resource. Shared load, hardware and restart experiments require a new explicit
 reservation. Completed synthetic transport and stereo integration are recorded in
-[transport](../AUDIO_TRANSPORT_PLAN.md) and [hardware](../AUDIO_HARDWARE_PLAN.md); do not
+[transport](plans/AUDIO_TRANSPORT_PLAN.md) and [hardware](plans/AUDIO_HARDWARE_PLAN.md); do not
 repeat them merely because an old execution prompt says to start them.

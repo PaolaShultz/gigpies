@@ -9,4 +9,4 @@ against the actual executable, without copying the provider's role algorithm.
 Additional normal tests protect E02 prior generation 7, strict private storage,
 replacement inodes, stale forget, ambiguity and 32/33-pair history bounds.
 
-Protocol and lifetime obligations: [ROLE_BINDING.md](../../../../docs/ROLE_BINDING.md).
+Protocol and lifetime obligations: [ROLE_BINDING.md](../../../../docs/reference/ROLE_BINDING.md).

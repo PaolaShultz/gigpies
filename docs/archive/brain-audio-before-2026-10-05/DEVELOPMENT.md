@@ -12,7 +12,7 @@ offline independently; this CLI does not launch either desk. See
 ## Explicit hardware host
 
 The optional `hardware-host` feature builds `gigpies-hardware`, a bounded stereo
-ALSA/module bench; see [its contract and acceptance](AUDIO_HARDWARE.md). Build
+ALSA/module bench; see [its contract and acceptance](../../acceptance/AUDIO_HARDWARE.md). Build
 owner libraries independently and pass explicit paths in private configuration.
 Normal tests open no devices; actual measurements require session authorization
 and resource reservation. `cargo run` still defaults to the offline GigPies CLI.
@@ -75,7 +75,7 @@ outputs. Never move private recordings into the public documentation archive.
 
 ## Validation
 
-Enable [publication hooks](PUBLICATION.md) with
+Enable [publication hooks](../../development/PUBLICATION.md) with
 `git config --local core.hooksPath .githooks` after checking for existing hooks.
 Use `CARGO_INCREMENTAL=0` for local Rust builds/tests.
 
@@ -117,32 +117,32 @@ actual Git blobs, private directory boundaries and the reviewed script list.
 
 ## Offline automixer
 
-See [AUTOMIX.md](AUTOMIX.md) for commands and explicit private-media test opt-ins.
+See [AUTOMIX.md](../../guides/AUTOMIX.md) for commands and explicit private-media test opt-ins.
 `src/automix/config.rs` owns editable settings and validation, `dsp.rs` owns signal
 processing, and `render.rs` owns offline files/timeline/reports. Production tests
 remain hardware-free. Failed render directories are partial and must not be published.
 
-The optional FX/review extension is documented in [FX_PASS.md](FX_PASS.md).
+The optional FX/review extension is documented in [FX_PASS.md](../../guides/FX_PASS.md).
 `effects.rs` owns configuration/routing; attributed static engines are in
 `fx_engines.rs` and `exciter.rs`; `analysis.rs` owns deterministic measurements and
 bounded review rules. `scripts/analyze_mix.py` is optional plotting only and cannot
 change settings. All correction decisions remain in Rust and are covered by the
 normal synthetic suite.
 
-The [musical balance pass](BALANCE_PASS.md) is owned by `automix/balance.rs`. It
+The [musical balance pass](../../guides/BALANCE_PASS.md) is owned by `automix/balance.rs`. It
 reuses native source reading/routing and DSP, buffers synchronized energy covariance,
 and searches musical faders without touching input trims. `scripts/balance_excerpts.py`
 is an optional PCM excerpt/export verification tool; it never changes mix settings.
 
-The [manufacturer-reference experiment](PRESET_EXPERIMENT.md) adds explicit shelf
+The [manufacturer-reference experiment](../studies/PRESET_EXPERIMENT.md) adds explicit shelf
 shapes and local parameter mapping. Numerical collections and media stay ignored.
 
-The [tone pass](TONE_PASS.md) is owned by `automix/tone.rs`. It reuses the existing
+The [tone pass](../../guides/TONE_PASS.md) is owned by `automix/tone.rs`. It reuses the existing
 FFT and production DSP, accepts explicit instrument-path identity, and has focused
 normal regressions in `tests/tone.rs`. Its spectral targets are editable intent
 choices in a separate policy; it does not change the session persistence schema.
 
-The [source-rule coordinator](SOURCE_RULES.md), `automix/expert.rs`, owns explicit
+The [source-rule coordinator](../../guides/SOURCE_RULES.md), `automix/expert.rs`, owns explicit
 profile applicability, sustained-compression plans, source advice and joint
 validation. `tone.rs` owns guitar spectral measurements and EQ search. New rules
 must separate detection, proposed changes, actual validation and remaining defects;
@@ -154,24 +154,24 @@ Independent finished-mix review is owned by `automix/reference.rs`; it must neve
 import or modify processing settings. `tests/reference.rs` exercises alignment and
 file contracts with synthetic audio. `scripts/play_pair.py` owns prepared two-clip
 playback; its normal tests inject a fake player and never open hardware. See
-[reference review](REFERENCE_REVIEW.md) for confidence limits and commands.
+[reference review](../../guides/REFERENCE_REVIEW.md) for confidence limits and commands.
 
 Source audio is shared across sibling projects through `../waves`; see
-[local media layout](LOCAL_MEDIA.md). Generated evidence stays project-local.
+[local media layout](../../development/LOCAL_MEDIA.md). Generated evidence stays project-local.
 
-The [DI bass/kick extension](BASS_KICK.md) is owned by `automix/bass.rs`. Its separate
+The [DI bass/kick extension](../../guides/BASS_KICK.md) is owned by `automix/bass.rs`. Its separate
 policy keeps bass intent distinct from guitar profiles. It reuses production DSP
 and the expert module's repeated-contact thresholds. `tests/bass.rs` protects
 current decisions and guards in the normal suite. `scripts/bass_evidence.py` only
 summarizes/plots saved measurements; it cannot select or modify processing.
 
-The [drum extension](DRUMS.md) is owned by `automix/drums.rs`, with the explicit
+The [drum extension](../../guides/DRUMS.md) is owned by `automix/drums.rs`, with the explicit
 rhythmic-offset calculation in `balance.rs`. It uses production source/strip/routing
 DSP and the existing bass FFT helpers. `tests/drums.rs` belongs in the normal suite;
 `scripts/drum_evidence.py` summarizes saved measurements without choosing settings.
 `drum-verify` checks a frozen pilot candidate and cannot search against held-out data.
 
-`automix/bleed.rs` owns [conditional snare-spill analysis](SNARE_BLEED.md), bounded
+`automix/bleed.rs` owns [conditional snare-spill analysis](../../guides/SNARE_BLEED.md), bounded
 static probes and diagnostic waveform predictors. `tests/bleed.rs` is normal synthetic
 coverage. `scripts/snare_bleed_evidence.py` summarizes fixed masks without selecting
 settings. The renderer has no new gate, expander or reference-cancellation path.
@@ -180,7 +180,7 @@ settings. The renderer has no new gate, expander or reference-cancellation path.
 retained-rise support. Its separate fit/evaluate commands never select processing;
 `test_snare_temporal_evidence.py` is fast normal coverage for training isolation,
 quiet/compound protection, malformed evidence and source-identifiability limits.
-See the [temporal follow-up](SNARE_BLEED.md#temporal-follow-up-frozen-representation-audit).
+See the [temporal follow-up](../studies/SNARE_BLEED.md#temporal-follow-up-frozen-representation-audit).
 
 `automix/bleed_reference.rs` owns frozen joint-reference diagnostic fitting and
 full-source evaluation. It reuses `bleed::measure`, keeps sample support inside each
@@ -193,9 +193,9 @@ of those measurements; it cannot select processing or populate listener preferen
 `tests/balance.rs` checks SOURCE against production renderer samples and coherent
 sums; `scripts/test_ensemble_review.py` checks fixed raw activity, section conflicts,
 export-stage separation and provenance/alignment refusal. Both are normal fast tests.
-See [Complainiacs reassessment](COMPLAINIACS_REASSESSMENT.md) for the current use.
+See [Complainiacs reassessment](../studies/COMPLAINIACS_REASSESSMENT.md) for the current use.
 
-The [subsequent workflow review](COMPLAINIACS_WORKFLOW_REVIEW.md) adds coherent
+The [subsequent workflow review](../studies/COMPLAINIACS_WORKFLOW_REVIEW.md) adds coherent
 snare/remaining-ensemble groups and `scripts/snare_context.py`. Its normal tests
 protect fixed-event context, signed interaction, silence and split independence.
 Listening specifications now pin original SOURCE settings/WAV hashes; preparation
@@ -208,7 +208,7 @@ offline admission contract allows schema-valid HPFs including bypass; production
 measurement must use the configured filter. `tests/preservation.rs` checks exact
 SOURCE-as-FINAL samples and analyzer/renderer agreement. Missing tone/balance intent
 and default FX review preserve settings; explicit historical experiments remain
-reproducible. See [source preservation](SOURCE_PRESERVATION.md).
+reproducible. See [source preservation](../../guides/SOURCE_PRESERVATION.md).
 
 `automix/ambience.rs` owns explicit artistic FX proposals, engine-decay calibration,
 training-only return calibration and held-out ensemble checks. It preserves the
@@ -232,7 +232,7 @@ EQ matching retains its existing identity API through re-exports.
 decision. Its normal tests cover legacy missing observations, bounded returns,
 zero amount, rejected plans, inconsistent saved evidence and output preservation.
 
-`automix::matching` owns [frozen EQ matching](EQ_MATCHING.md), map imports and the
+`automix::matching` owns [frozen EQ matching](../../guides/EQ_MATCHING.md), map imports and the
 local review page. `tests/matching.rs` covers production-DSP preservation, recovery,
 noise/cancellation abstention, persistence and nonlinear interactions. SHA-256 pins
 inputs/settings; serde_json float round trips preserve those identities. The page
@@ -256,7 +256,7 @@ and supplies the policy-aware render and scalar-only observation entry points.
 The normal `tests/summing.rs` and `tests/delivery.rs` protect independent arithmetic,
 conversion, mode independence, static output identity and failure recovery.
 The policy checkpoint and external-meter script have synthetic Python regressions;
-normal tests do not require FFmpeg. See [commands and contracts](SUMMING_DELIVERY.md).
+normal tests do not require FFmpeg. See [commands and contracts](../../guides/SUMMING_DELIVERY.md).
 
 ## GP07 channel processing checks
 

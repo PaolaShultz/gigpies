@@ -51,7 +51,7 @@ RECOVER CURRENT STATE
 2. Recover completed task0012 from the private ledger and
    user/channel-processing/0012/REVIEW.md, final-revisions.json, final-ledger.json,
    desk-accepted.json, workers.json, joint-acceptance-final.json and validation
-   summaries. Read docs/CHANNEL_PROCESSING.md and the actual implemented source:
+   summaries. Read docs/reference/CHANNEL_PROCESSING.md and the actual implemented source:
    src/channel_processing.rs, processing_wire.rs, mixer.rs, mixer_control.rs and
    local_audio.rs; Desk's processing.rs, audio.rs, local_audio.rs and frontend.rs.
    The completed published checkpoint is GigPies

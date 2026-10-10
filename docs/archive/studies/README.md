@@ -1,0 +1,23 @@
+# Archived studies
+
+Historical context only. [Current documentation](../../README.md) · [Archive](../README.md)
+
+- [Expert selection of artistic effects](ARTISTIC_FX.md)
+- [Offline musical balance experiment](BALANCE_PASS.md)
+- [DI bass definition and kick interaction](BASS_KICK.md)
+- [Brain consoles: SHR Desk and SHR Lightdesk](BRAIN_CONSOLE_PLAN.md)
+- [Complainiacs reassessment: balance before more correction](COMPLAINIACS_REASSESSMENT.md)
+- [Complainiacs workflow reassessment](COMPLAINIACS_WORKFLOW_REVIEW.md)
+- [Visual map and historical concept review](CONCEPT_REVIEW.md)
+- [Kick, snare and rhythmic emphasis](DRUMS.md)
+- [Frozen EQ matching and tone maps](EQ_MATCHING.md)
+- [Offline effects and automatic review pass](FX_PASS.md)
+- [Complete local listening checkpoint](LISTENING_CHECKPOINT.md)
+- [Live master EQ producer — task0018 software validated](MASTER_EQ_PRODUCER.md)
+- [Local multitrack material](MULTITRACKS.md)
+- [Manufacturer-reference offline experiment](PRESET_EXPERIMENT.md)
+- [Independent mix-reference review and prepared playback](REFERENCE_REVIEW.md)
+- [Snare bleed: additional evidence and failure handling](SNARE_BLEED.md)
+- [Source preservation and evidence for intervention](SOURCE_PRESERVATION.md)
+- [Source rules and soundcheck advice](SOURCE_RULES.md)
+- [Guitar correction when the ending fades](TONE_DECAY.md)

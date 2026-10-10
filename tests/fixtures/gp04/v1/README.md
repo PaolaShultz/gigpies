@@ -15,7 +15,7 @@ reordering,overlap and stale-window expectations. `tests/gp04.rs` executes the
 wire corpus and independently compares real tap PCM to the stated eight-input
 source. Temporary Unix integration tests exercise the actual provider executable.
 
-Wire layout/requirements: [ANALYSIS_STREAM.md](../../../../docs/ANALYSIS_STREAM.md).
+Wire layout/requirements: [ANALYSIS_STREAM.md](../../../../docs/reference/ANALYSIS_STREAM.md).
 
 `e09r-44100-descriptor.json` is the exact refused E09R descriptor.
 `e09-map-change-descriptor.json` and `e09-epoch-change-descriptor.json` are explicit

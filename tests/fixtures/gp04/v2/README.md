@@ -9,7 +9,7 @@ asserts physical socket mapping or acoustic verification.
 The descriptor and request explicitly select C-ANALYSIS:2 / lux.aux.v2. Existing
 v1 fixtures are unchanged. Packet and GAW1 framing, age, source-frame progression,
 loss and calibration checks remain unchanged. See the producer contract in
-`docs/CONFIGURED_ANALYSIS.md` for admission and recovery.
+`docs/reference/CONFIGURED_ANALYSIS.md` for admission and recovery.
 
 `topology.json` is the exact serialized `EngineTopology::software(17, 3, 0)`
 software-only configuration, asserted against the owner constructor by that test.

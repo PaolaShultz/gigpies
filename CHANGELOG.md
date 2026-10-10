@@ -21,7 +21,7 @@
 Native console integration, full mixer/lighting controls, physical lighting and
 combined two-surface hardware acceptance remain planned. No new hardware or
 listening tests were performed for this version; publication checks are recorded
-in [validation](docs/VALIDATION.md).
+in [validation](docs/archive/records/VALIDATION.md).
 
 ## 0.2.2 — 2026-10-03
 

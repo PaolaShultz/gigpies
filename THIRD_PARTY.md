@@ -15,7 +15,7 @@ upstream dependency licences continue to apply.
 
 `docs/assets/gigpies-concept.png` is AI-generated concept artwork supplied by the
 project owner. It is preserved as a concept reference, with limitations documented in
-`docs/CONCEPT_REVIEW.md`. Third-party names and marks belong to their owners; no
+`docs/archive/studies/CONCEPT_REVIEW.md`. Third-party names and marks belong to their owners; no
 endorsement or ownership of those marks is claimed.
 
 `docs/assets/gigpies-hero.png` is the replacement photorealistic hero generated
@@ -23,7 +23,7 @@ with the built-in image generation tool on 2026-10-04. It uses the owner-supplie
 concept and the projects' original offline Desk/Lightdesk screen drafts as visual
 references. It depicts an intended setup, not a photographed hardware test.
 The exact prompt is `docs/assets/gigpies-hero-prompt.txt`; limitations are in the
-[visual review](docs/CONCEPT_REVIEW.md). Rendered manufacturer names and device
+[visual review](docs/archive/studies/CONCEPT_REVIEW.md). Rendered manufacturer names and device
 designs imply no endorsement or verified model/mapping. No manufacturer photograph
 or manual was downloaded or bundled for this revision.
 
@@ -57,7 +57,7 @@ configuration and local type paths replace host controls; unused reset paths are
 The new delay, routing, wet-return calibration and deterministic spectral review are
 GigPies implementations; no sibling checkout is changed or linked.
 The gain estimator, routing, file workflow and preset choices are GigPies work.
-Manufacturer guidance and the loudness standard are linked in [AUTOMIX](docs/AUTOMIX.md).
+Manufacturer guidance and the loudness standard are linked in [AUTOMIX](docs/guides/AUTOMIX.md).
 
 ## Offline true-peak measurement
 
@@ -65,12 +65,12 @@ The windowed-sinc estimator in `src/automix/true_peak.rs` is original GigPies co
 following the oversampling guidance of ITU-R BS.1770-5 Annex 2. It does not copy
 the standard's example FIR table or add a library dependency. The independently
 invoked FFmpeg/libsoxr and SciPy verification tools retain their upstream licences
-and are not vendored or downloaded by CI. See [method and references](docs/SUMMING_DELIVERY.md).
+and are not vendored or downloaded by CI. See [method and references](docs/guides/SUMMING_DELIVERY.md).
 
 The shelf coefficient equations follow Robert Bristow-Johnson's mathematical
 [Audio EQ Cookbook, published by W3C](https://www.w3.org/TR/audio-eq-cookbook/).
 Our implementation fixes shelf slope to S=1. No manufacturer DSP code, firmware,
-manual or preset collection is included. See [reference-use boundaries](docs/PRESET_EXPERIMENT.md).
+manual or preset collection is included. See [reference-use boundaries](docs/archive/studies/PRESET_EXPERIMENT.md).
 
 ## Brain asynchronous sample-rate conversion
 
