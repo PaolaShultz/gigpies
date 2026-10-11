@@ -359,6 +359,59 @@ The accepted Lux provider source is
 Its matching release passed actual named-source calibration, explicit AUTO,
 loss retention, human override and disarmed restart checks.
 
+### Optional musical estimates
+
+Lux `--musical-analysis` with an explicit `--analysis` source selects additive
+`lx05-music-v1` or configured `lx05-music-v2`. These publish `lux.analysis.v2`
+with a separate `musical` object; existing LX05 startup and fields remain
+compatible. This extension consumes the same C-ANALYSIS raw PCM path. GigPies
+does not duplicate harmonic analysis, and Lightdesk does not open audio devices.
+
+Lux estimates twelve pitch-class strengths, major/minor chords, contextual key
+and integer Camelot identity, signed fifths movement, and recurring arrangement
+identities with tentative verse/chorus labels. Individual estimates may be null.
+Confidence is a heuristic support score, not a calibrated probability. The old
+`beat`, `downbeat` and `harmony` fields remain null; the versioned `musical` object
+owns the richer estimates. Legacy consumers must not be connected to the new
+schema without the matching consumer implementation.
+
+`musical.source_frame` is the latest spectral window's exclusive source end,
+not the latest received PCM end. A tracking estimate must be within 6144 source
+frames (128 ms) of the current source-window end and within the same source
+identity. The spectral window spans 256 ms; this is not zero-latency recognition.
+Unavailable/stale input clears published musical estimates and temporal history.
+Fresh calibration and the existing explicit authority gates are still required.
+Harmonic tension/resolution can adjust the existing intensity proposal by at most
+50 units; grant caps, slew bounds, programmer/Hold and loss retention still apply.
+Section candidates are presented for interpretation and do not independently
+trigger automatic lighting changes.
+
+Algorithm and exact owner contract:
+[Lux musical analysis](../../../shr-lux/docs/notes/0034-musical-analysis.md) and
+[configured/music schema](../../../shr-lux/docs/notes/0033-configured-analysis.md).
+The [GP-MUSIC card](../archive/records/2026-10-11-gp-music.md)
+records synthetic software integration acceptance and qualification limits.
+
+### Optional authored musical scenes
+
+The additional `--scene-director` opt-in selects `lx06-scenes-v1` or configured
+`lx06-scenes-v2`. It requires musical analysis and an explicit source. Legacy
+startup retains its schema; older consumers must reject the new schema. The
+matching Lightdesk client accepts both legacy and scene versions, with scene
+commands available only on the latter.
+
+Lux owns the bounded version-1 show map, change interpretation, deterministic
+selection, local recurring-section memory and elapsed fades. Mood/palette RGB
+and lift are authored independently. C-LIGHT's existing leased command envelope
+carries atomic `scene_map_replace`, nonmutating `scene_preview` and finite scoped
+`scene_grant`. Compact command replies and paginated owner inventory preserve
+existing transport limits. Scene INT/RGB enters the existing automatic layer;
+programmer/Hold, caps, calibration, source freshness and loss remain authoritative.
+The private authored map survives restart; selection, section memory, transitions
+and grants do not. Physical output remains null/disarmed and beat/downbeat remain
+unavailable. See [musical scenes](MUSICAL_SCENES.md) for architecture, authoring,
+the exact owner contract and the reproducible software episode.
+
 ## Recorder
 
 Keep `shr_rec_v1_*`, raw format `shr-rec-raw` v1 and RAW_RECORDER.md semantics.

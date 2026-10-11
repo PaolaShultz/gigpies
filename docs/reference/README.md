@@ -4,6 +4,7 @@ Current signal paths, interfaces and runtime behavior. Versioned legacy contract
 
 [Documentation](../README.md) · [Product status](../STATUS.md)
 
+- [Musical scene maps and console authoring](MUSICAL_SCENES.md)
 - [Named analysis provider — GP-04 / C-ANALYSIS:1](ANALYSIS_STREAM.md)
 - [C-AUDIO:1 GP-02 wire format](AUDIO_CONTROL_WIRE.md)
 - [Explicit local synthetic audio engine](AUDIO_LOCAL_SERVICE.md)

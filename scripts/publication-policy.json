@@ -31,6 +31,8 @@
     "scripts/analyze_mix.py",
     "scripts/balance_excerpts.py",
     "scripts/bass_evidence.py",
+    "scripts/check_music_analysis.py",
+    "scripts/check_scene_director.py",
     "scripts/check_publication.py",
     "scripts/drum_evidence.py",
     "scripts/ensemble_review.py",

@@ -1,6 +1,6 @@
 # GigPies integration: plan and implementation
 
-Updated 2026-10-09. This document owns cross-module integration tasks from planning
+Updated 2026-10-11. This document owns cross-module integration tasks from planning
 through implementation and acceptance. Module-only work stays in the
 [owning module plan](MODULE_IMPLEMENTATION_MAP.md). The same task must not have a
 second status table in an index, handoff, capability matrix or knowledge note.
