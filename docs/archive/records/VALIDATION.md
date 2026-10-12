@@ -68,12 +68,10 @@ windows, real lighting authority/output, controller/display assignment and combi
 CPU/GPU/memory acceptance remain planned. No historical research matrix, new music
 render, playback, load test, physical output or host/service configuration ran.
 
-Concise local logs/previews live under ignored `artifacts/publication-0.2.3/`.
-Existing build/evidence directories were reviewed and preserved. The normal build
-directory is about 7.6 GiB after both release builds; about 30 GiB remains free.
-This pass removed its idle temporary preview environment and one-off renderer,
-recovering 39 MiB, and retained about 428 KiB of logs/previews. Remote CI is a
-separate result for the pushed revision.
+The superseded publication logs/previews were removed during the October 12
+cleanup; the results above remain the acceptance record. For commit
+`eb32afdfb0520ccf3c3df7f7a264c6496407a387`, recorded CI runs 37196979807
+(main) and 37196979868 (v0.2.3) both succeeded.
 
 ## Summing and delivery execution — 2026-10-03, unreleased
 
@@ -132,7 +130,7 @@ No new real-audio evaluation, full-song render, playback, exhaustive historical
 study or hardware test was run for this publication. Synthetic tests use temporary
 media and clean it up. Filesystem counters remained zero; the prior crash cause
 is unresolved and a forced offline full scan has not been established.
-Publication logs are under `artifacts/publication-0.2.2/`. Remote CI is separate
+Superseded local publication logs were removed after summarizing these results. Remote CI is separate
 from these local results and must be checked for the pushed revision.
 
 ## 0.2.1 publication checks — 2026-10-03
@@ -155,8 +153,8 @@ records synthetic recovery, the real pilot's conservative miss and preserved mix
 comparators. New full-song auditions, historical exhaustive renderers, playback and
 hardware checks were intentionally skipped for publication. Musical acceptance is
 pending; no true-peak claim is made. Existing recordings, maps, private evidence and
-complete exports remain local. Publication logs are retained under ignored
-`artifacts/publication-0.2.1/`.
+complete exports remain local. Superseded local publication logs were removed. Recorded CI run 37076858828
+succeeded for commit `6682409b828d6105825568b07c8ccbada7d54112`.
 
 Versioned commit/push hooks are enabled locally. Remote CI is separate from these
 local results and must be checked for the pushed revision.

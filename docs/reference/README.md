@@ -25,3 +25,5 @@ Current signal paths, interfaces and runtime behavior. Versioned legacy contract
 - [Authenticated processing-node and Brain endpoints](REMOTE_PROCESSING.md)
 - [Authenticated remote commands and media](REMOTE_TRANSPORT.md)
 - [Injected role binding and live leases (GP-09)](ROLE_BINDING.md)
+
+- [Shared Ratatui instrument panel](INSTRUMENT_PANEL.md)

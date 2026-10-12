@@ -23,6 +23,15 @@ PA/FX/REC libraries build independently, with reviewed exact artifact identities
 there are no sibling path dependencies. Source changes remain subject to each
 repository's instructions and the user's task scope.
 
+Shared console presentation is owned in GigPies `src/instrument-panel/`: Ratatui
+controls, tokens and authored font tiles. Desk and Lightdesk consume frozen,
+checksum-verified directory-source packages without sibling path dependencies.
+Their semantic actions/provider workers remain in their own repositories; the
+shared package has no engine or output authority. See the
+[shared presentation contract](../reference/INSTRUMENT_PANEL.md) and
+[GP-PANEL acceptance card](../development/MODULE_IMPLEMENTATION_PLAN.md#gp-panel--shared-physical-instrument-panel).
+This library is not an eighth runtime owner.
+
 ## Existing work and integration limits
 
 The actual configurable source graph consumes SHR PA v2, raw SHR REC and

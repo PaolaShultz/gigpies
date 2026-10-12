@@ -55,6 +55,7 @@ it is historical, not a queue to execute. Later accepted work supersedes its lim
 
 | Task | Owner / contributors | State and next action |
 |---|---|---|
+| [GP-PANEL](#gp-panel--shared-physical-instrument-panel) | GigPies shared UI; Desk/Lightdesk consumers | IN PROGRESS: real-terminal proof and initial production adapters; acceptance gates remain |
 | [GP-METER](#gp-meter--measured-audio-on-the-real-desk) | GigPies lead; SHR Desk consumer | IMPLEMENTED / software-validated; owner-artifact P4 BLOCKED: supply reviewed manifest |
 | [GP-FX](#gp-fx--writable-owner-effects-in-the-console) | GigPies lead; SHR FX provider, SHR Desk consumer | PLANNED: depends on owner FX-02/03 prepared writable contract |
 | [GP-SHOW](#gp-show--audio-scenes-and-operator-recovery) | GigPies lead; SHR Desk consumer | PLANNED: define scene contents, safes and reviewed recall before implementation |
@@ -530,3 +531,212 @@ Before completion, update this task's state/checklist/evidence/next action, pres
 other workers' edits, inspect named diffs and publication guards, and maintain only
 source-linked knowledge routing. Follow the owner's publication authorization;
 source acceptance does not deploy services or authorize device activation.
+
+
+## GP-PANEL — shared physical instrument panel
+
+State: **IN PROGRESS**. Owner: GigPies integration/shared presentation package;
+contributors: SHR Desk and SHR Lightdesk. Authorized 2026-10-11: implementation
+in the three canonical repositories, one thread, no delegation/worktrees/clones,
+no commits/publication/deployment, hardware or host service/audio changes.
+Preserve the existing GP-UI-COMPARE record and both contributor-plan edits.
+
+Outcome: compact Ratatui production consoles with reusable authored colour PUA
+material tiles, ordinary readable text and actual provider state. An actual
+terminal specimen must pass visual/cell acceptance before production migration.
+
+### Concrete execution plan
+
+1. Audit production native input/render/provider paths, fonts, action maps and
+   workflow tests. Freeze the old 100-screen benchmark inputs and classify their
+   synthetic data. Record every production page/modal and its authority boundary
+   in `docs/reference/INSTRUMENT_PANEL.md` before migrating it.
+2. Add an independently buildable shared `shr-instrument-panel` package inside
+   GigPies `src/instrument-panel/`, with pinned Ratatui/Crossterm and its lockfile.
+   Use GigPies' existing target directory and parent-held nonblocking build lock.
+   Keep tokens, widgets, asset registry and protocol session in this one owner.
+   After proof, distribute a versioned, checksum-verified Cargo directory-source
+   package to both consumers (exact version, no sibling path dependency); no
+   handwritten duplicated controls. Publication remains forbidden this session.
+3. Author original material/LED/control tiles with editable geometric sources,
+   bounded one-cell footprints and PUA-B registry away from Nerd/Powerline ranges.
+   Generate colour font/protocol payloads reproducibly, retain licences and
+   verify candidate text-font licences. Probe actual support; never infer it from
+   TERM or a directory name. Parse bounded replies, track owned registrations,
+   unregister only owned slots, restore terminal modes on errors/normal exit.
+4. Build a real Ratatui specimen: metal plate, stateful raised/pressed/focused/
+   disabled/latched controls, recessed display, four on/off LED colours, red
+   gradient/glow, fractional VU/spectrum/fader. Synthetic motion must be labelled
+   specimen data. Check clipping, minimum size, resize, focus and keyboard/mouse.
+5. Launch in the selected real terminal on this Pi; inspect screenshots at
+   multiple cell/font sizes. Verify tile joins, widths, gradients, bounded glow,
+   probing/cleanup and direct/SSH/multiplexer behavior. Select the primary
+   terminal/font contract only from this proof. No production migration before
+   it passes. Missing actual display/terminal access is an explicit dependency.
+6. Migrate Desk then Lightdesk through their existing semantic event/worker paths.
+   Preserve all pages, exact edits/reviews, Hold/grants/caps/freshness/source loss,
+   owner-confirmed vs pending state, null/disarmed output and disconnect safety.
+   Missing spectrum remains unavailable. Terminal key-release limitations must
+   fail closed for held talkback; never synthesize a held safety proof.
+7. Focused tests while developing; complete normal shared-package and both
+   default/native owning suites after production rendering changes; fmt/Clippy.
+   Compare identical 100-screen page/meter/spectrum/interaction/idle workloads:
+   application construction/diff/bytes and terminal presentation separately,
+   including startup registration, CPU/RSS. Sink writes are application-only.
+8. Retain concise screenshots, launch commands, asset notices, measurements and
+   limitations; clean only task-owned disposable intermediates. Close/archive
+   this card only after required software/terminal gates pass.
+
+### Channel-screen correction — 2026-10-12
+
+The operator rejected the initial screenshots. They establish terminal/font
+transport only, not visual acceptance. Work now concentrates on one production
+Desk selected-channel page before any further Lightdesk migration. No inert
+feature placeholders: controls shown must have an existing complete owner path.
+
+1. Use retained selected-channel references and actual GP07/GP03 capabilities;
+   compose EQ, compressor, sends and output strip from typed owner snapshots.
+   Preserve all modal/review precedence and scope/freshness/input fences.
+2. Author reusable rounded metallic controls, substantial rotary encoders and
+   fader parts in the shared glyph source. Keep ordinary labels and numbers;
+   show independent owner, draft, selected and pending states. No screen bitmap.
+3. Implement the Channel page and keyboard/mouse targeting through existing
+   semantic actions. Omit unimplemented source gain/HPF/gate/polarity rather
+   than advertise inert controls. Existing implemented controls retain stale
+   and read-only states when their owner/authority is lost.
+4. Capture and inspect the real Rio page with the actual private software owner,
+   including processing, edits and fallback. Iterate appearance before claiming
+   acceptance. Keep concise actual PNGs and one reproducible preview command.
+5. Run focused page/input/state tests, normal owning suites and shared component
+   checks; document this bounded screen and remaining overall GP-PANEL work.
+
+### Operator feedback — keyboard-free channel panel
+
+The operator accepts the rotary appearance, but rejects shortcut clutter and
+cannot distinguish the current tiny status dots as physical LEDs. Next increment:
+1. Remove shortcut prefixes, field numbers and keyboard instructions from the
+   selected-channel operating surface; preserve semantic bindings internally.
+2. Use the authored illuminated/dark lens assets beside explicit owner-state
+   captions, distinguishing confirmed processing/bypass from a detached draft.
+3. Primary input confirmed by the operator: MIDI. Remove the pointer-first
+   assumption. Keep the existing controller plan as mapping owner; do not label
+   unimplemented physical assignments or claim keyboard-free hardware operation.
+   Review/confirmation and exact edits remain subject to existing safety gates.
+4. Validate the changed production rendering and controls, inspect a replacement
+   actual-terminal capture, replace superseded evidence and clean task outputs.
+
+Presentation correction implemented in shared 0.3.1/font 0.3: 443 tiles,
+three-cell lenses, plain channel labels, no keyboard legend. Replaced the same
+two actual-terminal captures; fallback inspected and discarded. Shared 12 and
+Desk default 331 normal tests passed, with shared/default Clippy passing. The
+updated owner-vs-draft lamp regression passed in the default suite. Candidate
+publication guards and vendor checksums passed. The operator then requested no
+further screen corrections and moved to cleanup; remaining native/Lightdesk
+validation was stopped, not claimed passed for this revision. The earlier
+0.2.1 full-suite result remains historical evidence only. No new MIDI port or
+physical mapping was implemented or activated. The operator also rejected the
+local-draft explanatory row; leave that visual change for later as requested.
+Removed 2,215,489,088 bytes of completed validation executables plus 3,001,697,304
+bytes from 19 completed binaries in the interrupted native build. The
+validation process and temporary log are gone; the shared build lock is free.
+
+### Publication validation — 2026-10-12
+
+The user subsequently authorized committing, pushing and synchronizing all thirteen
+canonical repositories on both Pis, excluding rpi-remote. The previously interrupted
+0.3.1 validation is now complete: shared 12, Desk default 331/native 334 and
+Lightdesk default 135/native 136 normal tests passed. Formatting, warning-denied
+all-target Clippy and release builds passed for all five configurations. Commands:
+`cargo fmt --all --check`, `cargo test --offline --locked --all-targets -j1`,
+`cargo clippy --offline --locked --all-targets -j1 -- -D warnings`, and
+`cargo build --offline --locked --release -j1`; consumer native runs add
+`--features native`. Shared commands use `--manifest-path src/instrument-panel/Cargo.toml`
+and the normal GigPies target directory. All ran on Pi5 under the shared build
+reservation with Rust 1.97.1 and CARGO_INCREMENTAL=0.
+
+Publication-policy tests passed (6/9/9), complete-index guards passed, and both
+vendored packages match the shared source and their checksum manifests. The
+verbatim third-party DejaVu notice retains its upstream whitespace; authored
+files pass whitespace checks. Historical/exhaustive, provider-executable opt-ins,
+physical hardware and software-GPU opt-ins were skipped. Existing render evidence
+was retained without generating another set. Removed 10,234,398,024 bytes of
+completed test executables and the temporary validation log. These results
+supersede the interrupted gate status above; remaining GP-PANEL acceptance stays
+open. Private synchronization task 0023 records exact final source identities.
+
+### Channel validation and closeout — 2026-10-12
+
+Implemented the dedicated production channel page and shared 0.2.1 controls.
+Actual Rio captures: [settled channel](../assets/panel-desk-channel.png) and
+[mouse-focused local draft](../assets/panel-desk-channel-draft.png). Independent
+GP07 readback confirmed EQ +3 dB and compression 4:1, revision 1, ready/settled.
+Input telemetry in the capture is explicitly stale; no live input claim.
+Fallback, disconnected state and minimum-size pause were visually inspected.
+
+Normal all-target suites passed: shared 11; Desk default 331/native 334
+(21 opt-in tests skipped in each); Lightdesk default 135/native 136
+(5/6 opt-in tests skipped). Clippy with warnings denied passed all five builds.
+Publication-policy Python tests passed (GigPies 6, each consumer 9).
+Historical/exhaustive/hardware suites were intentionally not run.
+The cleaned presentation helper completed its 100-frame old-scene replay:
+45.79 ms median, 63.87 ms p95 observation, 344.80 ms startup, 119616 KiB RSS.
+This includes X readback/polling and is not a benchmark of the new Channel page
+or physical display latency. The broader performance/SSH/physical gates remain open.
+
+Cleanup removed 10,231,885,256 bytes of completed test executables and
+11,273,163 bytes across 305 disposable files and 51 scratch directories.
+Final sources, two captures, font and Rio remain; task scratch, intermediate
+captures, JSON dumps, logs and completed test executables are removed. Preview
+and measurement helpers now use automatically removed temporary directories.
+This bounded channel implementation is complete; operator visual acceptance and
+the remaining shared migration are still open. Do not archive GP-PANEL as done.
+
+### Acceptance and current evidence
+
+- [x] Live status/disk/process audit: rpi5, 32 GiB free; targets GigPies 4.2 GiB,
+  Desk 2.4 GiB, Lightdesk 1.4 GiB. No active Cargo found at initial inspection.
+- [x] Confirmed drift: Desk `native::Gpu::render` calls `raster::rgba`; Lightdesk
+  `native::upload` calls `render::ppm` then expands RGB to RGBA. Both upload whole
+  1920x1080 textures. Their blueprints explicitly chose winit/wgpu TUI appearance.
+- [x] Upstream example inspected: `ratatui/Cargo.toml` depends on Crossterm/libc,
+  not Ratatui; `main.rs` prints cooked-mode lines after probing. Its comment that
+  flush implies an atomic PTY message must not become our correctness assumption.
+- [x] Shared Ratatui package, 77 authored tiles, reproducible COLRv0 font,
+  stateful specimen, one-cell registry and source licence notices implemented.
+- [x] Actual Rio/Pi specimen captured; 16/20/24 px joins corrected with exact
+  font metrics; fallback, keyboard/mouse, resize and minimum-size checked; superseded captures removed.
+- [x] Direct Glyph Protocol registration/normal cleanup exercised: 77 slots
+  empty after exit. Geometry fails square-fit inspection; remains experimental.
+- [x] Initial production adapters use existing owner workers/actions, no app
+  pixel framebuffer. Real offline/null-owner screenshots retain read-only,
+  freshness, unavailable measurements and physical UNKNOWN states.
+- [ ] Full page-by-page physical-control redesign and all operator-path visual
+  acceptance. Current production pages retain their source text layouts inside
+  shared plates; this is not the completed instrument-panel migration.
+- [x] Final normal suites, rustfmt/Clippy and candidate publication checks pass.
+  Shared 11; Desk 329 default/332 native; Lightdesk 135 default/136 native.
+  Six matched 100-frame application and actual-terminal workloads recorded;
+  terminal timings include observation overhead and exclude physical scanout.
+- [ ] SSH path qualification, delayed protocol/reconnect cleanup, complete
+  interaction workload/presentation comparison with previous native renderer.
+- [x] Task-owned test executables, duplicate generated images/data and temporary
+  font/Python caches cleaned; runnable binaries, source and unique evidence kept.
+- [ ] Closure/archive after remaining acceptance, not before.
+
+### Retained evidence and next action
+
+User authorized installing tools on 2026-10-11; no TV connection was required for
+software terminal proof. Xvfb, xdotool, Pillow/fontTools and Mesa software Vulkan
+were provisioned; Rio 0.5.28 is extracted only into ignored task artifacts.
+No host audio/service, physical output, deployment, publication or Git index was
+changed. Shared source is distributed as exact-version checksum-verified Cargo
+directory packages to the two authorized consumers; no path dependencies.
+
+[Shared contract and runnable previews](../reference/INSTRUMENT_PANEL.md) owns
+usage, font authoring/licences and deployment limits. The
+[dated evidence record](../archive/records/2026-10-11-gp-panel-proof.md) retains
+actual screenshots and separately labelled application/terminal measurements.
+The original GP-UI-COMPARE record and contributor changes remain preserved.
+
+Next: complete the page-level physical controls and outstanding acceptance above. Keep this card open while
+those requirements remain; do not archive it as a completed migration.

@@ -33,6 +33,11 @@ receipt are recorded in the batch ledger. Historical campaigns remain opt-in.
 No physical playback, microphone capture, MIDI/DMX output, acoustic alignment or
 hardware timing qualification is claimed.
 
+The October 12 hygiene pass removed superseded task0020 build-only and
+panic-fixture repair bundles, plus Desk's pre-correction trial directory. The
+accepted behavior and gate counts above, final corrected Desk episodes and
+private integration receipts remain. No hardware evidence was removed.
+
 ## Live master EQ — task0018 software validation
 
 The optional owner extension and GP18-master-eq:1 provider path are implemented
@@ -661,7 +666,7 @@ correction. Complainiacs now accepts +5 dB at 300 Hz / −3 dB at 2400 Hz; held-
 body/presence improves from −8.49 to −2.36 dB. One current → new mix pair is ready
 locally. Listener preference is pending. The four other saved session pilots retain
 their settings. 71 Rust and four Python tests pass. See [evidence, rules and
-limitations](TONE_DECAY.md).
+limitations](../studies/TONE_DECAY.md).
 
 ## Independent supplied-reference review
 
@@ -691,7 +696,7 @@ unmet. A localized PCM-contact safeguard was reconciled with the existing repeat
 contact rule, with the unchanged candidate revalidated and the source limitation
 retained. One verified 12-second current → bass-corrected pair is ready; no playback,
 commit or push. 79 Rust and eight Python tests pass. See [bass/kick evidence and
-limitations](BASS_KICK.md).
+limitations](../studies/BASS_KICK.md).
 
 ## Kick/snare rhythmic emphasis
 

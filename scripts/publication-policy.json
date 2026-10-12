@@ -52,10 +52,18 @@
     "scripts/test_snare_context.py",
     "scripts/test_snare_temporal_evidence.py",
     "scripts/verify_delivery.py",
-    "src/automix/matching/review.html"
+    "src/automix/matching/review.html",
+    "scripts/build_panel_glyphs.py",
+    "scripts/package_panel.py",
+    "scripts/preview_panel.py",
+    "scripts/measure_panel_terminal.py",
+    "scripts/preview_panel_providers.py",
+    "scripts/probe_panel_cleanup.py"
   ],
   "binary_artwork": [
     "docs/assets/gigpies-concept.png",
-    "docs/assets/gigpies-hero.png"
+    "docs/assets/gigpies-hero.png",
+    "docs/assets/panel-desk-channel.png",
+    "docs/assets/panel-desk-channel-draft.png"
   ]
 }

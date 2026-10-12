@@ -201,6 +201,9 @@ Desk runtime source is `70ba6b99d10e315778f1b00edddd5e2cee417014`, digest
 Publication documentation commits do not change these runtime inputs. Exact
 artifact/checker/configuration hashes and immutable per-run receipts remain in the
 private task ledger. No private recordings or test configurations are published.
+Superseded software trials 1–36 and intermediate build/debug logs were removed
+after closure. The seven accepted trials 37–43, their verification receipts,
+reproduction sources and private ledger remain; physical qualification is still open.
 
 | Scenario | Trial | Independently checked result |
 |---|---:|---|
