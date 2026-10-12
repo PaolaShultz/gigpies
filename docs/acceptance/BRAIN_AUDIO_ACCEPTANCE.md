@@ -2,8 +2,8 @@
 
 Status: **SOFTWARE VALIDATION PASSED — 2026-10-06**. The independently reviewed
 frozen candidate passed complete production/consumer gates and all seven reserved
-two-Pi scenarios, trials 37–43. Earlier passes and failed trials are retained
-separately. These results do not authorize physical sound-card activation or
+two-Pi scenarios, trials 37–43. Superseded Pi4 trials 1–36 and old controller candidate binaries were
+removed during the October 12 hygiene pass; accepted trials and source patches remain. These results do not authorize physical sound-card activation or
 establish hardware/acoustic qualification. Publication, hosted CI and exact source/
 ledger receiving receipts are tracked separately by the coordinator.
 
