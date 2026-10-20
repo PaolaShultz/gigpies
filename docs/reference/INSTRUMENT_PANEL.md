@@ -7,6 +7,11 @@ in [GP-PANEL](../development/MODULE_IMPLEMENTATION_PLAN.md#gp-panel--shared-phys
 
 ## Rendering contract
 
+The selected Desk Channel has a bounded, opt-in material path described below.
+It supersedes the colour-font appearance for this screen only. The following
+shared font contract remains the other pages’ renderer and a separate fallback.
+
+
 Ratatui owns cell layout, widget rendering and incremental terminal updates.
 Labels/values remain ordinary text. Original reusable colour glyphs supply
 material boundaries, LED lenses, bounded glow and fader parts. No whole-screen
@@ -219,6 +224,11 @@ were recorded; the source and repeatable commands remain.
 
 ## Desk selected-channel page
 
+![Approved selected Channel panel with separate EQ, compressor and output sections](../assets/panel-desk-channel.png)
+
+Approved October 20, 2026. Actual production terminal capture using deterministic
+software audio; no physical audio or MIDI qualification is implied.
+
 The dedicated Ratatui Channel page requires the existing `--processing` capability
 probe and FOH context. Four bell bands (Hz/dB/Q and independent bypass), global EQ
 bypass, compressor threshold/ratio/knee/attack/release/makeup/bypass, pan, fader,
@@ -229,14 +239,15 @@ Other scopes and all exact-entry/review/modal pages retain their existing routes
 Click a parameter or encoder to open/select its detached processing field. U/I
 select fields; J/K adjust fine, N/P coarse; numeric entry plus Enter accepts text
 locally. F4 opens the complete existing review; only a separate Enter after all
-review pages are presented can confirm. Clicking the output fader/pan opens the
+review pages are presented can confirm. Clicking the output level/pan opens the
 existing exact-value editor. Mute/Hold/release still use owner review. The encoder
 is a field-selection target; continuous mouse dragging is not implemented.
 
 The graph is the calculated four-bell **settings response**, using the existing
-Desk EQ-response calculator and the owner's 48 kHz RBJ-bell convention. Its window
-is ±18 dB; it is not a spectrum or a measurement. Draft settings are amber and
-explicitly labelled; settled and target values remain distinct in the inspector.
+Desk EQ-response calculator and the owner's advertised sample rate and RBJ-bell convention. Its window
+is ±18 dB. The separately sourced spectrum described below sits behind it; the
+curve itself remains a settings response. Draft settings are amber, selected
+values cyan; full owner/draft differences remain in the existing review.
 Gain reduction reads the owner detector independently of drafts. Input sample
 peak is the real GP-METER observation; stale data cannot light a live meter.
 
@@ -255,7 +266,10 @@ injected role descriptors (no physical devices):
 
 `--keys` sends paced keyboard gestures, `--click X,Y` targets a terminal cell in
 window pixels, `--fallback` selects ordinary text, `--disconnect` drops only the
-owned private provider, and `--resize WIDTH,HEIGHT` exercises recovery. A channel
+owned private provider, and `--resize WIDTH,HEIGHT` exercises recovery; a semicolon-separated sequence
+checks shrink/restore. Rio may report one fewer row after a pixel resize than
+at startup: `--resize '1000,700;1928,1146'` restores 160×45 at 24 px.
+The minimum-size guard follows actual terminal cells, not requested pixels. A channel
 capture prints a concise independent read-only GP07 owner readback. Temporary
 X/terminal configs, logs and private synthetic-owner state are removed on exit;
 only the requested PNG remains. No JSON dump is retained by default.
@@ -271,7 +285,7 @@ computer-keyboard shortcut strip or shortcut prefixes; the keyboard bindings
 remain a development/accessibility path described here, not the panel layout.
 The existing controller plan owns physical mapping. Its channel rotary assignment
 is still proposed: this rendering change neither opens a MIDI port nor claims a
-working learned hardware profile. No unbound knob numbers are advertised.
+working learned hardware profile. Physical column numbers describe the intended MiniLab layout, not learned bindings.
 
 Shared three-cell indicator lenses use original metallic bezel/dark-lens geometry
 and bounded green/yellow/red/blue illumination (24 appended tiles). EQ, compressor
@@ -280,3 +294,176 @@ local draft. Mute indicates the owner's mute target; Hold indicates the owner ho
 Blue means a selected draft parameter; amber means a local unapplied draft.
 Explicit captions and values remain readable without colour. Unlit lenses remain
 visible. The new font requires `SHR_PANEL_FONT='SHR Panel Mono:0.3'`.
+
+
+## Channel cached materials and MiniLab columns
+
+Set `SHR_CHANNEL_MATERIALS=rio-kitty-v1` for the selected Channel experiment.
+Ratatui remains the sole terminal input/text/diff owner. Original MIT PNG plates,
+recessed wells, rounded pots, raised/latched buttons and four-colour LED lenses
+are composed behind ordinary text using Rio’s Kitty graphics protocol. Shading
+is calculated **offline in the application asset authoring tool**, not by a
+terminal shader engine. No full-screen framebuffer exists. Each used asset is
+uploaded once; subsequent frames diff placements and reuse the cache. Stable
+frames emit zero material bytes. The finite repertoire is 118 assets, 709,328
+base64 payload bytes; first use uploads only the needed subset.
+
+Authoring source: `../shr-desk/scripts/build_channel_materials.py` (system Python
+with Pillow), generated `src/channel_material_assets.rs`, renderer
+`src/channel_material.rs`. These contain original geometry, no third-party art,
+text or fabricated measurements. This explicit Rio 0.5.28 path has been inspected
+at 16/20/24 px on ARM64 using a real terminal under Xvfb. It is not a claim about
+arbitrary Kitty-compatible terminals, SSH, physical scanout or connected MIDI.
+
+The [Desk controller design](../../../shr-desk/docs/CONTROLLER.md#selected-channel-eight-physical-columns)
+owns the eight-column layout: EQ frequency/gain in columns 1–4, compressor
+threshold/attack, ratio/release and knee/makeup in 5–7, pan/level in 8. All eight
+pads align below; menus are contextual and the 9–16 layer holds less-used commands.
+Physical MIDI messages, encoder scaling/pickup and pad LED feedback remain to be
+mapped and qualified. Software menus use existing reviewed actions and owner
+readback; no new binding is implied.
+
+```sh
+/usr/bin/python3 scripts/preview_panel_providers.py desk --channel --materials --cpu-terminal --suffix channel
+```
+
+Add `--font-size 16` or `20` for smaller normal-size checks. The source supports
+repeatable private software-owner captures, not hardware activation. For normal
+connected use, keep the documented provider/role invocation and add the explicit
+material environment variable. See GP-PANEL for final screenshots, measurements
+and the remaining visual-review gate. Other screens are outside this increment.
+
+### Selected-channel spectrum contract
+
+GigPies `src/spectrum.rs` owns the analysis; Desk `src/spectrum.rs` only validates
+observations and maintains display peak holds. The existing lighting C-ANALYSIS
+stream is a four-source subscription and cannot select an arbitrary logical
+input, so it remains unchanged. The new path reuses GigPies' existing radix-2 FFT.
+
+`GP-SPECTRUM:1` is an optional, read-only extension on the existing private
+same-UID `audio.sock`. Its versioned request is the capability probe. It carries
+`contract`, `version`, `show_id`, `epoch`, `map`, `query`, and the stable `input`
+ID. Counters are unsigned JSON integers. The response echoes identity and query,
+returns `supported:true`, sample rate, `tap:"raw-pre-processing"`,
+`units:"millidBFS-peak-Hann-max"`, source `first_frame`/exclusive `end_frame`,
+`acquisition_age_ms`, `valid` and 64 finite integer `bins`. Invalid/missing/stale
+windows have `valid:false` and empty bins, never an invented silent spectrum.
+Old providers can refuse/close this separate observer connection without changing
+control or GP-METER connections. Desk stops probing an unrecognized provider
+until its control generation or selected input changes. A discovered provider's
+observer reconnects read-only, clearing history. The authenticated remote bridge
+does not advertise this extension yet; remote Desk sessions honestly omit it.
+
+The tap takes logical source samples before channel EQ, compressor, fader and mute,
+following the source-frame timeline after physical-slot mapping. It is digital
+sample amplitude, **not dB SPL or a calibrated acoustic measurement**. At 48 kHz,
+a 4096-sample periodic Hann window starts every 4800 source frames (10 Hz).
+Positive FFT amplitudes use `4/N` normalization; a bin-centred sinusoid with peak
+1 is 0 dBFS. Each of 64 equal-log intervals between 20 Hz and 20 kHz takes its
+maximum FFT-bin amplitude. This is peak-bin aggregation, not integrated band
+power or PSD. Empty intervals/silence floor at −96 dBFS; finite display range is
+−96..+24 dBFS, with visual bars clipped at 0. Resolution is 11.71875 Hz, so the
+lowest intervals may contain no FFT bin. Nonfinite or >16 peak source samples
+invalidate acquisition; no overflowing FFT is published.
+
+One selected tap per provider is a bounded analysis resource. Multiple observers
+requesting different inputs compete for that tap; every reply checks the actual
+input/map and omits mismatched data. Selection expires one second after the last
+query. The callback performs fixed storage copies and nonblocking SPSC offers;
+it allocates nothing, locks nothing and performs no I/O. The two-window queue
+cannot grow. The worker drains at most two windows, analyzes only the newest,
+and publishes one latest observation; full queues drop work. FFT, JSON and
+mutex-protected latest publication occur outside audio processing. Queries have
+an 80 ms minimum spacing and the existing bounded reply queue/deadline.
+
+Age is measured conservatively from receipt of the first source block using the
+monotonic clock; it includes collection/worker time, and Desk additionally charges
+the request round trip. This does not prove physical ADC capture age. Observations
+expire after 350 ms and repeated source frames cannot renew them. Selection,
+map/epoch changes, primary loss and reconnect clear display history. Peak markers
+hold 500 ms of source time then decay 24 dB/s; stale/absent data clears bars and
+markers without continued animation. The small existing graph legend shows a
+dash for unavailable data; no status banner adds a row.
+
+The final Channel layout has 16 usable graph rows, 16 meter segments, two aligned
+rows of eight pots and one row of eight contextual pads. The old four-row header
+and SETTLED/TARGET/EDITED/ENTRY inspector are removed. Channel identity and the
+software pad-layer selector sit in the plate edge; typed numbers appear inside
+the selected value well. Full review/confirmation, grants, caps, Hold, manual
+ownership and null/disarmed output remain in their existing menus/owner paths.
+Three separate vertical metal plates follow the physical columns: EQ 1–4,
+compressor 5–7, output 8. The top is an empty border row, a row of labels/LEDs, then an empty row
+before the display wells. Knobs and pads retain their existing coordinates. The EQ spectrum/response stays inside its 63×16-cell
+graph. Above the compressor pots, three recessed 13-segment meters show raw input
+peak/RMS (dBFS) and actual owner gain reduction (dB, filling downward). Raw levels
+are not presented as post-compressor measurements. Each observation keeps its
+existing freshness gate; unavailable scales remain unlit with a dash. Column 8
+retains its independent 16-segment raw sample peak meter. Materials remain cached and Ratatui owns all terminal input/text.
+
+Software proof and actual terminal captures (no physical devices):
+
+```sh
+# Under the shared build reservation, canonical GigPies target:
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_INCREMENTAL=0 cargo +1.97.1 build --locked -j1 --example spectrum-source
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked -j1 --test spectrum -- --nocapture
+/usr/bin/python3 scripts/preview_panel_providers.py desk --channel --materials --spectrum --cpu-terminal --suffix channel
+# Opt-in cost evidence; synthetic PCM remains exclusively test/example input:
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_INCREMENTAL=0 cargo +1.97.1 test --locked --release -j1 --test spectrum -- --ignored --nocapture
+```
+
+The existing [GP-PANEL card](../development/MODULE_IMPLEMENTATION_PLAN.md#gp-panel--shared-physical-instrument-panel)
+owns the final measurements, validation, screenshot states and limitations.
+
+### Notcurses comparison
+
+Studied upstream [Notcurses](https://github.com/dankamongmen/notcurses/tree/v3.0.11),
+its [plane](https://github.com/dankamongmen/notcurses/blob/v3.0.11/doc/man/man3/notcurses_plane.3.md),
+[visual](https://github.com/dankamongmen/notcurses/blob/v3.0.11/doc/man/man3/notcurses_visual.3.md)
+and [render](https://github.com/dankamongmen/notcurses/blob/v3.0.11/doc/man/man3/notcurses_render.3.md)
+documentation, `src/demo/trans.c` and `src/poc/gradients.c`, plus
+[libnotcurses-sys](https://github.com/dankamongmen/libnotcurses-sys).
+Planes are ordered cell matrices with alpha compositing; cell gradients and
+half-cell gradients remain spatially discrete. Bitmap visuals select terminal
+protocols such as Kitty/Sixel; ordinary/subcell text still depends on font
+metrics and glyph coverage. Incremental rendering compares composed cells and
+optimizes escapes; bitmap damage can entail larger retransmission. These are
+terminal rendering facilities, not a GPU material/shader engine.
+
+C 3.0.11 was built and run on this ARM64 Pi. Rust wrapper 3.11.0 declares edition
+2021 / Rust 1.65 and its build script requires C >=3.0.11; release documentation
+pairs it with C 3.0.11. Those declared requirements are consistent with the pinned Rust 1.97.1
+toolchain; this experiment did not compile the Rust FFI.
+Notcurses is Apache-2.0 with source exceptions in COPYRIGHT (including MIT
+neofetch data); the wrapper is MIT OR Apache-2.0. No dependency was added to Desk.
+
+The standalone MIT probe `src/instrument-panel/examples/material_compare.c`
+compares cell and half-cell gradients with the same authored EQ plate and a text
+plane. It independently owns its terminal; it never runs inside Ratatui. On Rio,
+text damaged the pixel plane with visible rectangular holes and caused image
+retransmission in this configuration. The successful cached-placement prototype
+therefore remains the bounded Channel choice. This is evidence about this probe
+and terminal, not a universal limit on Notcurses. A broad backend migration would
+require a separate architecture decision and equivalent owner/workflow checks.
+
+Reproduce with C 3.0.11 installed in an isolated prefix (no host services):
+
+```sh
+cc -O2 -Wall -Wextra -Werror $(pkg-config --cflags notcurses-core) src/instrument-panel/examples/material_compare.c $(pkg-config --libs notcurses-core) -o /tmp/material-compare
+# Export the existing EQ asset, no image synthesis at runtime:
+/usr/bin/python3 - <<'PYASSET'
+import base64, io, re
+from pathlib import Path
+from PIL import Image
+s = Path('../shr-desk/src/channel_material_assets.rs').read_text()
+data = re.search(r'\("eq", \d+, \d+, "([^"]+)"\)', s)[1]
+Path('/tmp/eq.rgba').write_bytes(Image.open(io.BytesIO(base64.b64decode(data))).convert('RGBA').resize((936,864)).tobytes())
+PYASSET
+/usr/bin/python3 scripts/preview_panel.py --name notcurses-compare --font-size 24 --width 2200 --height 1020 --cpu-terminal --keys '' --command /tmp/material-compare /tmp/eq.rgba /tmp/notcurses-stats.txt
+```
+
+Remove those temporary probe outputs after inspection. CMake qualification used
+`USE_MULTIMEDIA=none`, `USE_CXX=off`, `USE_DOCTEST=off`, `USE_PANDOC=off`,
+`USE_POC=off`, `BUILD_EXECUTABLES=off`, `BUILD_TESTING=off`, `USE_STATIC=off`,
+`USE_DEFLATE=on`, Release; local libunistring/ncurses/libdeflate headers, no host
+installation. Source tar SHA256:
+`acc8809b457935a44c4dcaf0ee505ada23594f08aa2ae610acb6f2355afd550a`.

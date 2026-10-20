@@ -17,10 +17,14 @@ p.add_argument('--width',type=int,default=1560)
 p.add_argument('--height',type=int,default=900)
 p.add_argument('--keys',default='a')
 p.add_argument('--click')
-p.add_argument('--resize')
+p.add_argument('--resize',help='WIDTH,HEIGHT;WIDTH,HEIGHT cycle')
+p.add_argument('--ready-file',type=Path,help='Owned preview coordination marker after input gestures')
 p.add_argument('--settle-seconds',type=float,default=.4)
 p.add_argument('--command',nargs=argparse.REMAINDER)
 a=p.parse_args()
+resize_sizes=[tuple(map(int,size.split(','))) for size in a.resize.split(';')] if a.resize else []
+screen_width=max([a.width]+[w for w,h in resize_sizes])
+screen_height=max([a.height]+[h for w,h in resize_sizes])
 assert a.name.replace('-','').replace('_','').isalnum()
 base=ROOT/'artifacts/instrument-panel';base.mkdir(parents=True,exist_ok=True)
 scratch=tempfile.TemporaryDirectory(prefix='shr-panel-preview-');run=Path(scratch.name)
@@ -46,7 +50,7 @@ env.update(DISPLAY=display,RIO_CONFIG_HOME=str(run),FONTCONFIG_FILE=str(run/'fon
 if a.system_fonts_only:env.pop('SHR_PANEL_FONT',None)
 x=None;r=None
 try:
- with (run/'xvfb.log').open('w') as log:x=subprocess.Popen(['Xvfb',display,'-screen','0',f'{a.width}x{a.height}x24','-nolisten','tcp'],stdout=log,stderr=log)
+ with (run/'xvfb.log').open('w') as log:x=subprocess.Popen(['Xvfb',display,'-screen','0',f'{screen_width}x{screen_height}x24','-nolisten','tcp'],stdout=log,stderr=log)
  for _ in range(100):
   if Path(f'/tmp/.X11-unix/X{number}').exists():break
   if x.poll() is not None:raise RuntimeError('virtual server failed')
@@ -72,13 +76,15 @@ try:
  else:raise RuntimeError('first terminal presentation deadline')
  time.sleep(.6) # allow read-only provider/role attachment after the first paint
  if a.resize:
-  rw,rh=a.resize.split(',');subprocess.run(['xdotool','windowsize',window,rw,rh],env=env,check=True);time.sleep(.2)
+  for size in a.resize.split(';'):
+   rw,rh=size.split(',');subprocess.run(['xdotool','windowsize',window,rw,rh],env=env,check=True);time.sleep(.4)
  if a.keys:
   for key in a.keys.split(','):
    subprocess.run(['xdotool','key',key],env=env,check=True)
    time.sleep(.12)
  if a.click:
   cx,cy=a.click.split(',');subprocess.run(['xdotool','mousemove',cx,cy,'click','1'],env=env,check=True)
+ if a.ready_file:a.ready_file.write_text('ready\n')
  time.sleep(max(0,min(a.settle_seconds,10)))
  output=base/(a.name+'.png');ImageGrab.grab(xdisplay=display).save(output)
  print(output)

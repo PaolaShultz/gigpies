@@ -8,7 +8,7 @@ import argparse,json,os,statistics,subprocess,time,tempfile
 from pathlib import Path
 from PIL import ImageGrab
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('scenes',type=Path);p.add_argument('--name',default='presentation');p.add_argument('--cpu-terminal',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('scenes',type=Path,nargs='?');p.add_argument('--channel-test',type=Path);p.add_argument('--workload',choices=['unchanged','controls','meters','spectrum'],default='unchanged');p.add_argument('--plain',action='store_true');p.add_argument('--name',default='presentation');p.add_argument('--cpu-terminal',action='store_true');a=p.parse_args()
 assert a.name.replace('-','').replace('_','').isalnum()
 base=ROOT/'artifacts/instrument-panel';base.mkdir(parents=True,exist_ok=True)
 scratch=tempfile.TemporaryDirectory(prefix='shr-panel-measure-');run=Path(scratch.name)
@@ -19,13 +19,20 @@ number=next(n for n in range(94,110) if not Path(f'/tmp/.X11-unix/X{n}').exists(
 env=os.environ.copy();env.pop('NO_COLOR',None);env.pop('WAYLAND_DISPLAY',None)
 env.update(DISPLAY=display,RIO_CONFIG_HOME=str(run),FONTCONFIG_FILE=str(fontconf),SHR_PANEL_FONT='SHR Panel Mono:0.3',VK_DRIVER_FILES='/usr/share/vulkan/icd.d/lvp_icd.json',VK_ICD_FILENAMES='/usr/share/vulkan/icd.d/lvp_icd.json',WINIT_UNIX_BACKEND='x11')
 timing=run/'frames.txt';timing.unlink(missing_ok=True)
+if a.channel_test:
+ env.update(SHR_CHANNEL_TIMING=str(timing),SHR_CHANNEL_WORKLOAD=a.workload)
+ if a.plain:env['SHR_CHANNEL_PLAIN']='1'
+ command=[str(a.channel_test.resolve()),'channel_material_performance','--ignored','--exact','--nocapture']
+else:
+ if not a.scenes:p.error('scenes or --channel-test required')
+ command=[str(ROOT/'target/release/examples/present'),str(a.scenes.resolve()),str(timing)]
 x=None;r=None;observed=[];started=time.monotonic_ns()
 try:
  with (run/'xvfb.log').open('w') as log:x=subprocess.Popen(['Xvfb',display,'-screen','0','1928x1122x24','-nolisten','tcp'],stdout=log,stderr=log)
  for _ in range(100):
   if Path(f'/tmp/.X11-unix/X{number}').exists():break
   time.sleep(.02)
- with (run/'rio.log').open('w') as log:r=subprocess.Popen(['/usr/bin/time','-v','-o',str(run/'resources.txt'),str(base/'tools/rio/usr/bin/rio'),'-e',str(ROOT/'target/release/examples/present'),str(a.scenes.resolve()),str(timing)],env=env,stdout=log,stderr=log,start_new_session=True)
+ with (run/'rio.log').open('w') as log:r=subprocess.Popen(['/usr/bin/time','-v','-o',str(run/'resources.txt'),str(base/'tools/rio/usr/bin/rio'),'-e',*command],env=env,stdout=log,stderr=log,start_new_session=True)
  for _ in range(250):
   q=subprocess.run(['xdotool','search','--class','rio'],env=env,capture_output=True,text=True)
   if q.returncode==0:
@@ -56,6 +63,7 @@ try:
    raise RuntimeError(f'frame {i} was not observed')
  r.wait(timeout=5)
  result={'frames':len(observed),'median_ms':statistics.median(observed)/1e6,'p95_ms':sorted(observed)[94]/1e6,'startup_to_first_visible_ms':startup/1e6,'renderer':'Rio tiny-skia' if a.cpu_terminal else 'Rio Vulkan lavapipe','limits':'X framebuffer; includes framebuffer readback/polling and scheduling, excludes physical scanout. Marker adds one changed row even for unchanged scenes.'}
+ if a.channel_test:result['application']=Path(str(timing)+'.app').read_text().strip()
  result['terminal_cells']=Path(str(timing)+'.size').read_text().strip()
  result['resources']={line.strip().split(': ',1)[0]:line.strip().split(': ',1)[1] for line in (run/'resources.txt').read_text().splitlines() if ': ' in line and any(k in line for k in ['User time','System time','Maximum resident'])}
  (base/(a.name+'.json')).write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))

@@ -1,0 +1,284 @@
+//! GP-SPECTRUM:1. Selected raw pre-processing digital samples; no acoustic calibration.
+//! Callback copies into a fixed two-window SPSC queue. FFT and publication run off-thread.
+use serde::{Deserialize, Serialize};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+};
+use std::time::Duration;
+const N: usize = 4096;
+pub const BINS: usize = 64;
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Request {
+    pub contract: String,
+    pub version: u32,
+    pub show_id: String,
+    pub epoch: u64,
+    pub map: u64,
+    pub query: u64,
+    pub input: String,
+}
+#[derive(Clone, Debug, Serialize)]
+pub struct Snapshot {
+    pub contract: &'static str,
+    pub version: u32,
+    pub supported: bool,
+    pub show_id: String,
+    pub epoch: u64,
+    pub map: u64,
+    pub query: u64,
+    pub input: String,
+    pub sample_rate: u32,
+    pub tap: &'static str,
+    pub units: &'static str,
+    pub first_frame: u64,
+    pub end_frame: u64,
+    pub acquisition_age_ms: u64,
+    pub valid: bool,
+    pub bins: Vec<i32>,
+}
+struct Window {
+    samples: [f64; N],
+    input: usize,
+    first: u64,
+    received: u64,
+    map: u64,
+}
+#[derive(Clone)]
+struct ResultWindow {
+    input: usize,
+    first: u64,
+    received: u64,
+    map: u64,
+    bins: Vec<i32>,
+}
+pub struct Spectrum {
+    selected: Arc<AtomicUsize>,
+    expires: AtomicU64,
+    stop: Arc<AtomicBool>,
+    sender: rtrb::Producer<Window>,
+    latest: Arc<Mutex<Option<ResultWindow>>>,
+    samples: [f64; N],
+    count: usize,
+    first: u64,
+    received: u64,
+    input: usize,
+    map: u64,
+    next: u64,
+    rate: u32,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+/// Hann-windowed peak-amplitude FFT, max per logarithmic band (20 Hz..20 kHz).
+/// 0 dBFS means a bin-centred sinusoid of peak amplitude 1; floor -96 dBFS.
+pub fn analyze(samples: &[f64; N], rate: u32) -> Vec<i32> {
+    let mut fft: Vec<_> = samples
+        .iter()
+        .enumerate()
+        .map(|(i, x)| {
+            [
+                x * (0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / N as f64).cos()),
+                0.,
+            ]
+        })
+        .collect();
+    crate::automix::analysis::fft(&mut fft);
+    let mut peaks = [0f64; BINS];
+    for (k, v) in fft.iter().enumerate().take(N / 2).skip(1) {
+        let hz = k as f64 * rate as f64 / N as f64;
+        if !(20. ..=20000.).contains(&hz) {
+            continue;
+        }
+        let bin = (((hz / 20.).log10() / 3.) * BINS as f64).floor() as usize;
+        peaks[bin.min(BINS - 1)] = peaks[bin.min(BINS - 1)].max(v[0].hypot(v[1]) * 4. / N as f64);
+    }
+    peaks
+        .iter()
+        .map(|p| {
+            (20000. * p.max(10f64.powf(-4.8)).log10())
+                .round()
+                .clamp(-96000., 24000.) as i32
+        })
+        .collect()
+}
+impl Spectrum {
+    pub fn new(rate: u32) -> Self {
+        let (sender, mut receiver) = rtrb::RingBuffer::<Window>::new(2);
+        let selected = Arc::new(AtomicUsize::new(usize::MAX));
+        let stop = Arc::new(AtomicBool::new(false));
+        let latest = Arc::new(Mutex::new(None));
+        let (out, halt) = (latest.clone(), stop.clone());
+        let worker = std::thread::spawn(move || {
+            while !halt.load(Ordering::Relaxed) {
+                let mut newest = None;
+                // Fixed queue capacity: bounded drain; obsolete windows discarded.
+                for _ in 0..2 {
+                    if let Ok(w) = receiver.pop() {
+                        newest = Some(w);
+                    }
+                }
+                if let Some(w) = newest {
+                    let bins = analyze(&w.samples, rate);
+                    *out.lock().unwrap() = Some(ResultWindow {
+                        input: w.input,
+                        first: w.first,
+                        received: w.received,
+                        map: w.map,
+                        bins,
+                    });
+                } else {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        });
+        Self {
+            selected,
+            expires: AtomicU64::new(0),
+            stop,
+            sender,
+            latest,
+            samples: [0.; N],
+            count: 0,
+            first: 0,
+            received: 0,
+            input: usize::MAX,
+            map: 0,
+            next: 0,
+            rate,
+            worker: Some(worker),
+        }
+    }
+    /// No locks, allocation, syscalls or FFT. Input is interleaved source PCM.
+    pub fn offer(&mut self, pcm: &[f64], channels: usize, frame: u64, received: u64, map: u64) {
+        if received > self.expires.load(Ordering::Relaxed) {
+            self.count = 0;
+            return;
+        }
+        let input = self.selected.load(Ordering::Relaxed);
+        if input >= channels || channels == 0 {
+            return;
+        }
+        if input != self.input
+            || map != self.map
+            || (self.count != 0 && frame != self.first + self.count as u64)
+        {
+            self.count = 0;
+            self.next = frame;
+            self.input = input;
+            self.map = map;
+        }
+        for (i, chunk) in pcm.chunks_exact(channels).enumerate() {
+            let at = frame + i as u64;
+            if at < self.next {
+                continue;
+            }
+            if self.count == 0 {
+                self.first = at;
+                self.received = received;
+            }
+            if !chunk[input].is_finite() || chunk[input].abs() > 16. {
+                self.count = 0;
+                self.next = at + self.rate as u64 / 10;
+                continue;
+            }
+            self.samples[self.count] = chunk[input];
+            self.count += 1;
+            if self.count == N {
+                let _ = self.sender.push(Window {
+                    samples: self.samples,
+                    input,
+                    first: self.first,
+                    received: self.received,
+                    map,
+                });
+                self.count = 0;
+                self.next = self.first + self.rate as u64 / 10;
+            }
+        }
+    }
+    pub fn snapshot(&self, r: &Request, index: usize, now: u64) -> Snapshot {
+        self.expires
+            .store(now.saturating_add(1000), Ordering::Relaxed);
+        self.selected.store(index, Ordering::Relaxed);
+        let w = self
+            .latest
+            .lock()
+            .unwrap()
+            .clone()
+            .filter(|w| w.input == index && w.map == r.map);
+        let valid = w
+            .as_ref()
+            .is_some_and(|w| now.saturating_sub(w.received) <= 350);
+        Snapshot {
+            contract: "GP-SPECTRUM",
+            version: 1,
+            supported: true,
+            show_id: r.show_id.clone(),
+            epoch: r.epoch,
+            map: r.map,
+            query: r.query,
+            input: r.input.clone(),
+            sample_rate: self.rate,
+            tap: "raw-pre-processing",
+            units: "millidBFS-peak-Hann-max",
+            first_frame: w.as_ref().map_or(0, |w| w.first),
+            end_frame: w.as_ref().map_or(0, |w| w.first + N as u64),
+            acquisition_age_ms: w.as_ref().map_or(0, |w| now.saturating_sub(w.received)),
+            valid,
+            bins: if valid { w.unwrap().bins } else { vec![] },
+        }
+    }
+}
+impl Drop for Spectrum {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(w) = self.worker.take() {
+            let _ = w.join();
+        }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn stale_selection_and_bounded_handoff() {
+        let mut s = Spectrum::new(48000);
+        let r = Request {
+            contract: "GP-SPECTRUM".into(),
+            version: 1,
+            show_id: "test".into(),
+            epoch: 1,
+            map: 1,
+            query: 1,
+            input: "input-01".into(),
+        };
+        assert!(!s.snapshot(&r, 0, 1000).valid);
+        for i in 0..86 {
+            s.offer(&[0.5; 48], 1, i * 48, 1000, 1);
+        }
+        let deadline = std::time::Instant::now() + Duration::from_secs(1);
+        while !s.snapshot(&r, 0, 1100).valid {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(!s.snapshot(&r, 0, 1351).valid);
+        assert!(!s.snapshot(&r, 1, 1100).valid);
+        let mut r = r;
+        r.map = 2;
+        assert!(!s.snapshot(&r, 0, 1100).valid);
+    }
+    #[test]
+    fn tone_and_silence() {
+        for k in [8, 85, 853] {
+            let x = std::array::from_fn(|i| {
+                0.5 * (std::f64::consts::TAU * k as f64 * i as f64 / N as f64).sin()
+            });
+            let b = analyze(&x, 48000);
+            assert!((b.iter().max().unwrap() + 6021).abs() < 3);
+            let peak = b.iter().position(|v| Some(v) == b.iter().max()).unwrap();
+            let hz = k as f64 * 48000. / N as f64;
+            assert_eq!(peak, ((hz / 20.).log10() / 3. * 64.).floor() as usize);
+        }
+        assert!(analyze(&[0.; N], 48000).iter().all(|v| *v == -96000));
+    }
+}

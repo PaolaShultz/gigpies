@@ -587,6 +587,403 @@ terminal specimen must pass visual/cell acceptance before production migration.
    limitations; clean only task-owned disposable intermediates. Close/archive
    this card only after required software/terminal gates pass.
 
+### Single-screen material revision — 2026-10-12 (active)
+
+The earlier font appearance was rejected as visually flat. The operator has now
+accepted the cached-material screenshots and requested removal of redundant
+titles. This increment is
+restricted to selected Channel; no broader migration, commits, deployment,
+hardware, services or MIDI activation. Canonical checkouts only, one thread.
+
+Inspection: the custom COLRv0 tiles and rounded knobs are real. Flat `panel()`
+fills occupy most pixels, buttons use square edge strips, and three-cell lamps
+remain narrow stepped octagons. Font transport success is not visual acceptance.
+
+Additional operator direction: model the MiniLab as eight columns. Columns
+1–4 pair frequency/gain (encoders 1–4 / 9–12); 5–7 pair threshold/attack,
+ratio/release and knee/makeup; 8 pairs pan/level. Exactly eight contextual pads
+align below. Secondary 9–16 contains less-used commands. Mute belongs in Output;
+level remains the primary rotary. The owning controller document defines intended
+positions and explicitly records missing learned MIDI/LED mappings.
+
+Decision after actual comparison: retain Ratatui as the sole frontend/input/text
+owner, with **Channel-only cached Kitty material placements**, explicitly enabled
+by `SHR_CHANNEL_MATERIALS=rio-kitty-v1`. The proposal preceded implementation;
+there is no production Notcurses migration and no shared package/version change.
+Original MIT plates, wells, buttons, rounded pots and LED lenses are authored
+offline in Desk. The 119-asset repertoire is 668,960 base64 bytes; assets are
+uploaded on first use and reused. No per-frame asset generation, whole-screen
+framebuffer or independent second terminal owner exists. Lightdesk is unchanged.
+
+Notcurses C 3.0.11 was compiled and run as ARM64, independently in Rio 0.5.28.
+The reusable C probe compares cell/half-cell gradients and the identical material
+plate. In this configuration ordinary text over the pixel plane caused rectangular
+holes and image retransmission: 100 unchanged renders 44.106 ms / 800 bytes;
+100 text-changing renders 80.368 ms / 4,324,476 bytes. These are library render /
+blocking-write totals, **not observed presentation latency**, and not equivalent
+to the Desk workload. Planes/subcells improve terminal composition, not material
+shading itself. C/Rust versions, licences, source examples and reproducible probe
+commands are in the [existing reference](../reference/INSTRUMENT_PANEL.md#notcurses-comparison).
+Rust wrapper source compatibility was inspected; its FFI was not compiled.
+
+Polish following visual acceptance: removed the numbered section headings and
+their raised title strips, the redundant signal-flow sentence, graph heading,
+repeated band captions and idle “Channel control” / “Owner ready” captions.
+Channel identity, parameter names/units, menu actions, values and operational
+states remain. Protection/epoch/revision now occupy the former signal-flow line.
+The renderer, cache strategy and action semantics are unchanged. The performance
+figures below describe the accepted material build before this label cleanup;
+removing titles is not a backend speed change. The same two final screenshot
+paths are replaced in place after real-terminal inspection. The title-cleanup
+revision again passes all 332 default / 335 native normal tests (22 opt-ins
+excluded per configuration), both warnings-denied Clippy configurations,
+formatting, both release builds and both proposed-index publication guards.
+Removed the polish pass’s completed test executables, logs and duplicate PNGs
+after the checks: 7,788,910,943 file bytes; the final two PNG paths are retained.
+
+Final connected proof, real Rio/Xvfb on this Pi, tiny-skia backend:
+
+- [Channel / pads 1–8](../assets/panel-desk-channel.png): owner revision 1,
+  EQ enabled, band 1 +3 dB, compressor enabled with settled ratio 4:1.
+- [Edited ratio / pads 9–16](../assets/panel-desk-channel-draft.png): owner revision
+  3 after reviewed mute and Hold; selected local ratio 6:1 remains distinct from
+  settled/target 4:1. Independent read-only GP07 readback confirms the owner ratio
+  remains 4:1. Green/yellow/red/blue lenses and dark counterparts are visible.
+
+These are actual production Desk controls connected to a private software owner,
+with injected role descriptors and synthetic software input. Meter/GR values are
+owner observations, not renderer inventions; the graph is calculated settings
+response, not spectrum. Physical controller/display/audio qualification is not
+claimed. Grants, full review paging, Hold/manual ownership, caps, stale gates and
+null/disarmed behavior remain in existing owner paths. No device was opened.
+
+Inspected ordinary text, seams, bevels, plate edges, LED states and numeric wells
+at 16/20/24 px. The lower numeric bevel was moved below the digit baseline after
+the small-font check. Eight aligned pads and all 24 processing field targets are
+covered by normal regression tests. Actual Band menu and secondary-layer clicks,
+review/apply, owner readback, plain-text fallback, provider loss and shrink/restore
+were exercised. Provider loss clears materials and returns to the existing
+readable unavailable page. Rio reports 44 rows after resizing to the original
+1122-pixel height; restore to 1146 pixels supplies the required 45 rows. The guard
+correctly removes controls/materials below minimum and restores them afterward.
+
+Reproduce final state 1 from GigPies:
+
+```sh
+/usr/bin/python3 scripts/preview_panel_providers.py desk --channel --materials --cpu-terminal --suffix channel --keys g,e,k,i,i,3,Return,i,i,i,i,i,i,i,i,i,i,i,i,i,i,i,k,i,i,4,Return,F4,Next,Return
+```
+
+For state 2 append `,m,Return,h,Return,e` followed by 19 `,i` gestures and
+`,6,Return`, and add `--click 1750,102` to select pads 9–16. These are paced
+software gestures, not claims of MIDI binding. For a read-only starting preview,
+omit `--keys`; add `--font-size 16` or `20` for smaller checks.
+
+Validation: normal Desk default **332 passed**, native **335 passed**, 22 opt-ins
+excluded in each; default/native warnings-denied Clippy, both release builds, formatting and Python
+publication regressions (Desk 9, GigPies 6) passed. The first native run printed every passing
+suite but its launcher returned 143; a clean reserved rerun exited 0. Historical,
+hardware and unrelated actual-provider tests remain opt-in. Only the explicitly
+requested bounded rendering experiment/measurement is run separately.
+
+Release sink measurement (same production renderer, explicit synthetic fixture
+workloads, 34 warmup + 100 measured frames; drawing/diff/encoding, no terminal):
+
+| Workload | Material median / p95 | ANSI + material bytes / 100 warm frames |
+|---|---|---:|
+| Unchanged | 1.306 / 1.954 ms | 1,900 |
+| Rotating ratio | 1.315 / 1.343 ms | 13,108 |
+| Changing GR meter | 1.310 / 1.323 ms | 4,980 |
+
+Stable frames send zero material bytes (19 bytes/frame are backend cursor output).
+First material frame is 444,746 bytes for the control fixture, including 434,685
+material bytes; the finite rotated-position cache fills during warmup. The same
+layout using colour glyphs instead of bitmap materials measures 1.006–1.014 ms
+median, 12,912 bytes first frame and 1,900 / 14,705 / 4,980 warm bytes respectively.
+This isolates the approximately 0.3 ms material application cost; it does not
+measure terminal drawing or network performance.
+
+Actual release terminal runs (100 frames each, 160×45, Rio 0.5.28 tiny-skia):
+
+| Workload | Observed median / p95 | TTY application median / p95 | Total bytes, including cold start + observer marker |
+|---|---|---|---:|
+| Unchanged + marker | 69.25 / 82.66 ms | 1.355 / 1.472 ms | 467,254 |
+| Rotating ratio | 73.66 / 97.13 ms | 1.370 / 1.471 ms | 605,941 |
+| Changing GR meter | 68.44 / 81.77 ms | 1.353 / 1.426 ms | 471,965 |
+| Colour-font ratio comparison | 49.33 / 59.36 ms | 1.121 / 1.304 ms | 63,425 |
+
+The observer reads the real X framebuffer and ACKs a changing marker through
+terminal input; timings include readback/polling/scheduling, exclude physical
+scanout, and are not a refresh-rate qualification. Even “unchanged” presentation
+changes the observer row. Material startup-to-visible was 200–301 ms and first
+TTY frame 452,912 bytes (including observer); comparison 191 ms / 29,633 bytes.
+Rio plus child peak RSS was 62,064–64,144 KiB versus 30,480 KiB; user CPU over
+100 frames was 4.55–5.00 s versus 2.49 s. Counts cover frame text/material writes; console setup/cleanup and observer
+input ACKs are excluded. Local PTY bytes are not network traffic estimates. Cached materials improve appearance at measurable terminal
+cost, so this remains opt-in pending visual review and actual display qualification.
+
+Reproduce the separately labelled synthetic performance workload:
+
+```sh
+# From shr-desk, under the usual nonblocking build reservation:
+flock -xn /home/shome/p/.gigpies-build.lock env CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1 cargo +1.97.1 test --offline --locked --release -j1 --test frontend --no-run
+# Use the executable printed by Cargo; run from GigPies:
+/usr/bin/python3 scripts/measure_panel_terminal.py --channel-test ../shr-desk/target/release/deps/frontend-392bae132e49f501 --workload controls --cpu-terminal --name channel-controls
+```
+
+Repeat with `unchanged`/`meters`; `--plain` supplies the colour-font comparison.
+Run the executable directly with `channel_material_performance --ignored --exact
+--nocapture` for warm sink results. No fixture measurements enter production state.
+
+Final checks: generated assets reproduce byte-for-byte; 44 local documentation
+file links resolve; Python syntax, whitespace and complete proposed-index
+publication guards passed in both repositories without changing their real index.
+No commit, push or outgoing publication was attempted. After inspecting processes,
+open files and the shared build lock, removed 71 completed test executables,
+Notcurses scratch/dependencies, intermediate renders and measurement JSONs:
+**7,820,830,577 file bytes** reclaimed (7,820,427,264 allocated bytes). Desk's normal
+target remains 3.9 GiB with runnable debug/release binaries and reusable libraries;
+existing Rio/font tools remain 22 MiB. Retained only the two final screenshot
+replacements, reusable source/commands and this owning result record.
+
+### Selected Channel vertical separation — 2026-10-20
+
+The operator rejected the cross-section EQ expansion. This revision restores
+three independent full-height metal plates: EQ columns 1–4, compressor 5–7,
+output 8. The EQ keeps 16 usable rows and the genuine spectrum behind the curve,
+within its own 63-cell width. Three recessed meters above the compressor pots
+show existing raw input peak/RMS in dBFS and actual provider gain reduction in dB.
+Reduction fills downward in amber; raw meters rise in cyan/amber. These are
+independently fresh observations, not estimated compressor output. Unavailable
+values leave an unlit scale and dash. Output keeps 16 segments; sixteen pots,
+eight aligned columns, one-row contextual pads and review/authority paths stay
+in place. Cached material authoring now contains 118 assets / 709,328 base64 bytes.
+No DSP/provider, MIDI mapping, hardware or service changes are involved.
+
+Actual production terminal capture on rpi5 used Rio 0.5.28/tiny-skia under Xvfb,
+with the existing deterministic software PCM provider. Inspected 16/20/24 px,
+plate seams, numerical contrast, primary/secondary pads, compressor menu,
+minimum-size pause and resize recovery (20 px restore requires 1608×966 outer
+window dimensions). The two final files were overwritten in `docs/assets/`:
+
+- `panel-desk-channel.png`: 383,689 bytes; applied EQ +3 dB / compressor 4:1,
+  real raw peak −6.0 dBFS, RMS −9.0 dBFS and owner GR 7.9 dB.
+- `panel-desk-channel-draft.png`: 386,194 bytes; reviewed mute/Hold and secondary
+  pads, local ratio 6:1 while independent owner readback remains 4:1. The raw meter
+  observer was stale at this capture and correctly shows unlit scales/dashes;
+  the independently fresh spectrum and actual owner GR remain visible.
+
+Focused frontend checks passed (7 / 1 ignored), including the section boundary,
+GR direction and stale clearing. Complete default Desk suite passed **334 / 23
+ignored** and native **337 / 23 ignored**; both all-target Clippy configurations
+passed with warnings denied. Builds used Rust 1.97.1, `--locked`, `-j1`,
+`CARGO_INCREMENTAL=0`, canonical targets and the shared reservation. Unchanged
+provider/DSP suites and unrelated historical/exhaustive/hardware opt-ins were not
+rerun. Formatting and both working-tree whitespace checks passed. This subsection
+owns the replacement screenshots and measurements; October 12 appearance and
+rendering costs below describe the superseded wide-EQ layout.
+
+Release rendering evidence before the header-framing correction, with compilation
+idle, uses the same
+reproducible `channel_material_performance` and `measure_panel_terminal.py`
+commands below. Sink runs have 34 warmup + 100 measured frames; actual Rio runs
+have 100 acknowledged frames. Fixtures are explicitly synthetic benchmark input;
+the final screenshots instead use the real software-audio provider path.
+
+| Workload | Sink median / p95, µs | Warm sink bytes / 100 | TTY application median / p95, µs | TTY bytes / 100, including cold upload | X observation median / p95, ms |
+|---|---:|---:|---:|---:|---:|
+| Unchanged | 1,043 / 1,424 | 1,900 | 1,162 / 1,361 | 518,439 | 78.85 / 116.09 |
+| Controls | 1,045 / 1,068 | 10,682 | 1,190 / 1,744 | 654,263 | 83.80 / 111.73 |
+| Meters | 1,048 / 1,071 | 13,118 | 1,181 / 2,046 | 535,087 | 79.20 / 103.79 |
+| Spectrum | 1,161 / 1,193 | 152,810 | 1,353 / 1,506 | 798,183 | 81.16 / 116.29 |
+
+First TTY frames sent 497,584–501,164 bytes. Material traffic across 100 frames
+was 471,319 bytes, or 603,815 with changing knob angles; assets remain cached,
+not uploaded every frame. Terminal startup-to-visible was 222.41–478.94 ms and
+peak RSS 66,736–72,736 KiB. X observation includes framebuffer readback/polling,
+scheduling and the changing marker row; it excludes physical scanout. These
+are separate application/transport/presentation observations, not a claim of
+unchanged speed. Analysis and provider transport code were unchanged, so their
+October 12 measurements were not rerun or relabelled as new evidence.
+
+Closeout: after build/display processes exited, checked the shared lock and
+`/proc` references, then removed 86 task-created disposable files: **8,034,784,623
+file bytes / 8,033,243,136 allocated bytes**. Removed only this run's logged test
+executables, duplicate captures, benchmark JSON and temporary logs. Desk's normal
+build cache is 3.9 GiB; reusable Rio/font tools remain 22 MiB; free space is 53 GiB.
+Source, licences, required application executables and earlier uncommitted work
+were preserved. Only the two final screenshots remain. No rebuild followed
+cleanup. No commit, push, deployment or hardware activation was performed.
+
+Header framing correction: the top now has an empty border row, then the
+labels/LEDs row, then an empty row before the display wells. The earlier change
+put the border below the labels and was rejected. Both final captures were
+replaced and inspected with the corrected arrangement. Reproduce the secondary
+pad layer with `--click 540,78` (its header control is now below the border). The knobs, values and one-row pad strip
+keep their coordinates; displays keep their bottom edge, with a 16-row EQ graph,
+16 output segments and 13 compressor-meter segments. A focused regression checks
+both empty header rows and the existing control positions. Focused tests passed;
+complete normal suites passed (334 default / 337 native, 23 opt-ins ignored in
+each), as did both warnings-denied all-target Clippy checks. The operator approved
+the final capture on October 20 and explicitly authorized commit/push. The
+approved image is embedded in `docs/reference/INSTRUMENT_PANEL.md`. Publication
+guard regression suites passed (GigPies 6, Desk 9). Both default/native release
+builds passed, as did the complete-index publication guards and local document
+link checks. The accepted Channel state is ready for the authorized source
+commits; this does not deploy binaries or qualify physical hardware.
+
+Final cleanup after checking the shared lock and process references removed 80
+task-created test executables, duplicate captures and logs: 8,024,184,915 file
+bytes / 8,022,634,496 allocated bytes. Required default/native application output,
+source and licences remain; Desk's shared build cache is 3.9 GiB and free space
+is 53 GiB. The approved documentation image was preserved exactly. No rebuild
+followed cleanup.
+
+### Selected Channel refinement and real spectrum — 2026-10-12
+
+This continuation supersedes the title-cleanup layout/evidence above. Canonical
+GigPies and Desk only; existing edits preserved. No hardware, services, commits,
+pushes or deployment. The approved cached metal renderer remains; Ratatui is the
+only terminal/input owner. The first four rows and redundant inspector captions
+are removed. Eight contextual pads occupy one row, with the 9–16 software layer
+retained. Eight aligned physical columns preserve all sixteen pot assignments.
+The enlarged graph uses 17 rows across columns 1–7; the level meter has 17 segments.
+Draft values and typed entry remain in their numerical wells; full review,
+confirmation, grants, caps, freshness, Hold and manual ownership retain existing
+owner paths. No new MIDI binding is claimed. Arturia's manual documents the bank
+selection and subsequent pad functions, but no separate switch message; Desk's
+current decoder has no such mapping. Device/preset verification remains open in
+`shr-desk/docs/CONTROLLER.md`, outside the operating screen.
+
+GigPies now supplies optional `GP-SPECTRUM:1` from actual logical raw source PCM,
+before processing/fader/mute. A fixed two-window SPSC handoff feeds the existing
+FFT on a worker. It computes 4096-point periodic-Hann peak spectra every 4800
+source frames, max-aggregated into 64 logarithmic bins, 20 Hz–20 kHz. Units are
+millidBFS peak amplitude (bin-centred full-scale sine = 0 dBFS), not acoustic SPL.
+Callback copies are bounded and allocation/lock/I/O-free. Obsolete work is dropped;
+source age, frames, input/map/epoch and query identity fence observations. Desk
+polls at 10 Hz, expires at 350 ms including round-trip age, and renders coloured
+levels behind the EQ curve with 500 ms peak hold / 24 dB/s decay. Missing or stale
+data clears the plot without fake motion or a banner. Unsupported local providers
+remain usable via independent control/meter connections. The remote bridge has
+no spectrum capability yet and honestly omits it. One active selected analysis
+tap per provider is the explicit resource bound, not a product channel cap.
+
+The reusable `examples/spectrum-source.rs` supplies deterministic software PCM
+through the actual provider capture path; synthetic generation exists only in
+this example and tests/benchmarks. The owning contract and repeatable commands
+are in `docs/reference/INSTRUMENT_PANEL.md#selected-channel-spectrum-contract`.
+
+Actual software proof: the real provider transport verified 93.75, 996.09375
+and 9996.09375 Hz bin-centred tones at −6.021 dBFS, a change to −18.062 dBFS,
+silence and a new observer connection. The actual source → FFT/provider → Desk
+consumer test received **59 distinct windows in six seconds**, verified peak
+hold/decay, source loss and a fresh provider epoch. The callback heap guard passed.
+These are deterministic software-audio results, not a live hardware measurement.
+
+The final two files were overwritten after inspecting the actual production Desk
+in ARM64 Rio 0.5.28/tiny-skia under owned Xvfb on this Pi:
+
+- `docs/assets/panel-desk-channel.png`: owner revision 1, EQ band 1 +3 dB,
+  compressor 4:1, fresh raw 996.09375 Hz spectrum/peak and pads 1–8.
+- `docs/assets/panel-desk-channel-draft.png`: owner revision 3 after reviewed mute
+  and Hold, local selected ratio 6:1 and pads 9–16. Independent readback still
+  reports settled 4:1. Raw spectrum remains present through mute, as specified.
+
+Inspected 16/20/24 px text/values, plate seams, pot geometry, graph contrast,
+Band and secondary menus, full review/apply, minimum-size pause, shrink/restore,
+older-provider fallback and provider loss. No browser, generated artwork or
+buffer replay serves as appearance evidence. The preview helper now sizes Xvfb
+for the largest requested resize and waits for actual preview readiness before
+an owned-provider disconnect; its former fixed delay raced startup under load.
+
+Reproduce final state 1 with the earlier applied-state key sequence and add
+`--spectrum`. State 2 appends the earlier mute/Hold/draft gestures and uses
+`--click 540,54` for the relocated layer control. These are software input events,
+not learned MIDI bindings. The retained fixtures are explicitly software-only.
+
+Validation on the frozen production sources used Rust 1.97.1, `--locked`,
+`CARGO_INCREMENTAL=0`, `-j1`, canonical targets and the shared build reservation.
+Complete normal `cargo test --all-targets` suites passed: GigPies **445 passed /
+20 ignored**, `--features hardware-host` **529 / 46**; Desk default **334 / 23**,
+`--features native` **337 / 23**. All-target Clippy with `-D warnings` passed both
+owning configurations. The hardware-host feature suite used software fixtures;
+no physical device was activated. Focused allocation, contract, layout and
+recovery regressions passed, as did the explicit actual-provider spectrum opt-in.
+Unrelated historical, exhaustive, audition, physical-device and GPU opt-ins stayed
+skipped. Formatting and both working-tree whitespace checks passed.
+
+After the disconnect, native validation found one truncated cached test ELF
+(`actions`); it was rebuilt and the complete native suite passed. No production
+source change was required. Earlier complete-suite totals above were retained
+from the completed pre-disconnect runs; native was rerun because its completion
+was not preserved.
+
+Release cost evidence on rpi5, measured after compilation was idle:
+
+- FFT plus 64-band aggregation: **283 µs median / 285 µs p95**, 100 warmup +
+  1,000 measured windows. Selected callback copy/handoff: **177 µs total for
+  1,000 × 48-frame blocks** (this measures the bounded offer, not FFT work).
+- Actual local provider transport: nine queries, **748 µs median / 1,097 µs max**
+  round trip, **5,548 framed reply bytes** total, including initial unavailable
+  replies. This small sample includes provider scheduling and JSON; it is not
+  network or physical capture latency.
+
+The explicit synthetic rendering benchmark uses the production renderer, 160×45
+cells, cached materials, 34 warmup + 100 measured sink frames. Values below are
+observations, not an assertion of unchanged speed or statistical equivalence.
+
+| Workload | Sink render median / p95, µs | Warm sink bytes / 100 frames | Actual TTY app median / p95, µs | TTY bytes / 100 frames, including cold upload |
+|---|---:|---:|---:|---:|
+| Unchanged | 1,363 / 1,404 | 1,900 | 1,134 / 1,210 | 440,167 |
+| Changing controls | 1,033 / 1,072 | 10,682 | 1,150 / 1,258 | 575,991 |
+| Moving meters | 1,031 / 1,068 | 6,022 | 1,134 / 1,206 | 447,219 |
+| Moving spectrum | 1,153 / 1,193 | 172,783 | 1,342 / 1,436 | 718,329 |
+
+Actual Rio 0.5.28/tiny-skia presentation, 100 acknowledged frames per workload:
+
+| Workload | X framebuffer observation median / p95, ms | Startup to first visible, ms | Peak RSS, KiB |
+|---|---:|---:|---:|
+| Unchanged | 78.03 / 103.28 | 464.07 | 75,872 |
+| Changing controls | 87.68 / 113.73 | 236.08 | 82,512 |
+| Moving meters | 74.42 / 96.68 | 213.58 | 74,816 |
+| Moving spectrum | 79.85 / 102.69 | 223.07 | 75,840 |
+
+Presentation includes X framebuffer readback, polling and scheduling, excludes
+physical scanout, and adds one changing marker row even for the unchanged case.
+TTY first frames were 419,315–423,751 bytes; cached material traffic over all 100
+frames was 399,679 bytes except controls (532,175 bytes as new knob angles entered
+the cache). No full-screen bitmap or static-material upload occurs every frame.
+The sink and real-terminal measurements are separate; cold uploads and marker
+traffic must not be compared directly with warmed sink deltas.
+
+Reproduce cost evidence under the shared reservation with `CARGO_INCREMENTAL=0`
+and `CARGO_BUILD_JOBS=1`: in GigPies,
+`cargo +1.97.1 test --locked --release -j1 --test spectrum -- --ignored --nocapture`
+and the same command without `--ignored` for actual provider transport. In Desk,
+`cargo +1.97.1 test --locked --release -j1 --test frontend channel_material_performance -- --ignored --exact --nocapture`.
+The resulting executable was `shr-desk/target/release/deps/frontend-392bae132e49f501`.
+From GigPies, run `scripts/measure_panel_terminal.py --channel-test EXECUTABLE
+--workload WORKLOAD --cpu-terminal --name channel-WORKLOAD` using `/usr/bin/python3`
+for each of `unchanged`, `controls`, `meters`, `spectrum`. Synthetic benchmark
+fixtures are explicitly labelled and are not the final appearance proof.
+
+Closeout: build/display/source processes were idle and the shared lock plus
+`/proc` references were checked before cleanup. Removed **231 task-created
+files: 19,385,921,041 file bytes / 19,381,252,096 allocated bytes**. These were
+Cargo-identified test executables produced after this task checkpoint, redundant
+captures, benchmark JSON and temporary logs; source, required application/source
+executables, licences and unrelated edits were preserved. Remaining normal build
+caches are 4.6 GiB (GigPies) and 3.9 GiB (Desk); the reusable local Rio/font preview
+tools occupy 22 MiB. Free space is 53 GiB. No rebuild was performed after cleanup.
+
+The only final screenshots are `docs/assets/panel-desk-channel.png` (315,652 bytes)
+and `docs/assets/panel-desk-channel-draft.png` (320,079 bytes), with reproducible
+source/commands and this owning record retained. The requested Channel refinement
+and local selected-spectrum path are implemented and software-validated. Physical
+MiniLab bank messages, acoustic calibration and remote spectrum transport are not
+claimed; no physical audio/MIDI, running services, commits, pushes or deployment
+were performed. Work did not expand to other screens.
+
 ### Channel-screen correction — 2026-10-12
 
 The operator rejected the initial screenshots. They establish terminal/font

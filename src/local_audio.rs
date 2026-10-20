@@ -75,6 +75,7 @@ impl Packet {
 enum Incoming {
     Measurement(crate::measurement_wire::Request),
     Meter(crate::meter_wire::Request),
+    Spectrum(crate::spectrum::Request),
     Audio(Request),
     Structural(crate::structural_control::Request),
     Brain(crate::brain_control::Request),
@@ -159,6 +160,8 @@ impl Client {
             == Some(crate::measurement_wire::CONTRACT)
         {
             Incoming::Measurement(crate::measurement_wire::Request::decode(bytes)?)
+        } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP-SPECTRUM") {
+            Incoming::Spectrum(serde_json::from_value(value).map_err(|e| e.to_string())?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP-METER") {
             Incoming::Meter(crate::meter_wire::Request::decode(bytes)?)
         } else if value.get("contract").and_then(|v| v.as_str()) == Some("GP15-brain") {
@@ -449,6 +452,7 @@ enum StructuralAction {
     Failed(String),
 }
 pub struct LocalAudio {
+    spectrum: crate::spectrum::Spectrum,
     metering: Option<(crate::metering::Acquisition, crate::metering::Latest)>,
     meter_main: [f64; 96],
     meter_map: u64,
@@ -563,6 +567,7 @@ impl LocalAudio {
         let np = topology.pa_outputs;
         let nc = topology.capture_channels;
         let no = topology.playback_channels;
+        let spectrum = crate::spectrum::Spectrum::new(topology.sample_rate);
         let meter_map = topology.map_revision;
         let metering = topology
             .meter_admission(crate::topology::ResourceBudget::default())
@@ -581,6 +586,7 @@ impl LocalAudio {
             .map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         Ok(Self {
+            spectrum,
             metering,
             meter_main: [0.; 96],
             meter_map,
@@ -2309,6 +2315,37 @@ impl LocalAudio {
             match result {
                 Err(_) => keep = false,
                 Ok(None) => (),
+                Ok(Some(Incoming::Spectrum(request))) => {
+                    let input = self
+                        .topology()
+                        .inputs
+                        .iter()
+                        .position(|i| i.id == request.input);
+                    if request.contract != "GP-SPECTRUM"
+                        || request.version != 1
+                        || request.query == 0
+                        || request.show_id != self.show
+                        || request.epoch != self.epoch.0
+                        || request.map != self.topology().map_revision
+                        || !self.clients[index].replies.is_empty()
+                        || self.clients[index]
+                            .meter_last_query
+                            .is_some_and(|t| now.saturating_sub(t) < 80)
+                    {
+                        keep = false;
+                    } else {
+                        self.clients[index].meter_last_query = Some(now);
+                        self.clients[index].meter_deadline = now.checked_add(100);
+                        if let (Some(mono), Some(input)) = (meter_mono, input) {
+                            let reply = self.spectrum.snapshot(&request, input, mono);
+                            if self.clients[index].queue_module(&reply, now).is_err() {
+                                keep = false;
+                            }
+                        } else {
+                            keep = false;
+                        }
+                    }
+                }
                 Ok(Some(Incoming::Meter(request))) => {
                     if !self.clients[index].replies.is_empty()
                         || self.clients[index].telemetry.is_some()
@@ -2495,6 +2532,10 @@ impl LocalAudio {
         // Stop on changed maps or unrepresentable PCM instead of keeping a live
         // publisher with a permanently stalled source timeline.
         let map_revision = self.topology().map_revision;
+        if let Some(mono) = meter_mono {
+            self.spectrum
+                .offer(inputs, ni, source_frame, mono, map_revision);
+        }
         if let Some((tap, worker, map)) = &mut self.analysis {
             if *map != map_revision
                 || inputs

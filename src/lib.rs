@@ -88,3 +88,6 @@ pub mod measurement_capture;
 pub mod metering;
 
 pub mod meter_wire;
+
+/// Bounded selected-channel spectral observation.
+pub mod spectrum;

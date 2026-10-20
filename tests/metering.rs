@@ -402,3 +402,25 @@ fn export_source_topologies() {
         .unwrap();
     }
 }
+
+#[test]
+fn selected_spectrum_handoff_has_no_callback_heap_work() {
+    let mut tap = gigpies::spectrum::Spectrum::new(48000);
+    let r = gigpies::spectrum::Request {
+        contract: "GP-SPECTRUM".into(),
+        version: 1,
+        show_id: SHOW.into(),
+        epoch: 1,
+        map: 1,
+        query: 1,
+        input: "input-01".into(),
+    };
+    tap.snapshot(&r, 0, 0);
+    EVENTS.with(|n| n.set(0));
+    ACTIVE.with(|a| a.set(true));
+    for i in 0..1000 {
+        tap.offer(&[0.5; 48], 1, i * 48, i, 1);
+    }
+    ACTIVE.with(|a| a.set(false));
+    assert_eq!(EVENTS.with(Cell::get), 0);
+}
