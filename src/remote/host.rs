@@ -955,6 +955,22 @@ impl AuthorityEndpoint for HostAuthority {
         now_ms: u64,
     ) -> Result<Option<Value>> {
         context.check_writer(&payload)?;
+        if payload.get("contract").and_then(Value::as_str) == Some("GP-SPECTRUM") {
+            if self
+                .meter_reads
+                .get(&context.session())
+                .is_some_and(|t| now_ms.saturating_sub(*t) < 80)
+            {
+                return Err("spectrum observer poll bound".into());
+            }
+            let request: crate::spectrum::Request =
+                serde_json::from_value(payload).map_err(|e| e.to_string())?;
+            self.meter_reads.insert(context.session(), now_ms);
+            return serde_json::to_value(self.provider.spectrum_snapshot(&request)?)
+                .map(Some)
+                .map_err(|e| e.to_string());
+        }
+
         if payload.get("contract").and_then(Value::as_str) == Some(crate::fx_wire::CONTRACT) {
             return self.dispatch_fx(context, payload, now_ms).map(Some);
         }

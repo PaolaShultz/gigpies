@@ -639,6 +639,81 @@ impl LocalAudio {
             module_pending: Vec::with_capacity(2),
         })
     }
+    /// Read-only versioned analysis. `input` is the legacy wire name for source ID.
+    pub fn spectrum_snapshot(
+        &self,
+        request: &crate::spectrum::Request,
+    ) -> Result<crate::spectrum::Snapshot> {
+        use crate::spectrum::{MAIN, OUTPUT, Source};
+        let t = self.topology();
+        if request.contract != "GP-SPECTRUM"
+            || !matches!(request.version, 1 | 2)
+            || request.query == 0
+            || request.show_id != self.show
+            || request.epoch != self.epoch.0
+            || request.map != t.map_revision
+        {
+            return Err("spectrum identity/version".into());
+        }
+        let mut sources: Vec<_> = t
+            .inputs
+            .iter()
+            .map(|p| Source {
+                id: p.id.clone(),
+                label: format!("{} / {}", p.id, p.physical_port)
+                    .escape_debug()
+                    .to_string(),
+                tap: "raw-pre-processing",
+            })
+            .collect();
+        let mut index = t.inputs.iter().position(|p| p.id == request.input);
+        if request.version == 2 {
+            for (i, side) in ["left", "right"].iter().enumerate() {
+                let id = format!("main:{side}");
+                if request.input == id {
+                    index = Some(MAIN + i);
+                }
+                sources.push(Source {
+                    id,
+                    label: format!("Main {}", side),
+                    tap: "main-pre-pa",
+                });
+            }
+            for p in &t.outputs {
+                let id = format!("output:{}", p.id);
+                if request.input == id {
+                    index = Some(OUTPUT + p.playback_slot);
+                }
+                let route = match &p.source {
+                    Some(crate::topology::OutputSource::Main { channel: 0 }) => "Main L".into(),
+                    Some(crate::topology::OutputSource::Main { .. }) => "Main R".into(),
+                    Some(crate::topology::OutputSource::Monitor { index }) => {
+                        format!("Monitor {}", index + 1)
+                    }
+                    Some(crate::topology::OutputSource::Pa { index }) => {
+                        format!("PA {}", index + 1)
+                    }
+                    None => "Unassigned (digital zero)".into(),
+                };
+                sources.push(Source {
+                    id,
+                    label: format!("{} / {} / {}", p.id, p.physical_port, route)
+                        .escape_debug()
+                        .to_string(),
+                    tap: "physical-output-post-patch",
+                });
+            }
+        }
+        let mut reply = self.spectrum.snapshot(
+            request,
+            index.ok_or("spectrum source")?,
+            crate::analysis_stream::local::monotonic_ms()?,
+        );
+        if request.version == 2 {
+            reply.sources = Some(sources);
+        }
+        Ok(reply)
+    }
     pub fn meter_snapshot(
         &mut self,
         request: &crate::meter_wire::Request,
@@ -1657,6 +1732,7 @@ impl LocalAudio {
             g.discontinuity(epoch.0, frame)?;
         }
         self.epoch = epoch;
+        self.spectrum.reset();
         self.brain_frame_times.fill(None);
         self.brain_frame_times[(frame / 48 % 64) as usize] = Some((frame, self.last_now));
         self.analysis = None;
@@ -2234,6 +2310,20 @@ impl LocalAudio {
                 )?;
             }
         }
+        if result.is_ok()
+            && let Ok(mono) = crate::analysis_stream::local::monotonic_ms()
+        {
+            let channels = self.topology().playback_channels;
+            let map = self.topology().map_revision;
+            self.spectrum.offer_tap(
+                playback,
+                channels,
+                first_frame,
+                mono,
+                map,
+                crate::spectrum::OUTPUT,
+            );
+        }
         self.raw_scratch = raw;
         self.bus_scratch = buses;
         if result.is_err() {
@@ -2316,18 +2406,7 @@ impl LocalAudio {
                 Err(_) => keep = false,
                 Ok(None) => (),
                 Ok(Some(Incoming::Spectrum(request))) => {
-                    let input = self
-                        .topology()
-                        .inputs
-                        .iter()
-                        .position(|i| i.id == request.input);
-                    if request.contract != "GP-SPECTRUM"
-                        || request.version != 1
-                        || request.query == 0
-                        || request.show_id != self.show
-                        || request.epoch != self.epoch.0
-                        || request.map != self.topology().map_revision
-                        || !self.clients[index].replies.is_empty()
+                    if !self.clients[index].replies.is_empty()
                         || self.clients[index]
                             .meter_last_query
                             .is_some_and(|t| now.saturating_sub(t) < 80)
@@ -2336,13 +2415,13 @@ impl LocalAudio {
                     } else {
                         self.clients[index].meter_last_query = Some(now);
                         self.clients[index].meter_deadline = now.checked_add(100);
-                        if let (Some(mono), Some(input)) = (meter_mono, input) {
-                            let reply = self.spectrum.snapshot(&request, input, mono);
-                            if self.clients[index].queue_module(&reply, now).is_err() {
-                                keep = false;
+                        match self.spectrum_snapshot(&request) {
+                            Ok(reply) => {
+                                if self.clients[index].queue_module(&reply, now).is_err() {
+                                    keep = false;
+                                }
                             }
-                        } else {
-                            keep = false;
+                            Err(_) => keep = false,
                         }
                     }
                 }
@@ -2665,6 +2744,16 @@ impl LocalAudio {
                 &self.meter_main,
                 output,
                 meter_bus_valid,
+            );
+        }
+        if meter_bus_valid && let Some(mono) = meter_mono {
+            self.spectrum.offer_tap(
+                &self.meter_main,
+                2,
+                source_frame,
+                mono,
+                map_revision,
+                crate::spectrum::MAIN,
             );
         }
         self.brain.monitor_peak = self.brain_monitor.iter().fold(0_f64, |a, v| a.max(v.abs()));

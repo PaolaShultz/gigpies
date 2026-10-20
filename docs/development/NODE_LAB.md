@@ -1,5 +1,25 @@
 # Two-Pi development lab
 
+## Pi 5 reboot diagnostics
+
+Pi 5 keeps a bounded persistent system journal through
+`/etc/systemd/journald.conf.d/60-gigpies-persistent.conf`. It overrides the
+distribution's volatile storage: 256 MiB maximum, 32 MiB files, 2 GiB free-space
+reserve, 14-day retention, info-and-higher messages and a per-service rate limit
+of 1,000 messages per 30 seconds. The normal five-minute synchronization interval
+is retained; writes also occur between synchronizations. Rate limiting can discard
+messages, and an abrupt reset can lose the newest unsynchronized records.
+
+Use `sudo journalctl --list-boots`, `sudo journalctl -b -1 -e` and
+`sudo journalctl -k -b -1` after a reboot. Persistent storage was verified by
+reading a diagnostic marker directly from `/var/log/journal`; reboot survival
+has not been deliberately tested. The earlier volatile boot cannot be recovered.
+The existing one-minute system watchdog remains enabled.
+
+This is development diagnostics, not live-audio latency qualification. Audio
+callbacks must not write logs. Combined audio/recording qualification must include
+journal activity and bursts before accepting this configuration for live use.
+
 ## Dual-console integration direction, 2026-10-04
 
 GigPies' intended Brain hosts the audio Desk and lighting Lightdesk, each with its

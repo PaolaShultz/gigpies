@@ -343,21 +343,62 @@ observations and maintains display peak holds. The existing lighting C-ANALYSIS
 stream is a four-source subscription and cannot select an arbitrary logical
 input, so it remains unchanged. The new path reuses GigPies' existing radix-2 FFT.
 
-`GP-SPECTRUM:1` is an optional, read-only extension on the existing private
-same-UID `audio.sock`. Its versioned request is the capability probe. It carries
-`contract`, `version`, `show_id`, `epoch`, `map`, `query`, and the stable `input`
-ID. Counters are unsigned JSON integers. The response echoes identity and query,
-returns `supported:true`, sample rate, `tap:"raw-pre-processing"`,
-`units:"millidBFS-peak-Hann-max"`, source `first_frame`/exclusive `end_frame`,
-`acquisition_age_ms`, `valid` and 64 finite integer `bins`. Invalid/missing/stale
-windows have `valid:false` and empty bins, never an invented silent spectrum.
-Old providers can refuse/close this separate observer connection without changing
-control or GP-METER connections. Desk stops probing an unrecognized provider
-until its control generation or selected input changes. A discovered provider's
-observer reconnects read-only, clearing history. The authenticated remote bridge
-does not advertise this extension yet; remote Desk sessions honestly omit it.
+`GP-SPECTRUM:2` is the optional read-only spectrum extension on private same-UID
+`audio.sock` and the existing mutually authenticated remote observer connection.
+The request carries `contract`, `version`, `show_id`, `epoch`, `map`, `query`, and
+`input`. The last field retains its legacy name but identifies the independent
+**analysis source**, not the EQ target. Unsigned counters and strict unknown-field
+rejection remain. Responses echo identity/query and return `supported:true`,
+`sample_rate`, `tap`, `units:"millidBFS-peak-Hann-max"`, source `first_frame` and
+exclusive `end_frame`, `acquisition_age_ms`, `valid`, and legacy 64-band `bins`.
+Version 2 additionally returns `fft_bins` (2049 integer amplitudes, indices 0..2048
+of the same 4096-point FFT) and `sources` (`id`, `label`, `tap`). Missing/stale data
+has `valid:false` with both arrays empty. The inventory comes from admitted topology:
 
-The tap takes logical source samples before channel EQ, compressor, fader and mute,
+- Stable input IDs: `raw-pre-processing`, after capture-slot mapping, before EQ,
+  compressor, fader and mute.
+- `main:left` / `main:right`: `main-pre-pa`, the actual main meter tap including
+  composed main processing/returns when present, before owner PA.
+- `output:<stable-output-ID>`: `physical-output-post-patch`, the configured
+  playback slot after processing, output safety and route patching. Labels include
+  physical port and configured Main/Monitor/PA route; unassigned slots are actual
+  digital zero, not an inferred physical measurement.
+
+The reference rate remains 48 kHz. FFT length, periodic Hann window, amplitude
+normalization and 10 Hz acquisition are unchanged. DC/Nyquist endpoints use 2/N;
+positive interior bins use 4/N. Desk maps half-bin boundaries `(k ± 0.5) * rate / 4096`
+onto each 20 Hz–20 kHz logarithmic display column and takes the maximum of
+intersecting bins. Thus low bins span several columns and high bins combine; screen
+width never claims additional frequency resolution. The 64 legacy bars are not
+stretched when native bins are available. This is peak amplitude, not band power.
+
+Version 1 remains accepted with its original fields and 64-band response, without
+v2 fields. Desk probes v2 on its independent observer connection; if that initial
+probe fails it makes one v1 attempt for a raw input on a new connection. A successful
+v1 response is labelled `v1` (64 coarse bands); failures are unavailable, not proof of an
+unsupported version. No command/meter connection is reused or mutated. A discovered
+observer reconnects read-only after loss, clearing display history. TLS pairing,
+revocation, session epoch/map checks, bounded framing and query correlation apply
+to remote observations. Queries are limited to one per 80 ms per connection/session;
+Desk requests every 100 ms. The consumer observation budget is 128 KiB and at most
+4096 source descriptors (an observer protocol budget, not an engine channel cap).
+
+F11 on the Channel panel opens/closes fullscreen EQ/RTA; `[` and `]` cycle analysis
+sources independently of the edited channel. At 160 columns the graph has 158
+interior columns; it adapts down to 60×18, while ordinary control/review screens
+retain their 160×45 minimum. One compact contextual header is the only text string; the rest is the plot. Spectrum
+colour uses fixed dBFS stops −96/−72/−54/−36/−18/0, interpolated green→yellow→orange→red,
+with no normalization. Filled RTA columns sit behind discrete coloured EQ points
+on a separate ±18 dB gain scale; fullscreen has no combined response curve.
+Horizontal brackets show nominal Q bandwidth (f/Q, geometrically centred),
+with a heavier selected bracket and hollow/dashed bypassed controls. Source/tap
+and EQ target appear in the header; during editing it shows the selected EQ
+frequency/gain/Q and entry instead. Missing observations clear the spectrum.
+Clock/frame fences remain enforced without displaying telemetry panels. Existing grants, detached edits, Apply/full review/confirmation
+and cancellation retain authority. Fullscreen interaction may redraw independently;
+analysis remains 10 Hz. Modal review always takes precedence over the graph.
+
+The raw-input tap takes logical source samples before channel EQ, compressor, fader and mute,
 following the source-frame timeline after physical-slot mapping. It is digital
 sample amplitude, **not dB SPL or a calibrated acoustic measurement**. At 48 kHz,
 a 4096-sample periodic Hann window starts every 4800 source frames (10 Hz).
@@ -370,12 +411,15 @@ lowest intervals may contain no FFT bin. Nonfinite or >16 peak source samples
 invalidate acquisition; no overflowing FFT is published.
 
 One selected tap per provider is a bounded analysis resource. Multiple observers
-requesting different inputs compete for that tap; every reply checks the actual
+requesting different sources compete for that tap; every reply checks the actual
 input/map and omits mismatched data. Selection expires one second after the last
-query. The callback performs fixed storage copies and nonblocking SPSC offers;
+query. Source changes and recovered epochs fence queued windows as well as the
+latest observation; Desk clears observations and peak holds on source changes. The callback performs fixed storage copies and nonblocking SPSC offers;
 it allocates nothing, locks nothing and performs no I/O. The two-window queue
 cannot grow. The worker drains at most two windows, analyzes only the newest,
-and publishes one latest observation; full queues drop work. FFT, JSON and
+and publishes one latest observation; full queues drop work. Desk retires its
+bounded in-flight observer read before replacing the worker, so rapid source/page
+changes do not accumulate observer threads. FFT, JSON and
 mutex-protected latest publication occur outside audio processing. Queries have
 an 80 ms minimum spacing and the existing bounded reply queue/deadline.
 

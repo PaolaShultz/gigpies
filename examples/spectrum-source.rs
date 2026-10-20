@@ -7,10 +7,13 @@ use std::{
 fn main() -> Result<(), String> {
     let a: Vec<_> = std::env::args().collect();
     if a.len() != 5 {
-        return Err("spectrum-source PRIVATE_DIRECTORY SHOW_UUID EPOCH tones|sequence|hot".into());
+        return Err(
+            "spectrum-source PRIVATE_DIRECTORY SHOW_UUID EPOCH tones|sequence|hot|rta-sequence"
+                .into(),
+        );
     }
     let epoch = a[3].parse().map_err(|_| "epoch")?;
-    if !matches!(a[4].as_str(), "tones" | "sequence" | "hot") {
+    if !matches!(a[4].as_str(), "tones" | "sequence" | "hot" | "rta-sequence") {
         return Err("mode".into());
     }
     let t = EngineTopology::legacy();
@@ -18,9 +21,19 @@ fn main() -> Result<(), String> {
     let mut playback = vec![0.; 48 * t.playback_channels];
     let mut owner = LocalAudio::bind(Path::new(&a[1]), "audio.sock", &a[2], Counter(epoch))?;
     let start = Instant::now();
+    let mut noise = 0x1234_5678u32;
+    // Bounded deterministic software input for inspecting an actual broadband FFT.
+    // Sum of tone amplitudes <= 0.6; noise <= 0.1. Never opens an audio device.
+    let tones: Vec<_> = (0..28)
+        .map(|i| {
+            let bin = (2. * 1.28f64.powi(i)).round();
+            let amplitude = 0.6 / 28. * (0.65 + 0.35 * (i as f64 * 0.7).sin());
+            (bin, amplitude)
+        })
+        .collect();
     for tick in 0..60000u64 {
         let frame = owner.frame();
-        let phase = if a[4] == "sequence" {
+        let phase = if matches!(a[4].as_str(), "sequence" | "rta-sequence") {
             (tick / 1500) % 4
         } else {
             0
@@ -33,12 +46,24 @@ fn main() -> Result<(), String> {
             _ => 0.25,
         };
         for f in 0..48 {
+            let at = (frame + f as u64) as f64;
+            noise ^= noise << 13;
+            noise ^= noise >> 17;
+            noise ^= noise << 5;
+            let broad = tones
+                .iter()
+                .map(|(bin, amp)| amp * (std::f64::consts::TAU * bin * at / 4096.).sin())
+                .sum::<f64>()
+                + 0.1 * (f64::from(noise) / f64::from(u32::MAX) * 2. - 1.);
             for (i, input) in t.inputs.iter().enumerate() {
                 // Exact FFT-bin tones; distinct input identity and visible low/high components.
                 let k = if i == 0 { 85. } else { 8. + i as f64 * 37. };
-                let at = (frame + f as u64) as f64;
                 capture[f * t.capture_channels + input.capture_slot] =
-                    amplitude * (std::f64::consts::TAU * k * at / 4096.).sin();
+                    if a[4] == "rta-sequence" && tick >= 6000 {
+                        broad
+                    } else {
+                        amplitude * (std::f64::consts::TAU * k * at / 4096.).sin()
+                    };
             }
         }
         owner.tick_with_capture(

@@ -1,4 +1,4 @@
-//! GP-SPECTRUM:1. Selected raw pre-processing digital samples; no acoustic calibration.
+//! GP-SPECTRUM:1/2. Selected raw pre-processing digital samples; no acoustic calibration.
 //! Callback copies into a fixed two-window SPSC queue. FFT and publication run off-thread.
 use serde::{Deserialize, Serialize};
 use std::sync::{
@@ -8,6 +8,17 @@ use std::sync::{
 use std::time::Duration;
 const N: usize = 4096;
 pub const BINS: usize = 64;
+// Top-bit tap tags keep configured playback slots independent of the legacy
+// input wire index domain. Resource admission bounds the remaining address bits.
+pub const OUTPUT: usize = 1usize << (usize::BITS - 2);
+pub const MAIN: usize = 1usize << (usize::BITS - 1);
+#[derive(Clone, Debug, Serialize)]
+pub struct Source {
+    pub id: String,
+    pub label: String,
+    pub tap: &'static str,
+}
+
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
@@ -37,10 +48,15 @@ pub struct Snapshot {
     pub acquisition_age_ms: u64,
     pub valid: bool,
     pub bins: Vec<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fft_bins: Option<Vec<i32>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sources: Option<Vec<Source>>,
 }
 struct Window {
     samples: [f64; N],
     input: usize,
+    generation: u64,
     first: u64,
     received: u64,
     map: u64,
@@ -48,13 +64,16 @@ struct Window {
 #[derive(Clone)]
 struct ResultWindow {
     input: usize,
+    generation: u64,
     first: u64,
     received: u64,
     map: u64,
     bins: Vec<i32>,
+    fft_bins: Vec<i32>,
 }
 pub struct Spectrum {
     selected: Arc<AtomicUsize>,
+    generation: AtomicU64,
     expires: AtomicU64,
     stop: Arc<AtomicBool>,
     sender: rtrb::Producer<Window>,
@@ -64,14 +83,15 @@ pub struct Spectrum {
     first: u64,
     received: u64,
     input: usize,
+    acquired_generation: u64,
     map: u64,
     next: u64,
     rate: u32,
     worker: Option<std::thread::JoinHandle<()>>,
 }
-/// Hann-windowed peak-amplitude FFT, max per logarithmic band (20 Hz..20 kHz).
+/// Hann-windowed native positive FFT bins (DC through Nyquist).
 /// 0 dBFS means a bin-centred sinusoid of peak amplitude 1; floor -96 dBFS.
-pub fn analyze(samples: &[f64; N], rate: u32) -> Vec<i32> {
+pub fn analyze_fft(samples: &[f64; N]) -> Vec<i32> {
     let mut fft: Vec<_> = samples
         .iter()
         .enumerate()
@@ -83,24 +103,35 @@ pub fn analyze(samples: &[f64; N], rate: u32) -> Vec<i32> {
         })
         .collect();
     crate::automix::analysis::fft(&mut fft);
-    let mut peaks = [0f64; BINS];
-    for (k, v) in fft.iter().enumerate().take(N / 2).skip(1) {
-        let hz = k as f64 * rate as f64 / N as f64;
-        if !(20. ..=20000.).contains(&hz) {
-            continue;
-        }
-        let bin = (((hz / 20.).log10() / 3.) * BINS as f64).floor() as usize;
-        peaks[bin.min(BINS - 1)] = peaks[bin.min(BINS - 1)].max(v[0].hypot(v[1]) * 4. / N as f64);
-    }
-    peaks
-        .iter()
-        .map(|p| {
-            (20000. * p.max(10f64.powf(-4.8)).log10())
-                .round()
-                .clamp(-96000., 24000.) as i32
+    fft.iter()
+        .take(N / 2 + 1)
+        .enumerate()
+        .map(|(k, v)| {
+            let scale = if k == 0 || k == N / 2 { 2. } else { 4. };
+            (20000.
+                * (v[0].hypot(v[1]) * scale / N as f64)
+                    .max(10f64.powf(-4.8))
+                    .log10())
+            .round()
+            .clamp(-96000., 24000.) as i32
         })
         .collect()
 }
+pub fn aggregate(fft: &[i32], rate: u32) -> Vec<i32> {
+    let mut peaks = vec![-96000; BINS];
+    for (k, v) in fft.iter().enumerate().take(N / 2).skip(1) {
+        let hz = k as f64 * rate as f64 / N as f64;
+        if (20. ..=20000.).contains(&hz) {
+            let bin = (((hz / 20.).log10() / 3.) * BINS as f64).floor() as usize;
+            peaks[bin.min(BINS - 1)] = peaks[bin.min(BINS - 1)].max(*v);
+        }
+    }
+    peaks
+}
+pub fn analyze(samples: &[f64; N], rate: u32) -> Vec<i32> {
+    aggregate(&analyze_fft(samples), rate)
+}
+
 impl Spectrum {
     pub fn new(rate: u32) -> Self {
         let (sender, mut receiver) = rtrb::RingBuffer::<Window>::new(2);
@@ -118,9 +149,12 @@ impl Spectrum {
                     }
                 }
                 if let Some(w) = newest {
-                    let bins = analyze(&w.samples, rate);
+                    let fft_bins = analyze_fft(&w.samples);
+                    let bins = aggregate(&fft_bins, rate);
                     *out.lock().unwrap() = Some(ResultWindow {
                         input: w.input,
+                        generation: w.generation,
+                        fft_bins,
                         first: w.first,
                         received: w.received,
                         map: w.map,
@@ -133,6 +167,7 @@ impl Spectrum {
         });
         Self {
             selected,
+            generation: AtomicU64::new(0),
             expires: AtomicU64::new(0),
             stop,
             sender,
@@ -142,6 +177,7 @@ impl Spectrum {
             first: 0,
             received: 0,
             input: usize::MAX,
+            acquired_generation: 0,
             map: 0,
             next: 0,
             rate,
@@ -150,21 +186,40 @@ impl Spectrum {
     }
     /// No locks, allocation, syscalls or FFT. Input is interleaved source PCM.
     pub fn offer(&mut self, pcm: &[f64], channels: usize, frame: u64, received: u64, map: u64) {
+        self.offer_tap(pcm, channels, frame, received, map, 0);
+    }
+    #[allow(clippy::too_many_arguments)] // Explicit buffer shape, tap address and source timestamp.
+    pub fn offer_tap(
+        &mut self,
+        pcm: &[f64],
+        channels: usize,
+        frame: u64,
+        received: u64,
+        map: u64,
+        base: usize,
+    ) {
+        let selected = self.selected.load(Ordering::Relaxed);
+        if selected < base || selected >= base.saturating_add(channels) {
+            return;
+        }
+        let generation = self.generation.load(Ordering::Relaxed);
         if received > self.expires.load(Ordering::Relaxed) {
             self.count = 0;
             return;
         }
-        let input = self.selected.load(Ordering::Relaxed);
+        let input = selected - base;
         if input >= channels || channels == 0 {
             return;
         }
-        if input != self.input
+        if generation != self.acquired_generation
+            || selected != self.input
             || map != self.map
             || (self.count != 0 && frame != self.first + self.count as u64)
         {
             self.count = 0;
             self.next = frame;
-            self.input = input;
+            self.input = selected;
+            self.acquired_generation = generation;
             self.map = map;
         }
         for (i, chunk) in pcm.chunks_exact(channels).enumerate() {
@@ -186,7 +241,8 @@ impl Spectrum {
             if self.count == N {
                 let _ = self.sender.push(Window {
                     samples: self.samples,
-                    input,
+                    input: selected,
+                    generation,
                     first: self.first,
                     received: self.received,
                     map,
@@ -196,22 +252,34 @@ impl Spectrum {
             }
         }
     }
+    /// Source-epoch fence, called off render during owner recovery.
+    pub fn reset(&mut self) {
+        self.selected.store(usize::MAX, Ordering::Relaxed);
+        self.generation.fetch_add(1, Ordering::Relaxed);
+        self.count = 0;
+        self.expires.store(0, Ordering::Relaxed);
+        *self.latest.lock().unwrap() = None;
+    }
     pub fn snapshot(&self, r: &Request, index: usize, now: u64) -> Snapshot {
         self.expires
             .store(now.saturating_add(1000), Ordering::Relaxed);
-        self.selected.store(index, Ordering::Relaxed);
+        if self.selected.swap(index, Ordering::Relaxed) != index {
+            self.generation.fetch_add(1, Ordering::Relaxed);
+            *self.latest.lock().unwrap() = None;
+        }
+        let generation = self.generation.load(Ordering::Relaxed);
         let w = self
             .latest
             .lock()
             .unwrap()
             .clone()
-            .filter(|w| w.input == index && w.map == r.map);
+            .filter(|w| w.input == index && w.map == r.map && w.generation == generation);
         let valid = w
             .as_ref()
             .is_some_and(|w| now.saturating_sub(w.received) <= 350);
         Snapshot {
             contract: "GP-SPECTRUM",
-            version: 1,
+            version: r.version,
             supported: true,
             show_id: r.show_id.clone(),
             epoch: r.epoch,
@@ -219,12 +287,26 @@ impl Spectrum {
             query: r.query,
             input: r.input.clone(),
             sample_rate: self.rate,
-            tap: "raw-pre-processing",
+            tap: if index >= MAIN {
+                "main-pre-pa"
+            } else if index >= OUTPUT {
+                "physical-output-post-patch"
+            } else {
+                "raw-pre-processing"
+            },
             units: "millidBFS-peak-Hann-max",
             first_frame: w.as_ref().map_or(0, |w| w.first),
             end_frame: w.as_ref().map_or(0, |w| w.first + N as u64),
             acquisition_age_ms: w.as_ref().map_or(0, |w| now.saturating_sub(w.received)),
             valid,
+            fft_bins: (r.version == 2).then(|| {
+                if valid {
+                    w.as_ref().unwrap().fft_bins.clone()
+                } else {
+                    vec![]
+                }
+            }),
+            sources: None,
             bins: if valid { w.unwrap().bins } else { vec![] },
         }
     }
@@ -263,6 +345,12 @@ mod tests {
         }
         assert!(!s.snapshot(&r, 0, 1351).valid);
         assert!(!s.snapshot(&r, 1, 1100).valid);
+        assert!(
+            !s.snapshot(&r, 0, 1100).valid,
+            "A-B-A must not recover old observation"
+        );
+        s.reset();
+        assert!(!s.snapshot(&r, 0, 1100).valid);
         let mut r = r;
         r.map = 2;
         assert!(!s.snapshot(&r, 0, 1100).valid);

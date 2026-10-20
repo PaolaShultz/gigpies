@@ -1206,3 +1206,107 @@ async fn mutual_tls_meter_reads_actual_host_and_revocation_without_control_admis
     .await
     .unwrap();
 }
+
+/// Cross-repository acceptance uses the prebuilt Desk integration-test executable.
+#[cfg(all(target_os = "linux", feature = "hardware-host"))]
+#[tokio::test(flavor = "current_thread")]
+#[ignore = "actual Desk consumer; set GP_DESK_SPECTRUM_TEST to its tests/spectrum executable"]
+async fn actual_remote_spectrum_desk() {
+    use std::{os::unix::fs::PermissionsExt, time::Instant};
+    let directory = PrivateTestDirectory::new();
+    let (server_credentials, client_credentials) = credentials();
+    for (name, data) in [
+        (
+            "client.der",
+            client_credentials.certificate_chain[0].as_ref(),
+        ),
+        ("client.key", client_credentials.private_key.secret_der()),
+        ("ca.der", client_credentials.trust_roots[0].as_ref()),
+    ] {
+        let path = directory.0.join(name);
+        std::fs::write(&path, data).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+    let policy = PolicyStore::new(vec![peer(
+        client_credentials.certificate_chain[0].as_ref(),
+        &[Permission::Foh],
+    )])
+    .unwrap();
+    let server =
+        RemoteServer::bind("127.0.0.1:0".parse().unwrap(), &server_credentials, policy).unwrap();
+    let config = json!({"bind":"127.0.0.1:0", "server":server.local_addr().unwrap().to_string(), "server_name":"stagebox.test", "certificate":directory.0.join("client.der"), "private_key":directory.0.join("client.key"), "ca":directory.0.join("ca.der"), "server_certificate_sha256":fingerprint(server_credentials.certificate_chain[0].as_ref()), "peer_id":"brain"});
+    let path = directory.0.join("desk.json");
+    std::fs::write(&path, serde_json::to_vec(&config).unwrap()).unwrap();
+    let mut topology = EngineTopology::reference_16_18(0, 2).unwrap();
+    topology.outputs[0].source = Some(crate::topology::OutputSource::Main { channel: 0 });
+    let mut provider = crate::local_audio::LocalAudio::bind_configured(
+        &directory.0,
+        "spectrum.sock",
+        SHOW,
+        Counter(1),
+        topology,
+    )
+    .unwrap();
+    provider.rearm().unwrap();
+    let t = provider.topology().clone();
+    let mut host = HostAuthority::new(provider, 1).unwrap();
+    let mut capture = vec![0.; 48 * t.capture_channels];
+    let mut playback = vec![0.; 48 * t.playback_channels];
+    let (tx, mut rx) = tokio::sync::mpsc::channel(4);
+    let acceptor = tokio::spawn(async move {
+        while let Ok(session) = server.accept().await {
+            if tx.send(session).await.is_err() {
+                break;
+            }
+        }
+    });
+    let mut mailboxes = Vec::new();
+    let mut networks = Vec::new();
+    let mut child = std::process::Command::new(
+        std::env::var("GP_DESK_SPECTRUM_TEST").expect("prebuilt Desk spectrum test"),
+    )
+    .args([
+        "--exact",
+        "actual_remote_provider_spectrum",
+        "--ignored",
+        "--nocapture",
+    ])
+    .env("GP_SPECTRUM_REMOTE_CONFIG", path)
+    .spawn()
+    .unwrap();
+    let started = Instant::now();
+    let mut timer = tokio::time::interval(Duration::from_millis(1));
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        if started.elapsed() > Duration::from_secs(15) {
+            child.kill().unwrap();
+            panic!("bounded remote spectrum acceptance timed out");
+        }
+        tokio::select! {
+            Some(session)=rx.recv()=>{
+                let (mut proxy,mailbox)=authority_channel(session.context(),host.identity()).unwrap();
+                mailboxes.push(mailbox);
+                networks.push(tokio::spawn(async move { session.run(&mut proxy).await }));
+            }
+            _=timer.tick()=>{
+                let now=monotonic_ms();
+                for mailbox in &mut mailboxes { let _=mailbox.service(&mut host,now); }
+                mailboxes.retain(|m| !m.retired());
+                let frame=host.provider().frame();
+                for f in 0..48 { capture[f*t.capture_channels]=0.5*(std::f64::consts::TAU*85.*(frame+f as u64) as f64/4096.).sin(); }
+                host.process_source(now,1,frame,&capture,&mut playback).unwrap();
+            }
+        }
+    };
+    acceptor.abort();
+    for task in networks {
+        task.abort();
+    }
+    assert!(
+        status.success(),
+        "actual Desk remote spectrum failed: {status}"
+    );
+    assert_eq!(host.provider_mut().engine_mut().revision(), Counter(0));
+}

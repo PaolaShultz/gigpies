@@ -182,3 +182,85 @@ fn spectrum_costs() {
         start.elapsed().as_micros()
     );
 }
+
+#[test]
+fn v2_topology_taps_patch_slots_and_epoch_reset() {
+    let dir = std::env::temp_dir().join(format!("gp-spectrum-v2-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let show = "11111111-1111-4111-8111-111111111111";
+    let mut t = EngineTopology::software(17, 5, 0).unwrap();
+    // Output identity is deliberately different from its playback-slot index.
+    t.outputs[0].playback_slot = 6;
+    t.outputs[6].playback_slot = 0;
+    t.outputs[1].source = None;
+    t.outputs[6].id = "z".repeat(128);
+    t.outputs[6].physical_port = "lab\nport".into();
+    let mut owner =
+        LocalAudio::bind_configured(&dir, "audio.sock", show, Counter(1), t.clone()).unwrap();
+    owner.rearm().unwrap();
+    let mut pcm = vec![0.; 48 * t.capture_channels];
+    let mut out = vec![0.; 48 * t.playback_channels];
+    let mut request = gigpies::spectrum::Request {
+        contract: "GP-SPECTRUM".into(),
+        version: 2,
+        show_id: show.into(),
+        epoch: 1,
+        map: 1,
+        query: 1,
+        input: "input-17".into(),
+    };
+    for (source, tap, expected) in [
+        ("input-17", "raw-pre-processing", -6021),
+        ("main:right", "main-pre-pa", -15031),
+        ("output:output-01", "physical-output-post-patch", -15031),
+        ("output:output-02", "physical-output-post-patch", -96000),
+    ] {
+        request.input = source.into();
+        let initial = owner.spectrum_snapshot(&request).unwrap();
+        assert!(!initial.valid);
+        let sources = initial.sources.unwrap();
+        assert_eq!(sources.len(), 26);
+        let long = sources.iter().find(|s| s.id.len() == 135).unwrap();
+        assert!(long.label.contains("lab\\nport"));
+        for _ in 0..110 {
+            let frame = owner.frame();
+            for f in 0..48 {
+                pcm[f * t.capture_channels + 16] =
+                    0.5 * (std::f64::consts::TAU * 85. * (frame + f as u64) as f64 / 4096.).sin();
+            }
+            owner
+                .tick_with_capture(frame / 48, 1, frame, &pcm, &mut out)
+                .unwrap();
+        }
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let observation = loop {
+            let s = owner.spectrum_snapshot(&request).unwrap();
+            if s.valid {
+                break s;
+            }
+            assert!(Instant::now() < deadline, "source {source}");
+            std::thread::sleep(Duration::from_millis(2));
+        };
+        assert_eq!(observation.tap, tap);
+        let fft = observation.fft_bins.unwrap();
+        assert_eq!(fft.len(), 2049);
+        assert!((fft.iter().max().unwrap() - expected).abs() < 3, "{source}");
+        assert_eq!(observation.end_frame - observation.first_frame, 4096);
+    }
+    owner.recover_source(Counter(2), 0).unwrap();
+    request.epoch = 2;
+    assert!(
+        owner.spectrum_snapshot(&request).is_err(),
+        "old map rejected after recovery"
+    );
+    request.map = owner.topology().map_revision;
+    assert!(
+        !owner.spectrum_snapshot(&request).unwrap().valid,
+        "old epoch cannot become new data"
+    );
+    request.version = 3;
+    assert!(owner.spectrum_snapshot(&request).is_err());
+    drop(owner);
+    std::fs::remove_dir_all(dir).unwrap();
+}

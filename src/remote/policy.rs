@@ -197,6 +197,11 @@ impl AuthenticatedContext {
     pub fn check_writer(&self, payload: &serde_json::Value) -> Result<()> {
         self.check_current()?;
         let object = payload.as_object().ok_or("command envelope")?;
+        if object.get("contract").and_then(|v| v.as_str()) == Some("GP-SPECTRUM") {
+            // Strict read-only request decoding in the authority; no writer or mutation fields.
+            return Ok(());
+        }
+
         let kind = object
             .get("kind")
             .and_then(|v| v.as_str())

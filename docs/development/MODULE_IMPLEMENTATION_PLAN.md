@@ -517,6 +517,10 @@ Next: measure the actual combined Stagebox recording/protected audio and Brain
 FX/Lux/analysis/two-console workload, deadlines, control responsiveness, memory,
 thermal behavior and failures. Physical lighting requires Lux LX-06 first.
 Use [Brain responsibilities](../architecture/BRAIN_CONSOLES.md) and owner acceptance limits.
+Include ordinary and burst activity from the
+[bounded persistent journal](NODE_LAB.md#pi-5-reboot-diagnostics), enabled on Pi 5
+with explicit operator authorization on 2026-10-20. On-disk marker verification
+passed; live-audio latency and survival across an actual reset remain unqualified.
 
 ## Verification and handoff
 
@@ -1170,6 +1174,136 @@ the remaining shared migration are still open. Do not archive GP-PANEL as done.
 - [x] Task-owned test executables, duplicate generated images/data and temporary
   font/Python caches cleaned; runnable binaries, source and unique evidence kept.
 - [ ] Closure/archive after remaining acceptance, not before.
+
+### Desk presentation rate — 2026-10-20
+
+User requested CPU-first graphical knob refresh at no more than 10 Hz. Desk's
+terminal loop previously rendered after every input event as well as each 40 ms
+idle poll. The consumer now gates scene construction, Ratatui and material
+submission at 100 ms after the preceding submission; ordinary input bursts cannot
+bypass it and missed frames are not replayed. The fullscreen EQ/RTA interaction
+exception is documented below. Provider/input pumping retains its 40 ms
+maximum idle wait independently. Resize invalidates mouse targets until redraw;
+review presentation remains tied to actual submission. Ten Hz is the selected
+compromise; five Hz would add up to 200 ms visual feedback delay.
+
+The material audit found upload-once assets and placement diffs already present.
+A focused regression checks that rotating one knob replaces only its placement,
+with no stationary plate/neighbor replacement and no unchanged-frame bytes.
+Validation: Desk `cargo +1.97.1 test --locked -j1 --all-targets` passed
+336 tests across 36 binaries, zero failures, 23 opt-ins ignored, including the
+new deadline and placement regressions. `cargo +1.97.1 fmt --check` and
+`cargo +1.97.1 clippy --locked -j1 --all-targets -- -D warnings` passed.
+Build/test commands used the parent build lock and `CARGO_INCREMENTAL=0`.
+Hardware, actual-provider, historical/benchmark opt-ins and the unchanged native
+window feature were intentionally not exercised. After checking idle resources,
+task test executables were removed (2,246,008,832 allocated bytes recovered);
+normal build dependencies and runnable application remain, with target at 3.9 GiB.
+No physical devices, deployment or whole-host CPU qualification is included.
+
+### Fullscreen EQ/RTA — 2026-10-20
+
+Authorized scope: canonical GigPies and SHR Desk, single-threaded; preserve other
+edits. Source commits and pushes were subsequently authorized on 2026-10-20,
+including all pending project changes. Hardware and playback remain excluded;
+the separately authorized journal service change is documented in Node lab.
+
+- [x] Extend GP-SPECTRUM with explicit v2 native FFT bins and topology-derived
+  source inventory; preserve v1 wire shape and labelled consumer fallback.
+- [x] Analyze raw inputs, main L/R before PA and configured post-patch playback
+  slots through the actual bounded source handoff. Keep 4096-point Hann/10 Hz,
+  source/map/epoch/frame/age fences, and clear queued observations on selection
+  changes and recovered epochs. FFT/serialization remain outside callbacks.
+- [x] Route read-only spectrum requests through the authenticated production
+  remote host and the Desk observer, independently of control authority.
+- [x] Fullscreen Channel EQ/RTA with F11 entry/exit, width minus two graph columns,
+  fixed dBFS gradient, separate internal EQ gain scale, discrete coloured points
+  with nominal Q-width brackets and existing detached edit/review/cancel paths.
+  Colour transitions span the fixed range: green −72, yellow −54, orange −36,
+  red −18 dBFS (dark green −96, brighter red 0); no normalization.
+  One compact contextual label is the only text; no combined EQ curve or text
+  panels. Editing replaces the source/target label with selected frequency/gain/Q. Fullscreen
+  `[`/`]` select analysis independently; ordinary pan and PA Master EQ keys remain.
+- [x] Focused native-bin mapping, freshness, source reset, resizing and actual
+  local/remote provider-to-Desk acceptance. Retained visual evidence is the
+  actual Ratatui buffer raster in `shr-desk/artifacts/screens/fullscreen-rta.png`,
+  with a local draft over actual deterministic broadband provider analysis.
+  This replaces the rejected curve-dominant design and its excessive text.
+- [x] Final complete production suites, static checks and task artifact cleanup.
+
+The corrected-view local source/FFT/provider/Desk test observed 59 unique windows in six seconds
+and passed levels, silence, hold/decay, loss and new-epoch recovery. The actual
+mutual-TLS HostAuthority → Desk consumer passed the 16-input/18-output reference
+topology (36 source choices), raw input, main left and configured analog output 1:
+−6.021 dBFS raw, −15.031 dBFS after the default fader/pan, and 11 unique windows
+per one-second sampling interval (including interval boundaries). The connected
+Frontend attached without a writer grant, loaded GP07, rendered fullscreen, and
+changed to silent input 2 with cleared peaks while retaining EQ target input 1.
+The test leaves authority revision zero.
+The fullscreen semantic-edit test preserves the actual target, retains the draft
+through an analysis-source change, clears the observation and cancels the draft.
+The inspected render is software evidence, not a physical terminal/HDMI or acoustic
+qualification. One shared selected analysis tap per provider remains the bounded
+resource; competing source selections can make observations unavailable.
+
+Final Rust 1.97.1 normal suites (`CARGO_INCREMENTAL=0`, `--locked -j1`,
+`-- --test-threads=1`): GigPies default **446 passed / 20 ignored** and
+`hardware-host` **530 passed / 47 ignored**; Desk corrected-view default **341 passed / 24 ignored**
+and `native` **344 passed / 24 ignored**. Final runs had zero failures. The unchanged
+held-worker timing test failed once under the native run (33 ms send age), then
+passed both its focused rerun and the complete native rerun. Both repositories
+passed rustfmt and all-target Clippy with warnings denied in the initial pass;
+the correction reran native all-target Clippy and the software-source example check.
+Focused spectrum, mapping, freshness and rendering regressions passed; the
+explicit actual local and authenticated remote acceptance tests above also passed.
+Historical/exhaustive benchmarks, unrelated opt-in evidence renderers and physical
+tests remained skipped. Native tests ran without a display, with software Vulkan;
+no hardware activation, playback, service changes or acoustic tests occurred.
+
+Post-reboot verification on 2026-10-20 covered the final colour-stop adjustment,
+whose subsequent native run had been interrupted. Both repositories passed
+`cargo +1.97.1 fmt --all --check`, `test --locked --all-targets -j1 --
+--test-threads=1`, `clippy --locked --all-targets -j1 -- -D warnings` and
+`build --locked --release -j1`, repeating the latter three with `--features
+hardware-host` (GigPies) or `--features native` (Desk). All four normal test counts
+above were reproduced with zero failures; Python unittest discovery passed
+50 GigPies and 9 Desk tests. Builds used `CARGO_INCREMENTAL=0` and the shared lock;
+native used software Vulkan without display variables. Previously passed explicit
+provider acceptance was not rerun; unrelated opt-ins and physical tests stayed
+excluded. Validation is complete; there is no stalled build or remaining software
+check from the interrupted run.
+
+After processes and the shared lock were idle, recovery cleanup removed 171
+regenerated test executables, reclaiming 15,949,643,776 allocated bytes (14.85 GiB).
+Application builds, shared dependencies, the existing preview and all source edits
+were retained. Normal targets remain 4.6 GiB (GigPies) and 7.1 GiB (Desk, including
+existing native dependencies and pre-existing cached outputs); free space is
+50 GiB. No rebuild followed this cleanup. The separately authorized host logging
+change is documented in [Node lab](NODE_LAB.md#pi-5-reboot-diagnostics).
+
+After checking Git state, the shared build lock and process/open-file references,
+the initial cleanup removed 234 task-created files (18.19 GiB); correction cleanup
+removed another 85 test executables, proof-build aliases and temporary files,
+reclaiming **8,288,608,256 allocated bytes (7.72 GiB)**. The single retained
+visual is the **16,973-byte** fullscreen PNG; its reproducible acceptance/export
+path is below. Shared normal build dependencies, application binaries and debug
+artifacts remain (GigPies **4.5 GiB**, Desk **3.9 GiB**); free space is **53 GiB**.
+No rebuild followed that initial cleanup. Source edits were preserved for the
+subsequently authorized publication.
+
+Owning usage/contract: [selected-channel spectrum](../reference/INSTRUMENT_PANEL.md#selected-channel-spectrum-contract)
+and [Desk fullscreen usage](../../../shr-desk/docs/TERMINAL.md#fullscreen-eq--rta).
+Repeat actual local acceptance with `GP_SPECTRUM_SOURCE` set to the canonical
+`target/debug/examples/spectrum-source` and Desk's ignored
+`actual_provider_spectrum_recovery` test; optional `GP_SPECTRUM_RENDER` exports
+its actual 160×45 cell buffer for visual review. With export enabled the software
+source uses `rta-sequence`: the existing tone/level/silence sequence followed by
+bounded deterministic multitone plus noise input, analyzed by the actual FFT.
+No spectrum values are fabricated in Desk. Build Desk's `tests/spectrum`
+executable, set `GP_DESK_SPECTRUM_TEST` to that exact executable, and run GigPies'
+`--features hardware-host --lib remote::tests::actual_remote_spectrum_desk -- --ignored --nocapture`
+for authenticated software-only acceptance. Credentials and subprocess endpoints
+are private temporary test resources and are removed by the harness.
 
 ### Retained evidence and next action
 
