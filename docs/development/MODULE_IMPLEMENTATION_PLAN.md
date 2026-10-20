@@ -747,6 +747,57 @@ replacements, reusable source/commands and this owning result record.
 
 ### Selected Channel vertical separation — 2026-10-20
 
+Approved meter refinement: all four meters have 16 segments, centred titles on
+row 3 (first black row), bars on rows 4–19 and readings on row 20. The master’s
+original positions remain fixed. Level scales match from 0 to −60 dBFS; GR uses
+0…24 dB downward. Cached LED strips show green below −12, amber below −4 and red
+up to 0; dim strips describe the scale without implying a fresh observation.
+Six original sprites add 1,596 base64 bytes (124 assets / 710,924 bytes total).
+Assets upload once and placements are diffed; ordinary text retains the colours.
+OUT/PRE-FADER now reads actual `input-NN:processed` samples after EQ/compression,
+before mute/fader/pan, instead of repeating raw input or estimating output from GR.
+No DSP/authority/MIDI/hardware path changed.
+
+Both final files in `docs/assets/` are actual Rio/tiny-skia/Xvfb production captures
+of deterministic software audio, not hardware measurements:
+- `panel-desk-channel.png` (378,397 bytes): hot input peak −1.0 dBFS, RMS −4.0,
+  actual GR 7.2 dB and processed output −8.2 dBFS; +3 dB EQ, threshold −12 dB,
+  ratio 4:1. Input reaches red; output stays lower.
+- `panel-desk-channel-draft.png` (383,314 bytes): same aligned geometry, muted/Hold,
+  pads 9–16 and local 6:1 draft; independent owner readback remains 4:1. Pre-fader
+  observation intentionally remains active under channel mute.
+
+The operator approved the refinement and authorized source commit/push. Reproduce:
+
+```sh
+/usr/bin/python3 scripts/preview_panel_providers.py desk --channel --materials --spectrum-hot --cpu-terminal --suffix channel --keys g,e,k,i,i,3,Return,i,i,i,i,i,i,i,i,i,i,i,i,i,i,i,k,i,minus,1,2,Return,i,4,Return,F4,Next,Return
+```
+
+Append the documented mute/Hold/draft gestures and `--click 540,78` for secondary
+pads. The `hot` example mode is software-only; normal `tones`/`sequence` are
+unchanged. Helpers remove private runtime state; only two final PNGs are retained.
+The preceding iteration’s cleanup removed 47 disposable files (3,528,265,386 bytes).
+
+CI investigation: [GigPies run 39404031575](https://github.com/PaolaShultz/gigpies/actions/runs/39404031575)
+failed `tests/gp06.rs:231`, expecting zero clients after one nonblocking tick on a
+malformed header. The harness now waits for actual EOF/reset under a one-second
+wall-clock deadline, holding provider time at zero so incomplete-frame timeout
+cannot mask missing length refusal. Production limits/timeouts are unchanged.
+Desk’s preceding CI passed; GigPies’ hardware-host job was cancelled by fail-fast.
+Publication validation passed: Desk 334 default / 337 native tests (23 opt-ins
+ignored each); GigPies 445 default tests (20 opt-ins ignored) and 13 GP06 tests
+with hardware-host. Both feature configurations passed all-target Clippy with
+warnings denied and formatting. Python suites passed 50 GigPies / 9 Desk tests;
+complete-index publication guards passed. Unrelated historical, exhaustive and
+physical hardware tests stayed opt-in. No production DSP changed; hosted CI runs
+the full hardware-host suite and release builds. Desk source is pushed as
+`12e6a64`; the GigPies source is ready for the authorized commit/push.
+Cleanup under the idle shared lock removed 138 newly created test executables
+(12,780,671,848 file bytes / 12,777,668,608 allocated bytes), preserving application
+binaries, shared caches, authored source and both final screenshots.
+
+Earlier vertical-separation evidence (superseded appearance; retained measurements):
+
 The operator rejected the cross-section EQ expansion. This revision restores
 three independent full-height metal plates: EQ columns 1–4, compressor 5–7,
 output 8. The EQ keeps 16 usable rows and the genuine spectrum behind the curve,

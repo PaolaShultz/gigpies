@@ -7,10 +7,10 @@ use std::{
 fn main() -> Result<(), String> {
     let a: Vec<_> = std::env::args().collect();
     if a.len() != 5 {
-        return Err("spectrum-source PRIVATE_DIRECTORY SHOW_UUID EPOCH tones|sequence".into());
+        return Err("spectrum-source PRIVATE_DIRECTORY SHOW_UUID EPOCH tones|sequence|hot".into());
     }
     let epoch = a[3].parse().map_err(|_| "epoch")?;
-    if !matches!(a[4].as_str(), "tones" | "sequence") {
+    if !matches!(a[4].as_str(), "tones" | "sequence" | "hot") {
         return Err("mode".into());
     }
     let t = EngineTopology::legacy();
@@ -26,6 +26,7 @@ fn main() -> Result<(), String> {
             0
         };
         let amplitude = match phase {
+            0 if a[4] == "hot" => 0.891_250_938, // -1 dBFS peak, software evidence only
             0 => 0.5,
             1 => 0.125,
             2 => 0.,

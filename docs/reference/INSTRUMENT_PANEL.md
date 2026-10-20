@@ -224,9 +224,12 @@ were recorded; the source and repeatable commands remain.
 
 ## Desk selected-channel page
 
-![Approved selected Channel panel with separate EQ, compressor and output sections](../assets/panel-desk-channel.png)
+![Selected Channel panel with coloured LED meters and separate EQ, compressor and output sections](../assets/panel-desk-channel.png)
 
-Approved October 20, 2026. Actual production terminal capture using deterministic
+Layout approved October 20, 2026. This updated actual-terminal capture shows
+the aligned 16-segment meters, centred titles and measured post-processing
+output. The meter refinement is also approved.
+Actual production terminal capture using deterministic
 software audio; no physical audio or MIDI qualification is implied.
 
 The dedicated Ratatui Channel page requires the existing `--processing` capability

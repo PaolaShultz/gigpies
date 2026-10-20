@@ -19,3 +19,8 @@ seconds. It never opens PCM/MIDI or outputs audio. The regular provider and Desk
 contain no synthetic spectrum generator. Use `preview_panel_providers.py desk
 --channel --materials --spectrum --cpu-terminal --suffix channel` for actual Rio
 proof; GP-PANEL owns the measured results and final screenshots.
+
+The software-only `spectrum-source` example also accepts `hot`: a −1 dBFS peak
+tone for inspecting input meter warning colours and actual post-processing
+readback. `scripts/preview_panel_providers.py desk --channel --materials
+--cpu-terminal --spectrum-hot` selects it; no physical audio device is opened.

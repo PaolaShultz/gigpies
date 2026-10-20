@@ -12,6 +12,7 @@ parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('providers',nargs='*',choices=['desk','lightdesk'])
 parser.add_argument('--cpu-terminal',action='store_true')
 parser.add_argument('--spectrum',action='store_true',help='Explicit deterministic software PCM through real spectrum provider')
+parser.add_argument('--spectrum-hot',action='store_true',help='Deterministic -1 dBFS input through real processing; software evidence only')
 parser.add_argument('--materials',action='store_true',help='Channel-only cached material experiment')
 parser.add_argument('--disconnect',action='store_true')
 parser.add_argument('--channel',action='store_true',help='Desk channel page with explicit injected software role; no devices')
@@ -29,7 +30,7 @@ for name in names:
  if name=='desk':
   identity=directory/'audio.identity';epoch=str(int(json.loads(identity.read_text())['high_epoch'])+1) if identity.exists() else '1'
   provider=[str(root/'target/release/gigpies-headless'),'--directory',str(directory),'--show',show,'--epoch',epoch,'--ticks','60000']
-  if args.spectrum:provider=[str(root/'target/debug/examples/spectrum-source'),str(directory),show,epoch,'tones']
+  if args.spectrum or args.spectrum_hot:provider=[str(root/'target/debug/examples/spectrum-source'),str(directory),show,epoch,'hot' if args.spectrum_hot else 'tones']
   socket=directory/'audio.sock'
   app=[str(root.parent/'shr-desk/target/debug/shr-desk'),'--terminal',str(socket),show,epoch,'panel-preview','foh','--processing']
   if args.channel:

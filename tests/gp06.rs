@@ -227,8 +227,28 @@ fn fragmentation_malformed_lengths_incomplete_timeout_and_capacity() {
     for length in [0_u32, 65537, u32::MAX] {
         let mut socket = UnixStream::connect(dir.0.join("audio.sock")).unwrap();
         socket.write_all(&length.to_be_bytes()).unwrap();
-        s.tick(0).unwrap();
-        assert_eq!(s.client_count(), 0);
+        socket.set_nonblocking(true).unwrap();
+        // A nonblocking accept/read may make no progress (WouldBlock or EINTR).
+        // Observe the peer closing, rather than assuming one tick consumed the
+        // header. Keep provider time fixed: this must be length refusal, not
+        // the production incomplete-frame timeout.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        loop {
+            s.tick(0).unwrap();
+            match socket.read(&mut [0; 1]) {
+                Ok(0) => break,
+                Err(e) if e.kind() == ErrorKind::ConnectionReset => break,
+                Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::Interrupted) => {
+                    assert!(
+                        std::time::Instant::now() < deadline,
+                        "length {length} was not refused"
+                    );
+                    std::thread::yield_now();
+                }
+                other => panic!("unexpected response to malformed length {length}: {other:?}"),
+            }
+        }
+        assert_eq!(s.client_count(), 0, "malformed length {length}");
     }
     let mut partial = UnixStream::connect(dir.0.join("audio.sock")).unwrap();
     partial.write_all(&[0]).unwrap();
